@@ -11,17 +11,39 @@ embedded OPF package document and cover image — no sidecar files required.
 
 ## Running
 
+Don't put real credentials in the tracked `docker-compose.yml` — it ships with
+placeholder values on purpose. Instead, create a `docker-compose.override.yml`
+(already in `.gitignore`, so it's never committed) with your real values:
+
+```yaml
+services:
+  eink-library:
+    environment:
+      - LIBRARY_USER=your-username
+      - LIBRARY_PASS=your-password
+      - SESSION_SECRET=some-long-random-string
+    volumes:
+      - /path/to/your/epubs:/library:ro
+```
+
+Then:
+
 ```bash
-cp docker-compose.yml docker-compose.override.yml   # optional, or edit directly
 docker compose up -d --build
 ```
 
-Edit `docker-compose.yml` first:
-- Set `LIBRARY_USER` / `LIBRARY_PASS` to your desired login.
-- Set `SESSION_SECRET` to a long random string.
-- Point the `/library` volume mount at your real EPUB directory (mounted `:ro`).
+Compose automatically merges `docker-compose.override.yml` over
+`docker-compose.yml`. Visit `http://localhost:8080` and log in.
 
-Then visit `http://localhost:8080` and log in.
+## Users
+
+`LIBRARY_USER`/`LIBRARY_PASS` are **bootstrap-only**: on first startup (empty
+user database), they create the first account as an admin. After that, they're
+ignored — logins are checked against a `users` table in `DATA_DIR`, and the
+admin can add/remove other users or reset passwords from **Manage users**
+(linked in the library page header when logged in as an admin). Every user has
+equal read/download access to the library; `is_admin` only gates the user
+management page. The last remaining admin can't be deleted.
 
 ## Configuration
 
@@ -30,9 +52,9 @@ All configuration is via environment variables:
 | Var | Default | Purpose |
 |---|---|---|
 | `LIBRARY_PATH` | `/library` | read-only directory to scan for `.epub` files |
-| `DATA_DIR` | `/data` | writable dir for the SQLite index + cover cache |
-| `LIBRARY_USER` | *(required)* | login username |
-| `LIBRARY_PASS` | *(required)* | login password |
+| `DATA_DIR` | `/data` | writable dir for the SQLite index, users DB, cover cache |
+| `LIBRARY_USER` | *(required)* | bootstrap admin username (first run only) |
+| `LIBRARY_PASS` | *(required)* | bootstrap admin password (first run only) |
 | `SESSION_SECRET` | *(required)* | signing key for session cookies |
 | `PORT` | `8080` | HTTP listen port |
 | `COVER_WIDTH` | `300` | cover thumbnail width in px |

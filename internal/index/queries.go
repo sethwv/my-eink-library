@@ -26,8 +26,9 @@ const bookColumns = `id, file_path, file_size, file_mtime, title, sort_title, au
 	series, series_index, description, language, publisher, published_date, identifier,
 	cover_path, has_cover, added_at, updated_at, parse_error`
 
-// List returns a page of books ordered by sort/dir.
-func (d *DB) List(sort SortKey, descending bool, page, pageSize int) ([]Book, error) {
+// List returns a page of books ordered by sort/dir, optionally filtered by a
+// search string matched (case-insensitively) against title/author/series.
+func (d *DB) List(sort SortKey, descending bool, page, pageSize int, search string) ([]Book, error) {
 	col, ok := sortColumns[sort]
 	if !ok {
 		col = sortColumns[SortTitle]
@@ -44,8 +45,11 @@ func (d *DB) List(sort SortKey, descending bool, page, pageSize int) ([]Book, er
 	}
 	offset := (page - 1) * pageSize
 
-	query := fmt.Sprintf(`SELECT %s FROM books ORDER BY %s %s, id ASC LIMIT ? OFFSET ?`, bookColumns, col, dir)
-	rows, err := d.sql.Query(query, pageSize, offset)
+	where, args := searchClause(search)
+	query := fmt.Sprintf(`SELECT %s FROM books %s ORDER BY %s %s, id ASC LIMIT ? OFFSET ?`, bookColumns, where, col, dir)
+	args = append(args, pageSize, offset)
+
+	rows, err := d.sql.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list books: %w", err)
 	}
@@ -59,6 +63,22 @@ func (d *DB) Count() (int, error) {
 	var n int
 	err := d.sql.QueryRow(`SELECT COUNT(*) FROM books`).Scan(&n)
 	return n, err
+}
+
+// CountSearch returns how many books match the given search string (see List).
+func (d *DB) CountSearch(search string) (int, error) {
+	where, args := searchClause(search)
+	var n int
+	err := d.sql.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM books %s`, where), args...).Scan(&n)
+	return n, err
+}
+
+func searchClause(search string) (string, []any) {
+	if search == "" {
+		return "", nil
+	}
+	term := "%" + search + "%"
+	return `WHERE title LIKE ? OR author LIKE ? OR series LIKE ?`, []any{term, term, term}
 }
 
 // Get returns a single book by id.

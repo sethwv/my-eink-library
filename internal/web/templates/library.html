@@ -1,6 +1,15 @@
 {{define "content"}}
-<h1>Library</h1>
-<form method="GET" action="/" style="margin-bottom:1em;">
+<header class="topbar">
+  <h1 class="site-title"><a href="/">eink-library</a></h1>
+  <div class="topbar-right">
+    <span class="muted">{{.Username}}</span>
+    {{if .IsAdmin}}<a href="/admin/users">Manage users</a>{{end}}
+    <form method="POST" action="/logout" class="inline-form"><button type="submit" class="btn-link">Log out</button></form>
+  </div>
+</header>
+
+<form method="GET" action="/" class="toolbar">
+  <input type="text" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input">
   <label>Sort by
     <select name="sort" onchange="this.form.submit()">
       <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
@@ -9,30 +18,34 @@
       <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
     </select>
   </label>
-  <a href="/?sort={{.Sort}}&dir={{.ToggleDir}}&page={{.Page}}">{{if eq .Dir "asc"}}↑ asc{{else}}↓ desc{{end}}</a>
-  <button type="submit" style="display:none">Go</button>
+  <a href="/?sort={{.Sort}}&dir={{.ToggleDir}}&page={{.Page}}&q={{.Query}}">{{if eq .Dir "asc"}}↑ asc{{else}}↓ desc{{end}}</a>
+  <button type="submit">Search</button>
 </form>
 
-<table>
-{{range .Books}}
-<tr>
-  <td><img src="/covers/{{.ID}}" alt="" width="60"></td>
-  <td>
-    <strong>{{.Title}}</strong><br>
-    {{if .Author}}{{.Author}}<br>{{end}}
-    {{if .Series}}{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}<br>{{end}}
-    <a href="/books/{{.ID}}/download">EPUB</a> |
-    <a href="/books/{{.ID}}/download.kepub">KEPUB</a>
-  </td>
-</tr>
+{{if not .Books}}
+<p class="muted">No books found{{if .Query}} for "{{.Query}}"{{end}}.</p>
 {{end}}
-</table>
 
-<p>
-{{if gt .Page 1}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.PrevPage}}">&laquo; prev</a>{{end}}
-Page {{.Page}} of {{.TotalPages}}
-{{if .HasNext}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.NextPage}}">next &raquo;</a>{{end}}
-</p>
+<div class="grid">
+{{range .Books}}
+<div class="card">
+  <a href="/books/{{.ID}}/download"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
+  <div class="card-body">
+    <div class="card-title">{{.Title}}</div>
+    {{if .Author}}<div class="card-author">{{.Author}}</div>{{end}}
+    {{if .Series}}<div class="card-series">{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</div>{{end}}
+    <div class="card-actions">
+      <a href="/books/{{.ID}}/download">EPUB</a>
+      <a href="/books/{{.ID}}/download.kepub">KEPUB</a>
+    </div>
+  </div>
+</div>
+{{end}}
+</div>
 
-<form method="POST" action="/logout"><button type="submit">Log out</button></form>
+<nav class="pagination">
+{{if gt .Page 1}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.PrevPage}}&q={{.Query}}">&laquo; prev</a>{{end}}
+<span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
+{{if .HasNext}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.NextPage}}&q={{.Query}}">next &raquo;</a>{{end}}
+</nav>
 {{end}}

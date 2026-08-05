@@ -1,7 +1,154 @@
-body { font-family: sans-serif; margin: 1em; color: #111; background: #fff; }
-h1 { font-size: 1.3em; }
-.login-box { max-width: 20em; margin: 2em auto; }
-.login-box input { width: 100%; padding: 0.3em; margin: 0.2em 0 0.6em 0; }
-.error { color: #a00; }
-a { color: #06c; }
-table { border-collapse: collapse; width: 100%; }
+:root {
+  --fg: #111;
+  --fg-muted: #555;
+  --bg: #fff;
+  --border: #ccc;
+  --border-strong: #888;
+  --accent: #111;
+  --error: #a00;
+  --radius: 4px;
+  --gap: 1em;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.container {
+  max-width: 60em;
+  margin: 0 auto;
+  padding: 1em 1.25em 3em;
+}
+
+h1 { font-size: 1.4em; margin: 0.4em 0; }
+h2 { font-size: 1.1em; margin: 1.2em 0 0.5em; }
+
+a { color: var(--accent); text-decoration: underline; }
+a:hover { text-decoration: none; }
+
+.muted { color: var(--fg-muted); }
+.error {
+  color: var(--error);
+  border: 1px solid var(--error);
+  border-radius: var(--radius);
+  padding: 0.5em 0.75em;
+  margin: 0.75em 0;
+}
+
+/* Buttons and inline forms */
+button, .btn {
+  font: inherit;
+  padding: 0.4em 0.9em;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+button:hover { background: #eee; }
+.inline-form { display: inline; }
+.btn-link {
+  border: none;
+  background: none;
+  text-decoration: underline;
+  padding: 0;
+}
+
+input[type="text"], input[type="password"] {
+  font: inherit;
+  padding: 0.4em 0.6em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+label { display: block; margin: 0.5em 0; }
+
+/* Site header, shared across authenticated pages */
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75em;
+  margin-bottom: 1em;
+}
+.site-title { margin: 0; }
+.site-title a { text-decoration: none; }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  flex-wrap: wrap;
+}
+
+/* Search/sort toolbar */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6em;
+  margin-bottom: 1.25em;
+}
+.toolbar .search-input { flex: 1 1 14em; min-width: 10em; }
+
+/* Login page */
+.login-card {
+  max-width: 22em;
+  margin: 3em auto;
+  padding: 1.5em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.login-card input[type="text"],
+.login-card input[type="password"] {
+  width: 100%;
+}
+.login-card button { width: 100%; margin-top: 0.5em; }
+
+/* Book grid */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25em;
+  margin: 1em 0;
+}
+.card {
+  width: 9.5em;
+  display: flex;
+  flex-direction: column;
+}
+.card .cover {
+  width: 100%;
+  height: 14em;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #eee;
+}
+.card-body { margin-top: 0.4em; }
+.card-title { font-weight: bold; font-size: 0.95em; }
+.card-author, .card-series { font-size: 0.85em; color: var(--fg-muted); }
+.card-actions { margin-top: 0.3em; font-size: 0.85em; }
+.card-actions a { margin-right: 0.6em; }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1em;
+  margin-top: 2em;
+}
+
+/* Tables (admin users) */
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { text-align: left; padding: 0.4em 0.6em; border-bottom: 1px solid var(--border); }
+.admin-users form { margin: 0.2em 0; }

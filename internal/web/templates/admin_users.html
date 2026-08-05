@@ -1,0 +1,42 @@
+{{define "content"}}
+<header class="topbar">
+  <h1 class="site-title"><a href="/">eink-library</a></h1>
+  <div class="topbar-right">
+    <span class="muted">{{.Username}}</span>
+    <a href="/">Library</a>
+    <form method="POST" action="/logout" class="inline-form"><button type="submit" class="btn-link">Log out</button></form>
+  </div>
+</header>
+
+<h1>Manage Users</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+
+<table class="admin-users">
+<tr><th>Username</th><th>Admin</th><th></th></tr>
+{{range .Users}}
+<tr>
+  <td>{{.Username}}</td>
+  <td>{{if .IsAdmin}}yes{{else}}no{{end}}</td>
+  <td>
+    <form method="POST" action="/admin/users/{{.ID}}/reset-password" class="inline-form">
+      <input type="password" name="password" placeholder="new password" required>
+      <button type="submit">Reset password</button>
+    </form>
+    <form method="POST" action="/admin/users/{{.ID}}/delete" class="inline-form">
+      <button type="submit">Delete</button>
+    </form>
+  </td>
+</tr>
+{{end}}
+</table>
+
+<h2>Add user</h2>
+<form method="POST" action="/admin/users">
+  <label>Username<br><input type="text" name="username" autocapitalize="off" autocorrect="off" required></label>
+  <label>Password<br><input type="password" name="password" required></label>
+  <label><input type="checkbox" name="is_admin" style="width:auto;display:inline"> Admin</label>
+  <button type="submit">Create user</button>
+</form>
+
+<p><a href="/">&laquo; Back to library</a></p>
+{{end}}
