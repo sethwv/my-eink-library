@@ -12,20 +12,41 @@ import (
 	"github.com/swvn/eink-library/internal/index"
 	"github.com/swvn/eink-library/internal/kepub"
 	"github.com/swvn/eink-library/internal/thumbnail"
+	"github.com/swvn/eink-library/internal/users"
 )
 
 type Server struct {
 	Auth        *auth.Authenticator
 	DB          *index.DB
 	Covers      *thumbnail.Store
+	Users       *users.Store
 	LibraryPath string
 	PageSize    int
+}
+
+// viewerInfo returns the signed-in username and whether they're an admin,
+// for use in template data across authenticated pages.
+func (s *Server) viewerInfo(r *http.Request) (username string, isAdmin bool) {
+	username, _ = auth.UsernameFromContext(r.Context())
+	if username != "" {
+		isAdmin = s.Users.IsAdmin(username)
+	}
+	return username, isAdmin
+}
+
+// safeNext restricts post-login redirect targets to same-site relative paths,
+// rejecting absolute and protocol-relative ("//host/...") URLs to prevent open redirects.
+func safeNext(next string) string {
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return "/"
+	}
+	return next
 }
 
 func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
 	render(w, "login.html", map[string]any{
 		"Title": "Log in",
-		"Next":  r.URL.Query().Get("next"),
+		"Next":  safeNext(r.URL.Query().Get("next")),
 	})
 }
 
@@ -37,7 +58,7 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 
 	username := r.FormValue("username")
 	password := r.FormValue("password")
-	next := r.FormValue("next")
+	next := safeNext(r.FormValue("next"))
 
 	if !s.Auth.CheckPassword(username, password) {
 		render(w, "login.html", map[string]any{
@@ -48,11 +69,8 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Auth.IssueSession(w, r)
+	s.Auth.IssueSession(w, r, username)
 
-	if next == "" {
-		next = "/"
-	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
@@ -93,12 +111,14 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 		pageSize = 48
 	}
 
-	books, err := s.DB.List(sort, descending, page, pageSize)
+	search := strings.TrimSpace(q.Get("q"))
+
+	books, err := s.DB.List(sort, descending, page, pageSize, search)
 	if err != nil {
 		http.Error(w, "failed to load library", http.StatusInternalServerError)
 		return
 	}
-	total, err := s.DB.Count()
+	total, err := s.DB.CountSearch(search)
 	if err != nil {
 		http.Error(w, "failed to load library", http.StatusInternalServerError)
 		return
@@ -114,6 +134,8 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 		toggleDir = "asc"
 	}
 
+	username, isAdmin := s.viewerInfo(r)
+
 	render(w, "library.html", map[string]any{
 		"Title":      "Library",
 		"Books":      books,
@@ -125,6 +147,9 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 		"NextPage":   page + 1,
 		"HasNext":    page < totalPages,
 		"TotalPages": totalPages,
+		"Username":   username,
+		"IsAdmin":    isAdmin,
+		"Query":      search,
 	})
 }
 
@@ -204,4 +229,85 @@ var filenameReplacer = strings.NewReplacer(
 
 func sanitizeFilename(name string) string {
 	return filenameReplacer.Replace(name)
+}
+
+func (s *Server) AdminUsers(w http.ResponseWriter, r *http.Request) {
+	list, err := s.Users.List()
+	if err != nil {
+		http.Error(w, "failed to load users", http.StatusInternalServerError)
+		return
+	}
+
+	username, isAdmin := s.viewerInfo(r)
+
+	render(w, "admin_users.html", map[string]any{
+		"Title":    "Manage Users",
+		"Users":    list,
+		"Username": username,
+		"IsAdmin":  isAdmin,
+	})
+}
+
+func (s *Server) renderAdminUsersError(w http.ResponseWriter, r *http.Request, errMsg string) {
+	list, _ := s.Users.List()
+	username, isAdmin := s.viewerInfo(r)
+	render(w, "admin_users.html", map[string]any{
+		"Title":    "Manage Users",
+		"Users":    list,
+		"Error":    errMsg,
+		"Username": username,
+		"IsAdmin":  isAdmin,
+	})
+}
+
+func (s *Server) AdminUsersCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+	isAdmin := r.FormValue("is_admin") == "on"
+
+	if err := s.Users.Create(username, password, isAdmin); err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+func (s *Server) AdminUsersDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if err := s.Users.Delete(id); err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+func (s *Server) AdminUsersResetPassword(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.Users.ResetPassword(id, r.FormValue("password")); err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }

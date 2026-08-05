@@ -3,17 +3,29 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/swvn/eink-library/internal/users"
 )
 
-func testAuthenticator(t *testing.T) *Authenticator {
+func testStore(t *testing.T) *users.Store {
 	t.Helper()
-	a, err := New("reader", "s3cret", "test-signing-secret", time.Hour)
+	s, err := users.Open(filepath.Join(t.TempDir(), "users.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return a
+	t.Cleanup(func() { s.Close() })
+	if err := s.Create("reader", "s3cret", false); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func testAuthenticator(t *testing.T) *Authenticator {
+	t.Helper()
+	return New("test-signing-secret", time.Hour, testStore(t))
 }
 
 func TestCheckPassword(t *testing.T) {
@@ -35,7 +47,7 @@ func TestSessionRoundTrip(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/login", nil)
-	a.IssueSession(w, req)
+	a.IssueSession(w, req, "reader")
 
 	cookies := w.Result().Cookies()
 	if len(cookies) != 1 {
@@ -44,24 +56,25 @@ func TestSessionRoundTrip(t *testing.T) {
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(cookies[0])
-	if !a.VerifySession(verifyReq) {
+	username, ok := a.VerifySession(verifyReq)
+	if !ok {
 		t.Error("expected valid session to verify")
+	}
+	if username != "reader" {
+		t.Errorf("username = %q, want %q", username, "reader")
 	}
 }
 
 func TestSessionExpired(t *testing.T) {
-	a, err := New("reader", "s3cret", "test-signing-secret", -time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
+	a := New("test-signing-secret", -time.Hour, testStore(t))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/login", nil)
-	a.IssueSession(w, req)
+	a.IssueSession(w, req, "reader")
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(w.Result().Cookies()[0])
-	if a.VerifySession(verifyReq) {
+	if _, ok := a.VerifySession(verifyReq); ok {
 		t.Error("expected expired session to fail verification")
 	}
 }
@@ -71,28 +84,29 @@ func TestSessionTamperedRejected(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/login", nil)
-	a.IssueSession(w, req)
+	a.IssueSession(w, req, "reader")
 	cookie := w.Result().Cookies()[0]
 	cookie.Value = cookie.Value + "x"
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(cookie)
-	if a.VerifySession(verifyReq) {
+	if _, ok := a.VerifySession(verifyReq); ok {
 		t.Error("expected tampered cookie to fail verification")
 	}
 }
 
 func TestSessionWrongSecretRejected(t *testing.T) {
-	a1, _ := New("reader", "s3cret", "secret-one", time.Hour)
-	a2, _ := New("reader", "s3cret", "secret-two", time.Hour)
+	store := testStore(t)
+	a1 := New("secret-one", time.Hour, store)
+	a2 := New("secret-two", time.Hour, store)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/login", nil)
-	a1.IssueSession(w, req)
+	a1.IssueSession(w, req, "reader")
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(w.Result().Cookies()[0])
-	if a2.VerifySession(verifyReq) {
+	if _, ok := a2.VerifySession(verifyReq); ok {
 		t.Error("expected session signed with different secret to fail verification")
 	}
 }
@@ -118,14 +132,62 @@ func TestRequireAuth_RedirectsUnauthenticated(t *testing.T) {
 
 func TestRequireAuth_AllowsAuthenticated(t *testing.T) {
 	a := testAuthenticator(t)
+	var gotUsername string
 	handler := a.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUsername, _ = UsernameFromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	issueW := httptest.NewRecorder()
-	a.IssueSession(issueW, httptest.NewRequest("POST", "/login", nil))
+	a.IssueSession(issueW, httptest.NewRequest("POST", "/login", nil), "reader")
 
 	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(issueW.Result().Cookies()[0])
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if gotUsername != "reader" {
+		t.Errorf("username in context = %q, want %q", gotUsername, "reader")
+	}
+}
+
+func TestRequireAdmin_ForbidsNonAdmin(t *testing.T) {
+	store := testStore(t) // "reader" created as non-admin
+	a := New("test-signing-secret", time.Hour, store)
+	handler := a.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	issueW := httptest.NewRecorder()
+	a.IssueSession(issueW, httptest.NewRequest("POST", "/login", nil), "reader")
+
+	req := httptest.NewRequest("GET", "/admin/users", nil)
+	req.AddCookie(issueW.Result().Cookies()[0])
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireAdmin_AllowsAdmin(t *testing.T) {
+	store := testStore(t)
+	if err := store.Create("admin", "s3cret", true); err != nil {
+		t.Fatal(err)
+	}
+	a := New("test-signing-secret", time.Hour, store)
+	handler := a.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	issueW := httptest.NewRecorder()
+	a.IssueSession(issueW, httptest.NewRequest("POST", "/login", nil), "admin")
+
+	req := httptest.NewRequest("GET", "/admin/users", nil)
 	req.AddCookie(issueW.Result().Cookies()[0])
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

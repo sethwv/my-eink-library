@@ -1,59 +1,46 @@
-// Package auth handles the single-user login flow: password check via
-// bcrypt and a stateless HMAC-signed session cookie (no server-side session store).
+// Package auth handles the login flow: delegating password checks to
+// internal/users, and issuing a stateless HMAC-signed session cookie
+// (no server-side session store).
 package auth
 
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/swvn/eink-library/internal/users"
 )
 
 const CookieName = "eink_session"
 
 type Authenticator struct {
-	username     string
-	passwordHash []byte
-	secret       []byte
-	ttl          time.Duration
+	users  *users.Store
+	secret []byte
+	ttl    time.Duration
 }
 
-// New hashes the configured password once at startup so it's never compared in plaintext.
-func New(username, password, secret string, ttl time.Duration) (*Authenticator, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
-	}
+// New creates an Authenticator backed by the given users store.
+func New(secret string, ttl time.Duration, store *users.Store) *Authenticator {
 	return &Authenticator{
-		username:     username,
-		passwordHash: hash,
-		secret:       []byte(secret),
-		ttl:          ttl,
-	}, nil
+		users:  store,
+		secret: []byte(secret),
+		ttl:    ttl,
+	}
 }
 
-// CheckPassword reports whether the given credentials match the configured user/pass.
+// CheckPassword reports whether the given credentials are a valid login.
 func (a *Authenticator) CheckPassword(username, password string) bool {
-	if subtle.ConstantTimeCompare([]byte(username), []byte(a.username)) != 1 {
-		// Still run bcrypt so failed-username timing doesn't leak whether the
-		// username was right, at the cost of one extra hash comparison.
-		bcrypt.CompareHashAndPassword(a.passwordHash, []byte(password))
-		return false
-	}
-	return bcrypt.CompareHashAndPassword(a.passwordHash, []byte(password)) == nil
+	return a.users.CheckPassword(username, password)
 }
 
 // IssueSession sets a signed session cookie for username.
-func (a *Authenticator) IssueSession(w http.ResponseWriter, r *http.Request) {
+func (a *Authenticator) IssueSession(w http.ResponseWriter, r *http.Request, username string) {
 	expires := time.Now().Add(a.ttl)
-	payload := a.username + "|" + strconv.FormatInt(expires.Unix(), 10)
+	payload := username + "|" + strconv.FormatInt(expires.Unix(), 10)
 	token := a.sign(payload)
 
 	http.SetCookie(w, &http.Cookie{
@@ -79,30 +66,31 @@ func (a *Authenticator) ClearSession(w http.ResponseWriter) {
 	})
 }
 
-// VerifySession reports whether the request carries a valid, unexpired session cookie.
-func (a *Authenticator) VerifySession(r *http.Request) bool {
+// VerifySession reports the signed-in username if the request carries a
+// valid, unexpired session cookie.
+func (a *Authenticator) VerifySession(r *http.Request) (string, bool) {
 	c, err := r.Cookie(CookieName)
 	if err != nil || c.Value == "" {
-		return false
+		return "", false
 	}
 
 	payload, ok := a.verify(c.Value)
 	if !ok {
-		return false
+		return "", false
 	}
 
 	parts := strings.SplitN(payload, "|", 2)
-	if len(parts) != 2 {
-		return false
-	}
-	if subtle.ConstantTimeCompare([]byte(parts[0]), []byte(a.username)) != 1 {
-		return false
+	if len(parts) != 2 || parts[0] == "" {
+		return "", false
 	}
 	exp, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
-		return false
+		return "", false
 	}
-	return time.Now().Unix() < exp
+	if time.Now().Unix() >= exp {
+		return "", false
+	}
+	return parts[0], true
 }
 
 func (a *Authenticator) sign(payload string) string {

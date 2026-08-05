@@ -15,6 +15,7 @@ import (
 	"github.com/swvn/eink-library/internal/config"
 	"github.com/swvn/eink-library/internal/index"
 	"github.com/swvn/eink-library/internal/thumbnail"
+	"github.com/swvn/eink-library/internal/users"
 	"github.com/swvn/eink-library/internal/web"
 )
 
@@ -75,11 +76,17 @@ func main() {
 	}
 	go watcher.Run(ctx)
 
-	authn, err := auth.New(cfg.LibraryUser, cfg.LibraryPass, cfg.SessionSecret, cfg.SessionTTL)
+	userStore, err := users.Open(filepath.Join(cfg.DataDir, "users.db"))
 	if err != nil {
-		log.Fatalf("init auth: %v", err)
+		log.Fatalf("open users store: %v", err)
 	}
-	srv := &web.Server{Auth: authn, DB: db, Covers: covers, LibraryPath: cfg.LibraryPath, PageSize: cfg.PageSize}
+	defer userStore.Close()
+	if err := userStore.Bootstrap(cfg.LibraryUser, cfg.LibraryPass); err != nil {
+		log.Fatalf("bootstrap admin user: %v", err)
+	}
+
+	authn := auth.New(cfg.SessionSecret, cfg.SessionTTL, userStore)
+	srv := &web.Server{Auth: authn, DB: db, Covers: covers, Users: userStore, LibraryPath: cfg.LibraryPath, PageSize: cfg.PageSize}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -94,8 +101,21 @@ func main() {
 	mux.Handle("GET /covers/{id}", authn.RequireAuth(http.HandlerFunc(srv.Cover)))
 	mux.Handle("GET /books/{id}/download", authn.RequireAuth(http.HandlerFunc(srv.DownloadEPUB)))
 	mux.Handle("GET /books/{id}/download.kepub", authn.RequireAuth(http.HandlerFunc(srv.DownloadKepub)))
+	mux.Handle("GET /admin/users", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsers)))
+	mux.Handle("POST /admin/users", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersCreate)))
+	mux.Handle("POST /admin/users/{id}/delete", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersDelete)))
+	mux.Handle("POST /admin/users/{id}/reset-password", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersResetPassword)))
 
-	httpSrv := &http.Server{Addr: ":" + cfg.Port, Handler: mux}
+	httpSrv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           mux,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		// No WriteTimeout: the kepub download handler streams a live
+		// conversion of potentially large books; a write deadline could
+		// truncate legitimate downloads.
+	}
 
 	serveErr := make(chan error, 1)
 	go func() {

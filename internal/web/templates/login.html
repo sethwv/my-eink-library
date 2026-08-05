@@ -1,11 +1,15 @@
 {{define "content"}}
-<div class="login-box">
+<div class="login-card">
   <h1>eink-library</h1>
   {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
   <form method="POST" action="/login">
     <input type="hidden" name="next" value="{{.Next}}">
-    <label>Username<br><input type="text" name="username" autocapitalize="off" autocorrect="off"></label><br>
-    <label>Password<br><input type="password" name="password"></label><br>
+    <label>Username
+      <input type="text" name="username" autocapitalize="off" autocorrect="off" autofocus>
+    </label>
+    <label>Password
+      <input type="password" name="password">
+    </label>
     <button type="submit">Log in</button>
   </form>
 </div>

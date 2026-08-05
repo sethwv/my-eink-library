@@ -79,7 +79,7 @@ func TestScan_IndexesBooks(t *testing.T) {
 		t.Fatalf("Count = %d, want 2", n)
 	}
 
-	books, err := db.List(SortTitle, false, 1, 10)
+	books, err := db.List(SortTitle, false, 1, 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestScan_SkipsUnchangedFiles(t *testing.T) {
 	if err := db.Scan(libDir, nil); err != nil {
 		t.Fatal(err)
 	}
-	before, err := db.List(SortTitle, false, 1, 10)
+	before, err := db.List(SortTitle, false, 1, 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestScan_SkipsUnchangedFiles(t *testing.T) {
 	if err := db.Scan(libDir, nil); err != nil {
 		t.Fatal(err)
 	}
-	after, err := db.List(SortTitle, false, 1, 10)
+	after, err := db.List(SortTitle, false, 1, 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestScan_MalformedEpubStillIndexed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	books, err := db.List(SortTitle, false, 1, 10)
+	books, err := db.List(SortTitle, false, 1, 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,5 +164,48 @@ func TestScan_MalformedEpubStillIndexed(t *testing.T) {
 	}
 	if books[0].Title != "bad.epub" {
 		t.Errorf("Title = %q, want fallback filename %q", books[0].Title, "bad.epub")
+	}
+}
+
+func TestSearch_MatchesTitleAuthorSeries(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Zebra Tales", "Amy Zed")
+	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Banana Republic", "Bob Young")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	byTitle, err := db.List(SortTitle, false, 1, 10, "zebra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byTitle) != 1 || byTitle[0].Title != "Zebra Tales" {
+		t.Errorf("title search: got %+v, want 1 match on Zebra Tales", byTitle)
+	}
+
+	byAuthor, err := db.List(SortTitle, false, 1, 10, "young")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byAuthor) != 1 || byAuthor[0].Author != "Bob Young" {
+		t.Errorf("author search: got %+v, want 1 match on Bob Young", byAuthor)
+	}
+
+	noMatch, err := db.List(SortTitle, false, 1, 10, "nonexistent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(noMatch) != 0 {
+		t.Errorf("expected no matches, got %d", len(noMatch))
+	}
+
+	count, err := db.CountSearch("zebra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("CountSearch = %d, want 1", count)
 	}
 }

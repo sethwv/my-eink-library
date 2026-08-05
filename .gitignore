@@ -13,6 +13,9 @@ coverage.txt
 *.db-wal
 *.db-shm
 
+# Real local credentials/volumes go here, never in the tracked docker-compose.yml
+docker-compose.override.yml
+
 # Editor/OS
 .DS_Store
 .idea/
@@ -30,3 +33,6 @@ CLAUDE.md
 .dolt/
 .beads-credential-key
 .beads/proxieddb/
+
+
+test
