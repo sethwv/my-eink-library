@@ -6,17 +6,25 @@
 
 <form method="GET" action="{{.Action}}" class="toolbar">
   {{if .Name}}<input type="hidden" name="name" value="{{.Name}}">{{end}}
-  <label for="q">Search</label>
-  <input type="text" id="q" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input">
-  <label for="sort">Sort by</label>
-  <select id="sort" name="sort" onchange="this.form.submit()">
-    <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
-    <option value="author" {{if eq .Sort "author"}}selected{{end}}>Author</option>
-    <option value="series" {{if eq .Sort "series"}}selected{{end}}>Series</option>
-    <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
-    <option value="released" {{if eq .Sort "released"}}selected{{end}}>Release date</option>
-  </select>
-  <div>
+  <table class="toolbar-table">
+    <tr>
+      <td><label for="q">Search</label></td>
+      <td><input type="text" id="q" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input"></td>
+    </tr>
+    <tr>
+      <td><label for="sort">Sort by</label></td>
+      <td>
+        <select id="sort" name="sort" onchange="this.form.submit()">
+          <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
+          <option value="author" {{if eq .Sort "author"}}selected{{end}}>Author</option>
+          <option value="series" {{if eq .Sort "series"}}selected{{end}}>Series</option>
+          <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
+          <option value="released" {{if eq .Sort "released"}}selected{{end}}>Release date</option>
+        </select>
+      </td>
+    </tr>
+  </table>
+  <div class="toolbar-actions">
     <button type="submit" name="dir" value="{{.ToggleDir}}" class="dir-toggle">{{if eq .Dir "asc"}}&uarr; asc{{else}}&darr; desc{{end}}</button>
     <button type="submit" class="search-btn">Search</button>
   </div>
@@ -29,14 +37,9 @@
 <div class="grid">
 {{range .Books}}
 {{$book := .}}
-<div class="card">
+<div class="card" id="card-{{.ID}}">
   <div class="cover-wrap">
     <a class="cover-link" href="#" onclick="return openModal('book-{{.ID}}');"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
-    {{if $.ViewingShelfID}}
-    <a href="#" onclick="return openModal('remove-{{.ID}}');" class="shelf-btn" aria-label="Remove from {{$.ShelfName}}">&minus;</a>
-    {{else}}
-    <a href="#" onclick="return openModal('shelves-{{.ID}}');" class="shelf-btn" aria-label="Add to shelf">+</a>
-    {{end}}
   </div>
   <div class="card-body">
     <div class="card-title">{{.Title}}</div>
@@ -49,39 +52,16 @@
     <h3>{{.Title}}</h3>
     <a class="btn-download" href="/books/{{.ID}}/download">Download EPUB</a>
     <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
-    <a class="modal-close" href="#" onclick="return closeModal('book-{{.ID}}');">Cancel</a>
-  </div>
-</div>
-{{if $.ViewingShelfID}}
-<div id="remove-{{$book.ID}}" class="modal-overlay">
-  <div class="modal-box">
-    <h3>Remove from {{$.ShelfName}}?</h3>
-    <p class="muted">{{$book.Title}}</p>
-    <form method="POST" action="/books/{{$book.ID}}/shelves/{{$.ViewingShelfID}}">
-      <input type="hidden" name="next" value="{{$.CurrentURL}}">
-      <button type="submit" class="btn-download">Remove</button>
-    </form>
-    <a class="modal-close" href="#" onclick="return closeModal('remove-{{$book.ID}}');">Cancel</a>
-  </div>
-</div>
-{{else}}
-<div id="shelves-{{$book.ID}}" class="modal-overlay">
-  <div class="modal-box">
-    <h3>{{$book.Title}}</h3>
+    <div class="modal-section-label">Shelves</div>
     <ul class="shelf-list">
     {{range $.Shelves}}
     <li>
-      <form method="POST" action="/books/{{$book.ID}}/shelves/{{.ID}}" class="shelf-toggle-form">
-        <input type="hidden" name="next" value="{{$.CurrentURL}}">
-        <button type="submit" class="shelf-toggle{{if index $.ShelfMemberships .ID $book.ID}} is-on{{end}}">{{.Name}}</button>
-      </form>
+      <button type="button" class="shelf-toggle{{if index $.ShelfMemberships .ID $book.ID}} is-on{{end}}" onclick="return toggleShelf({{$book.ID}}, {{.ID}}, this, {{if eq .ID $.ViewingShelfID}}true{{else}}false{{end}});">{{.Name}}</button>
     </li>
     {{end}}
     </ul>
-    <a class="modal-close" href="#" onclick="return closeModal('shelves-{{$book.ID}}');">Close</a>
   </div>
 </div>
-{{end}}
 {{end}}
 </div>
 

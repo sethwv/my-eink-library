@@ -145,8 +145,7 @@ type bookListParams struct {
 	heading        string
 	defaultSort    index.SortKey
 	filtered       bool   // show the "back to library" link
-	viewingShelfID int64  // set only when viewing a specific shelf (e.g. Favourites); swaps the "+" for a "-"-with-confirm
-	shelfName      string // display name for the remove-confirm modal, paired with viewingShelfID
+	viewingShelfID int64 // set only when viewing a specific shelf (e.g. Favourites); its shelf-toggle button removes the book from the page instead of just flipping the checkmark
 }
 
 func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookListParams) {
@@ -232,7 +231,6 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"Filtered":         p.filtered,
 		"ShelfMemberships": memberships,
 		"ViewingShelfID":   p.viewingShelfID,
-		"ShelfName":        p.shelfName,
 	}
 	mergeInto(data, base)
 	render(w, "library.html", data)
@@ -289,7 +287,6 @@ func (s *Server) FavoritesHandler(w http.ResponseWriter, r *http.Request) {
 		defaultSort:    index.SortTitle,
 		filtered:       true,
 		viewingShelfID: shelfID,
-		shelfName:      favoritesName,
 	})
 }
 
