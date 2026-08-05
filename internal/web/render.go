@@ -12,10 +12,12 @@ var templatesFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-// render parses layout.html + the named page template fresh for each call so
-// that each page's "content" block doesn't collide with any other page's.
+// render parses layout.html + partials.html + the named page template fresh
+// for each call so that each page's "content" block doesn't collide with any
+// other page's. partials.html holds shared blocks (e.g. "topbar") reused
+// across authenticated pages.
 func render(w http.ResponseWriter, page string, data any) {
-	tmpl, err := template.ParseFS(templatesFS, "templates/layout.html", "templates/"+page)
+	tmpl, err := template.ParseFS(templatesFS, "templates/layout.html", "templates/partials.html", "templates/"+page)
 	if err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return

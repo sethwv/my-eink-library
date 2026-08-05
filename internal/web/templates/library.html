@@ -1,14 +1,11 @@
 {{define "content"}}
-<header class="topbar">
-  <h1 class="site-title"><a href="/">eink-library</a></h1>
-  <div class="topbar-right">
-    <span class="muted">{{.Username}}</span>
-    {{if .IsAdmin}}<a href="/admin/users">Manage users</a>{{end}}
-    <form method="POST" action="/logout" class="inline-form"><button type="submit" class="btn-link">Log out</button></form>
-  </div>
-</header>
+{{template "topbar" .}}
 
-<form method="GET" action="/" class="toolbar">
+<h1>{{.Heading}}</h1>
+{{if .Filtered}}<p><a href="/">&laquo; back to library</a></p>{{end}}
+
+<form method="GET" action="{{.Action}}" class="toolbar">
+  {{if .Name}}<input type="hidden" name="name" value="{{.Name}}">{{end}}
   <input type="text" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input">
   <label>Sort by
     <select name="sort" onchange="this.form.submit()">
@@ -16,9 +13,10 @@
       <option value="author" {{if eq .Sort "author"}}selected{{end}}>Author</option>
       <option value="series" {{if eq .Sort "series"}}selected{{end}}>Series</option>
       <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
+      <option value="released" {{if eq .Sort "released"}}selected{{end}}>Release date</option>
     </select>
   </label>
-  <a href="/?sort={{.Sort}}&dir={{.ToggleDir}}&page={{.Page}}&q={{.Query}}">{{if eq .Dir "asc"}}↑ asc{{else}}↓ desc{{end}}</a>
+  <a href="{{.Action}}?sort={{.Sort}}&dir={{.ToggleDir}}&page={{.Page}}&q={{.Query}}{{if .Name}}&name={{urlquery .Name}}{{end}}">{{if eq .Dir "asc"}}↑ asc{{else}}↓ desc{{end}}</a>
   <button type="submit">Search</button>
 </form>
 
@@ -29,23 +27,29 @@
 <div class="grid">
 {{range .Books}}
 <div class="card">
-  <a href="/books/{{.ID}}/download"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
+  <a class="cover-link" href="#book-{{.ID}}"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
   <div class="card-body">
     <div class="card-title">{{.Title}}</div>
-    {{if .Author}}<div class="card-author">{{.Author}}</div>{{end}}
-    {{if .Series}}<div class="card-series">{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</div>{{end}}
-    <div class="card-actions">
-      <a href="/books/{{.ID}}/download">EPUB</a>
-      <a href="/books/{{.ID}}/download.kepub">KEPUB</a>
+    <div class="card-chips">
+      {{if .Author}}<a class="chip" href="/authors?name={{urlquery .Author}}">{{.Author}}</a>{{end}}
+      {{if .Series}}<a class="chip chip-series" href="/series?name={{urlquery .Series}}">{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</a>{{end}}
     </div>
+  </div>
+</div>
+<div id="book-{{.ID}}" class="modal-overlay">
+  <div class="modal-box">
+    <h3>{{.Title}}</h3>
+    <a class="btn-download" href="/books/{{.ID}}/download">Download EPUB</a>
+    <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
+    <a class="modal-close" href="#">Cancel</a>
   </div>
 </div>
 {{end}}
 </div>
 
 <nav class="pagination">
-{{if gt .Page 1}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.PrevPage}}&q={{.Query}}">&laquo; prev</a>{{end}}
+{{if gt .Page 1}}<a href="{{.Action}}?sort={{.Sort}}&dir={{.Dir}}&page={{.PrevPage}}&q={{.Query}}{{if .Name}}&name={{urlquery .Name}}{{end}}">&laquo; prev</a>{{end}}
 <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
-{{if .HasNext}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.NextPage}}&q={{.Query}}">next &raquo;</a>{{end}}
+{{if .HasNext}}<a href="{{.Action}}?sort={{.Sort}}&dir={{.Dir}}&page={{.NextPage}}&q={{.Query}}{{if .Name}}&name={{urlquery .Name}}{{end}}">next &raquo;</a>{{end}}
 </nav>
 {{end}}

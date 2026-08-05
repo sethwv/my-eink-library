@@ -27,7 +27,7 @@ func TestWatcher_DetectsNewAndRemovedFiles(t *testing.T) {
 	writeTestEpub(t, bookPath, "New Book", "Author")
 
 	waitFor(t, 5*time.Second, func() bool {
-		n, _ := db.Count()
+		n, _ := db.Count(Filter{})
 		return n == 1
 	}, "book to appear in index after create")
 
@@ -36,7 +36,7 @@ func TestWatcher_DetectsNewAndRemovedFiles(t *testing.T) {
 	}
 
 	waitFor(t, 5*time.Second, func() bool {
-		n, _ := db.Count()
+		n, _ := db.Count(Filter{})
 		return n == 0
 	}, "book to disappear from index after delete")
 }
