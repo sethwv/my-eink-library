@@ -1,7 +1,7 @@
 {{define "topbar"}}
 <header class="topbar">
   <div class="topbar-main">
-    <h1 class="site-title"><a href="/">eink-library</a></h1>
+    <h1 class="site-title"><a href="/">{{.SiteName}}</a></h1>
     <nav class="topnav">
       <a href="/" title="Library">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -15,16 +15,41 @@
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <span class="nav-label">Series</span>
       </a>
-      <a href="/favorites" title="Favourites">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        <span class="nav-label">Favourites</span>
+      <a href="#shelves-nav-modal" title="Shelves">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18"/><path d="M21 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+        <span class="nav-label">Shelves</span>
+      </a>
+      <a href="#account-modal" title="Account">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19a6 6 0 0 1 11 0"/></svg>
+        <span class="nav-label">{{.Username}}</span>
       </a>
     </nav>
   </div>
-  <div class="topbar-right">
-    <span class="muted">{{.Username}}</span>
-    {{if .IsAdmin}}<a href="/admin/users">Manage users</a>{{end}}
-    <form method="POST" action="/logout" class="inline-form"><button type="submit" class="btn-link">Log out</button></form>
-  </div>
 </header>
+
+<div id="shelves-nav-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Shelves</h3>
+    <ul class="shelf-list">
+    {{range .Shelves}}
+    <li><a class="shelf-toggle" href="/favorites">{{.Name}}</a></li>
+    {{end}}
+    </ul>
+    <a class="modal-close" href="#">Close</a>
+  </div>
+</div>
+
+<div id="account-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h3>{{.Username}}</h3>
+    <ul class="shelf-list">
+      {{if .IsAdmin}}
+      <li><a class="shelf-toggle" href="/admin/users">Manage users</a></li>
+      <li><a class="shelf-toggle" href="/admin/server">Manage server</a></li>
+      {{end}}
+      <li><form method="POST" action="/logout"><button type="submit" class="shelf-toggle">Log out</button></form></li>
+    </ul>
+    <a class="modal-close" href="#">Close</a>
+  </div>
+</div>
 {{end}}

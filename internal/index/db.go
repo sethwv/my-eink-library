@@ -89,3 +89,22 @@ func Open(dbPath string) (*DB, error) {
 func (d *DB) Close() error {
 	return d.sql.Close()
 }
+
+// SetMeta upserts a single key/value pair in the meta table.
+func (d *DB) SetMeta(key, value string) error {
+	_, err := d.sql.Exec(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	return err
+}
+
+// GetMeta returns the value for key and whether it was found.
+func (d *DB) GetMeta(key string) (string, bool, error) {
+	var value string
+	err := d.sql.QueryRow(`SELECT value FROM meta WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return value, true, nil
+}

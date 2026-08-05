@@ -5,8 +5,10 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/swvn/eink-library/internal/auth"
 	"github.com/swvn/eink-library/internal/index"
@@ -21,20 +23,48 @@ type Server struct {
 	Covers      *thumbnail.Store
 	Users       *users.Store
 	LibraryPath string
+	DataDir     string
 	PageSize    int
+	SiteName    string
+	StartedAt   time.Time
 }
 
 const favoritesSlug = "favourites"
 const favoritesName = "Favourites"
 
-// viewerInfo returns the signed-in username and whether they're an admin,
-// for use in template data across authenticated pages.
-func (s *Server) viewerInfo(r *http.Request) (username string, isAdmin bool) {
-	username, _ = auth.UsernameFromContext(r.Context())
+// baseData returns template data common to every page that renders the
+// shared topbar (Username, IsAdmin, Shelves, SiteName, CurrentURL), ready
+// to be merged into a handler's page-specific map via mergeInto. shelves is
+// also returned directly for callers (renderBookList) that need to iterate
+// it further, e.g. to compute per-book shelf membership.
+func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index.Shelf, err error) {
+	username, _ := auth.UsernameFromContext(r.Context())
+	isAdmin := false
 	if username != "" {
 		isAdmin = s.Users.IsAdmin(username)
+		if _, err = s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName); err != nil {
+			return nil, nil, err
+		}
+		if shelves, err = s.DB.ListShelves(username); err != nil {
+			return nil, nil, err
+		}
 	}
-	return username, isAdmin
+
+	data = map[string]any{
+		"Username":   username,
+		"IsAdmin":    isAdmin,
+		"Shelves":    shelves,
+		"SiteName":   s.SiteName,
+		"CurrentURL": r.URL.RequestURI(),
+	}
+	return data, shelves, nil
+}
+
+// mergeInto copies every key from src into dst, overwriting on conflict.
+func mergeInto(dst, src map[string]any) {
+	for k, v := range src {
+		dst[k] = v
+	}
 }
 
 // safeNext restricts post-login redirect targets to same-site relative paths,
@@ -47,10 +77,17 @@ func safeNext(next string) string {
 }
 
 func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
-	render(w, "login.html", map[string]any{
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{
 		"Title": "Log in",
 		"Next":  safeNext(r.URL.Query().Get("next")),
-	})
+	}
+	mergeInto(data, base)
+	render(w, "login.html", data)
 }
 
 func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
@@ -64,11 +101,14 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 	next := safeNext(r.FormValue("next"))
 
 	if !s.Auth.CheckPassword(username, password) {
-		render(w, "login.html", map[string]any{
+		base, _, _ := s.baseData(r)
+		data := map[string]any{
 			"Title": "Log in",
 			"Error": "Incorrect username or password.",
 			"Next":  next,
-		})
+		}
+		mergeInto(data, base)
+		render(w, "login.html", data)
 		return
 	}
 
@@ -159,31 +199,22 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		toggleDir = "asc"
 	}
 
-	username, isAdmin := s.viewerInfo(r)
-
-	var shelves []index.Shelf
+	base, shelves, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+		return
+	}
 	memberships := map[int64]map[int64]bool{}
-	if username != "" {
-		if _, err := s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName); err != nil {
-			http.Error(w, "failed to load shelves", http.StatusInternalServerError)
-			return
-		}
-		shelves, err = s.DB.ListShelves(username)
+	for _, sh := range shelves {
+		ids, err := s.DB.ShelfBookIDs(sh.ID)
 		if err != nil {
 			http.Error(w, "failed to load shelves", http.StatusInternalServerError)
 			return
 		}
-		for _, sh := range shelves {
-			ids, err := s.DB.ShelfBookIDs(sh.ID)
-			if err != nil {
-				http.Error(w, "failed to load shelves", http.StatusInternalServerError)
-				return
-			}
-			memberships[sh.ID] = ids
-		}
+		memberships[sh.ID] = ids
 	}
 
-	render(w, "library.html", map[string]any{
+	data := map[string]any{
 		"Title":            p.heading,
 		"Heading":          p.heading,
 		"Books":            books,
@@ -195,18 +226,16 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"NextPage":         page + 1,
 		"HasNext":          page < totalPages,
 		"TotalPages":       totalPages,
-		"Username":         username,
-		"IsAdmin":          isAdmin,
 		"Query":            search,
 		"Action":           p.action,
 		"Name":             p.name,
 		"Filtered":         p.filtered,
-		"CurrentURL":       r.URL.RequestURI(),
-		"Shelves":          shelves,
 		"ShelfMemberships": memberships,
 		"ViewingShelfID":   p.viewingShelfID,
 		"ShelfName":        p.shelfName,
-	})
+	}
+	mergeInto(data, base)
+	render(w, "library.html", data)
 }
 
 // AuthorsHandler is dual-mode: with no ?name=, it lists every author (browse
@@ -320,16 +349,20 @@ func (s *Server) renderNameIndex(w http.ResponseWriter, r *http.Request, heading
 		return
 	}
 
-	username, isAdmin := s.viewerInfo(r)
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
 
-	render(w, "name_index.html", map[string]any{
+	data := map[string]any{
 		"Title":    heading,
 		"Heading":  heading,
 		"Items":    items,
 		"LinkBase": linkBase,
-		"Username": username,
-		"IsAdmin":  isAdmin,
-	})
+	}
+	mergeInto(data, base)
+	render(w, "name_index.html", data)
 }
 
 func (s *Server) Cover(w http.ResponseWriter, r *http.Request) {
@@ -417,26 +450,30 @@ func (s *Server) AdminUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username, isAdmin := s.viewerInfo(r)
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
 
-	render(w, "admin_users.html", map[string]any{
-		"Title":    "Manage Users",
-		"Users":    list,
-		"Username": username,
-		"IsAdmin":  isAdmin,
-	})
+	data := map[string]any{
+		"Title": "Manage Users",
+		"Users": list,
+	}
+	mergeInto(data, base)
+	render(w, "admin_users.html", data)
 }
 
 func (s *Server) renderAdminUsersError(w http.ResponseWriter, r *http.Request, errMsg string) {
 	list, _ := s.Users.List()
-	username, isAdmin := s.viewerInfo(r)
-	render(w, "admin_users.html", map[string]any{
-		"Title":    "Manage Users",
-		"Users":    list,
-		"Error":    errMsg,
-		"Username": username,
-		"IsAdmin":  isAdmin,
-	})
+	base, _, _ := s.baseData(r)
+	data := map[string]any{
+		"Title": "Manage Users",
+		"Users": list,
+		"Error": errMsg,
+	}
+	mergeInto(data, base)
+	render(w, "admin_users.html", data)
 }
 
 func (s *Server) AdminUsersCreate(w http.ResponseWriter, r *http.Request) {
@@ -489,4 +526,77 @@ func (s *Server) AdminUsersResetPassword(w http.ResponseWriter, r *http.Request)
 	}
 
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// ServerInfo shows admin-only read-only server/library stats.
+func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+
+	bookCount, err := s.DB.Count(index.Filter{})
+	if err != nil {
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
+	}
+	authors, err := s.DB.ListAuthors()
+	if err != nil {
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
+	}
+	series, err := s.DB.ListSeries()
+	if err != nil {
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
+	}
+	userList, err := s.Users.List()
+	if err != nil {
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
+	}
+	adminCount := 0
+	for _, u := range userList {
+		if u.IsAdmin {
+			adminCount++
+		}
+	}
+
+	var lastScanAt string
+	if v, ok, _ := s.DB.GetMeta("last_scan_at"); ok {
+		if unix, err := strconv.ParseInt(v, 10, 64); err == nil {
+			lastScanAt = time.Unix(unix, 0).Format("2006-01-02 15:04:05 MST")
+		}
+	}
+	var lastScanDurationMs string
+	if v, ok, _ := s.DB.GetMeta("last_scan_duration_ms"); ok {
+		lastScanDurationMs = v
+	}
+
+	data := map[string]any{
+		"Title":              "Manage Server",
+		"GoVersion":          runtime.Version(),
+		"Uptime":             time.Since(s.StartedAt).Round(time.Second).String(),
+		"LibraryPath":        s.LibraryPath,
+		"DataDir":            s.DataDir,
+		"BookCount":          bookCount,
+		"AuthorCount":        len(authors),
+		"SeriesCount":        len(series),
+		"UserCount":          len(userList),
+		"AdminCount":         adminCount,
+		"LastScanAt":         lastScanAt,
+		"LastScanDurationMs": lastScanDurationMs,
+	}
+	mergeInto(data, base)
+	render(w, "admin_server.html", data)
+}
+
+// ServerRescan triggers a synchronous full library rescan, then returns to the server info page.
+func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
+	if err := s.DB.Scan(s.LibraryPath, s.Covers); err != nil {
+		http.Error(w, "rescan failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }

@@ -15,6 +15,7 @@ type Config struct {
 	LibraryPass   string
 	SessionSecret string
 	Port          string
+	SiteName      string
 	CoverWidth    int
 	PageSize      int
 	SessionTTL    time.Duration
@@ -28,6 +29,7 @@ func Load() (*Config, error) {
 		LibraryPass:   os.Getenv("LIBRARY_PASS"),
 		SessionSecret: os.Getenv("SESSION_SECRET"),
 		Port:          getenv("PORT", "8080"),
+		SiteName:      getenv("SITE_NAME", "eink-library"),
 	}
 
 	var err error

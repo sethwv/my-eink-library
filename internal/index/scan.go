@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,8 +23,20 @@ type CoverSaver interface {
 
 // Scan walks libraryPath for .epub files and upserts them into the index,
 // then deletes rows for files that no longer exist. Per-file parse errors
-// are logged and stored on the row rather than aborting the scan.
+// are logged and stored on the row rather than aborting the scan. Records
+// last_scan_at/last_scan_duration_ms in the meta table on success.
 func (d *DB) Scan(libraryPath string, saver CoverSaver) error {
+	start := time.Now()
+	if err := d.scan(libraryPath, saver); err != nil {
+		return err
+	}
+
+	_ = d.SetMeta("last_scan_at", strconv.FormatInt(time.Now().Unix(), 10))
+	_ = d.SetMeta("last_scan_duration_ms", strconv.FormatInt(time.Since(start).Milliseconds(), 10))
+	return nil
+}
+
+func (d *DB) scan(libraryPath string, saver CoverSaver) error {
 	seen := make(map[string]bool)
 
 	err := filepath.WalkDir(libraryPath, func(path string, entry fs.DirEntry, err error) error {
