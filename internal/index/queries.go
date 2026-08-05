@@ -60,7 +60,13 @@ func (d *DB) List(sort SortKey, descending bool, page, pageSize int, f Filter) (
 	offset := (page - 1) * pageSize
 
 	where, args := buildWhereClause(f)
-	query := fmt.Sprintf(`SELECT %s FROM books %s ORDER BY %s %s, id ASC LIMIT ? OFFSET ?`, bookColumns, where, col, dir)
+	orderBy := fmt.Sprintf("%s %s", col, dir)
+	if sort == SortReleased {
+		// A missing release date should always sink to the bottom of the
+		// list, whichever direction the visible date column is sorted in.
+		orderBy = fmt.Sprintf("(published_date IS NULL OR published_date = ''), %s", orderBy)
+	}
+	query := fmt.Sprintf(`SELECT %s FROM books %s ORDER BY %s, id ASC LIMIT ? OFFSET ?`, bookColumns, where, orderBy)
 	args = append(args, pageSize, offset)
 
 	rows, err := d.sql.Query(query, args...)

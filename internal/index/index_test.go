@@ -49,6 +49,28 @@ func writeTestEpubWithSeries(t *testing.T, path, title, author, series string, s
 	writeTestEpubOPF(t, path, testOPFWithSeries(title, author, series, seriesIndex))
 }
 
+func testOPFWithDate(title, author, date string) string {
+	dateTag := ""
+	if date != "" {
+		dateTag = `<dc:date>` + date + `</dc:date>`
+	}
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>` + title + `</dc:title>
+    <dc:creator>` + author + `</dc:creator>
+    ` + dateTag + `
+  </metadata>
+  <manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest>
+  <spine><itemref idref="c1"/></spine>
+</package>`
+}
+
+func writeTestEpubWithDate(t *testing.T, path, title, author, date string) {
+	t.Helper()
+	writeTestEpubOPF(t, path, testOPFWithDate(title, author, date))
+}
+
 func writeTestEpubOPF(t *testing.T, path, opf string) {
 	t.Helper()
 	f, err := os.Create(path)
@@ -261,6 +283,48 @@ func TestFilter_ExactAuthorAndSeries(t *testing.T) {
 	if len(noMatch) != 0 {
 		t.Errorf("expected exact-match filter to reject partial name, got %d results", len(noMatch))
 	}
+}
+
+func TestList_ReleasedSortNullsLast(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpubWithDate(t, filepath.Join(libDir, "b1.epub"), "Older Book", "Amy Zed", "2000-01-01")
+	writeTestEpubWithDate(t, filepath.Join(libDir, "b2.epub"), "Newer Book", "Amy Zed", "2020-01-01")
+	writeTestEpubWithDate(t, filepath.Join(libDir, "b3.epub"), "Undated Book", "Amy Zed", "")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	ascending, err := db.List(SortReleased, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ascending) != 3 || ascending[len(ascending)-1].Title != "Undated Book" {
+		t.Fatalf("ascending release-date order: got %+v, want Undated Book last", titles(ascending))
+	}
+	if ascending[0].Title != "Older Book" || ascending[1].Title != "Newer Book" {
+		t.Errorf("ascending release-date order among dated books: got %+v, want Older Book then Newer Book", titles(ascending))
+	}
+
+	descending, err := db.List(SortReleased, true, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(descending) != 3 || descending[len(descending)-1].Title != "Undated Book" {
+		t.Fatalf("descending release-date order: got %+v, want Undated Book last", titles(descending))
+	}
+	if descending[0].Title != "Newer Book" || descending[1].Title != "Older Book" {
+		t.Errorf("descending release-date order among dated books: got %+v, want Newer Book then Older Book", titles(descending))
+	}
+}
+
+func titles(books []Book) []string {
+	out := make([]string, len(books))
+	for i, b := range books {
+		out[i] = b.Title
+	}
+	return out
 }
 
 func TestListAuthorsAndSeries(t *testing.T) {

@@ -3,10 +3,30 @@
 // device (Kobo's QtWebKit) even though it's a very old, otherwise-safe CSS
 // selector. No fetch, no arrow functions, no let/const: just
 // getElementById and style.display, the most basic DOM API there is.
+//
+// The dark backdrop (#modal-backdrop, defined once in layout.html) and the
+// per-book box (.modal-overlay) are separate elements on purpose: the
+// backdrop is position:fixed so it always covers the current viewport with
+// zero size computation needed, while .modal-overlay is position:absolute
+// and sized to fit only its own content, so a tall box (long description)
+// just scrolls with the rest of the page instead of needing an inner
+// scroll region (this engine's inner-element scrollbars are known-buggy).
+// Since .modal-overlay's markup lives wherever its book's card happens to
+// be in the DOM, openModal positions it at the current scroll offset so it
+// appears where the user is looking rather than wherever that DOM node
+// naturally falls.
+var openModalId = null;
+
 function openModal(id) {
   var el = document.getElementById(id);
+  var backdrop = document.getElementById("modal-backdrop");
   if (el) {
+    el.style.top = (window.pageYOffset || document.documentElement.scrollTop || 0) + "px";
     el.style.display = "block";
+    openModalId = id;
+  }
+  if (backdrop) {
+    backdrop.style.display = "block";
   }
   return false;
 }
@@ -16,19 +36,31 @@ function closeModal(id) {
   if (el) {
     el.style.display = "none";
   }
+  var backdrop = document.getElementById("modal-backdrop");
+  if (backdrop) {
+    backdrop.style.display = "none";
+  }
+  openModalId = null;
   return false;
 }
 
-// Tapping the dark backdrop (not the modal box or anything inside it)
-// closes whichever modal it belongs to. A click inside .modal-box always
-// has some descendant element as e.target, never the overlay div itself,
-// so this single check distinguishes "outside" from "inside" for every
-// modal on the page without wiring up each one individually.
+// Tapping the dark backdrop, or the per-book overlay's own padding area
+// (outside .modal-box but inside .modal-overlay), closes whichever modal
+// is open. A click inside .modal-box always has some descendant element
+// as e.target, never these two elements, so this distinguishes "outside"
+// from "inside" without wiring up each modal individually.
 document.onclick = function (e) {
   e = e || window.event;
   var target = e.target || e.srcElement;
-  if (target && (" " + target.className + " ").indexOf(" modal-overlay ") > -1) {
-    target.style.display = "none";
+  if (!target) {
+    return;
+  }
+  if (target.id === "modal-backdrop") {
+    closeModal(openModalId);
+    return;
+  }
+  if ((" " + target.className + " ").indexOf(" modal-overlay ") > -1) {
+    closeModal(target.id);
   }
 };
 
@@ -55,6 +87,9 @@ function toggleShelf(bookId, shelfId, btn, isViewing) {
     if (isViewing) {
       var overlay = document.getElementById("book-" + bookId);
       var card = document.getElementById("card-" + bookId);
+      // The backdrop is shared/global now, not part of this overlay — removing
+      // just the overlay would leave the backdrop up with nothing on top of it.
+      closeModal("book-" + bookId);
       if (overlay && overlay.parentNode) {
         overlay.parentNode.removeChild(overlay);
       }

@@ -52,6 +52,7 @@
     <div class="card-title">{{.Title}}</div>
     {{if .Author}}<div class="card-author"><a href="/authors?name={{urlquery .Author}}">{{.Author}}</a></div>{{end}}
     {{if .Series}}<div class="card-series">{{if .SeriesIndex}}<span class="series-index">{{.SeriesIndex}}</span> &middot; {{end}}<a href="/series?name={{urlquery .Series}}">{{.Series}}</a></div>{{end}}
+    {{if .AddedAt}}<div class="card-date">Added {{formatUnix .AddedAt}}</div>{{end}}
   </div>
 </div>
 <div id="book-{{.ID}}" class="modal-overlay">
@@ -68,6 +69,13 @@
         </td>
       </tr>
     </table>
+    <div class="modal-meta">
+      <div class="modal-dates">
+        {{if .AddedAt}}<span>Added {{formatUnix .AddedAt}}</span>{{end}}
+        {{if .PublishedAt}}<span>Released {{formatPublished .PublishedAt}}</span>{{end}}
+      </div>
+      {{if .Description}}<p class="modal-description">{{plainText .Description}}</p>{{end}}
+    </div>
     <div class="modal-section-label">Shelves</div>
     <ul class="shelf-list">
     {{range $.Shelves}}

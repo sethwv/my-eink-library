@@ -134,6 +134,16 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 
 var validSortParams = map[string]bool{"title": true, "author": true, "series": true, "added": true, "released": true}
 
+// defaultDirFor picks the direction a sort key opens in when the request
+// doesn't specify one: date-based sorts read newest-first by default,
+// everything else reads A-Z.
+func defaultDirFor(sort index.SortKey) string {
+	if sort == index.SortAdded || sort == index.SortReleased {
+		return "desc"
+	}
+	return "asc"
+}
+
 // bookListParams configures one call to renderBookList: the shared
 // sort/page/search machinery behind the library grid and every filtered
 // view (author, series, and future ones like shelves/favorites).
@@ -157,7 +167,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 
 	dir := q.Get("dir")
 	if dir != "asc" && dir != "desc" {
-		dir = "asc"
+		dir = defaultDirFor(sort)
 	}
 	descending := dir == "desc"
 
