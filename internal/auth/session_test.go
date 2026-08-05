@@ -56,12 +56,15 @@ func TestSessionRoundTrip(t *testing.T) {
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(cookies[0])
-	username, ok := a.VerifySession(verifyReq)
+	username, restricted, ok := a.VerifySession(verifyReq)
 	if !ok {
 		t.Error("expected valid session to verify")
 	}
 	if username != "reader" {
 		t.Errorf("username = %q, want %q", username, "reader")
+	}
+	if restricted {
+		t.Error("expected a password-issued session to be full, not restricted")
 	}
 }
 
@@ -74,7 +77,7 @@ func TestSessionExpired(t *testing.T) {
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(w.Result().Cookies()[0])
-	if _, ok := a.VerifySession(verifyReq); ok {
+	if _, _, ok := a.VerifySession(verifyReq); ok {
 		t.Error("expected expired session to fail verification")
 	}
 }
@@ -90,7 +93,7 @@ func TestSessionTamperedRejected(t *testing.T) {
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(cookie)
-	if _, ok := a.VerifySession(verifyReq); ok {
+	if _, _, ok := a.VerifySession(verifyReq); ok {
 		t.Error("expected tampered cookie to fail verification")
 	}
 }
@@ -106,7 +109,7 @@ func TestSessionWrongSecretRejected(t *testing.T) {
 
 	verifyReq := httptest.NewRequest("GET", "/", nil)
 	verifyReq.AddCookie(w.Result().Cookies()[0])
-	if _, ok := a2.VerifySession(verifyReq); ok {
+	if _, _, ok := a2.VerifySession(verifyReq); ok {
 		t.Error("expected session signed with different secret to fail verification")
 	}
 }
@@ -178,8 +181,10 @@ func TestRequireAuth_AllowsValidBookmarkToken(t *testing.T) {
 	store := testStore(t) // "reader" created as non-admin
 	a := New("test-signing-secret", time.Hour, store)
 	var gotUsername string
+	var gotRestricted bool
 	handler := a.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotUsername, _ = UsernameFromContext(r.Context())
+		gotRestricted = IsRestricted(r.Context())
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -198,8 +203,82 @@ func TestRequireAuth_AllowsValidBookmarkToken(t *testing.T) {
 	if gotUsername != "reader" {
 		t.Errorf("username in context = %q, want %q", gotUsername, "reader")
 	}
+	if !gotRestricted {
+		t.Error("expected a bookmark-token-authenticated request to be marked restricted")
+	}
 	if len(w.Result().Cookies()) != 1 {
 		t.Error("expected a session cookie to be issued alongside a valid token, so cookie-capable navigation doesn't need the token on every link")
+	}
+}
+
+func TestRequireFull_RedirectsRestrictedSessionToLogin(t *testing.T) {
+	store := testStore(t)
+	a := New("test-signing-secret", time.Hour, store)
+	handler := a.RequireFull(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	token, err := store.GenerateBookmarkToken("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/admin/server?token="+token, nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d (redirect to login for password step-up)", w.Code, http.StatusSeeOther)
+	}
+	loc := w.Header().Get("Location")
+	if loc == "" || loc[:6] != "/login" {
+		t.Errorf("Location = %q, want redirect to /login", loc)
+	}
+}
+
+func TestRequireFull_AllowsFullSession(t *testing.T) {
+	a := testAuthenticator(t)
+	handler := a.RequireFull(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	issueW := httptest.NewRecorder()
+	a.IssueSession(issueW, httptest.NewRequest("POST", "/login", nil), "reader")
+
+	req := httptest.NewRequest("GET", "/admin/server", nil)
+	req.AddCookie(issueW.Result().Cookies()[0])
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAdmin_RedirectsRestrictedSessionToLoginInsteadOf403(t *testing.T) {
+	store := testStore(t)
+	if err := store.Create("admin", "s3cret", true); err != nil {
+		t.Fatal(err)
+	}
+	a := New("test-signing-secret", time.Hour, store)
+	handler := a.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Even though "admin" really is an admin, a bookmark-token (restricted)
+	// session for that account must still be sent through a password
+	// step-up rather than let through or flatly 403'd.
+	token, err := store.GenerateBookmarkToken("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/admin/server?token="+token, nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d (redirect to login for password step-up)", w.Code, http.StatusSeeOther)
 	}
 }
 
