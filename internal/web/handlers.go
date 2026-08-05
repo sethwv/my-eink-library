@@ -601,3 +601,48 @@ func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }
+
+// AccountBookmark shows the current bookmark-token status and, immediately
+// after a (re)generate action redirected here with ?new=, the one-time
+// plaintext bookmark URL — it can never be shown again after this, since
+// only a bcrypt hash of the token is stored.
+func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+
+	data := map[string]any{
+		"Title":       "Bookmark Link",
+		"HasToken":    s.Users.HasBookmarkToken(username),
+		"BookmarkURL": "",
+	}
+	if newToken := r.URL.Query().Get("new"); newToken != "" {
+		data["BookmarkURL"] = bookmarkURL(r, newToken)
+	}
+	mergeInto(data, base)
+	render(w, "account_bookmark.html", data)
+}
+
+// AccountBookmarkRegenerate revokes any existing bookmark token and issues a
+// new one in a single action, then redirects back to AccountBookmark with
+// the new plaintext token in the query string so it can be displayed once.
+func (s *Server) AccountBookmarkRegenerate(w http.ResponseWriter, r *http.Request) {
+	username, _ := auth.UsernameFromContext(r.Context())
+	token, err := s.Users.GenerateBookmarkToken(username)
+	if err != nil {
+		http.Error(w, "failed to generate bookmark link", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/account/bookmark?new="+token, http.StatusSeeOther)
+}
+
+func bookmarkURL(r *http.Request, token string) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host + "/?token=" + token
+}

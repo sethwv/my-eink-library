@@ -1,0 +1,24 @@
+{{define "content"}}
+{{template "topbar" .}}
+
+<h1>Bookmark Link</h1>
+
+<p class="muted">A bookmarkable link that logs you in without a password &mdash; useful on an e-reader that doesn't keep cookies between sessions. Anyone with this link can access your library, so treat it like a password: only one is active at a time, and regenerating immediately invalidates the old one.</p>
+
+{{if .BookmarkURL}}
+<div class="bookmark-url-box">
+  <strong>Your new bookmark link (shown once &mdash; save it now):</strong>
+  <p><code>{{.BookmarkURL}}</code></p>
+</div>
+{{else if .HasToken}}
+<p class="muted">You have an active bookmark link. It isn't shown again after creation &mdash; regenerate to get a new one (this invalidates the current link).</p>
+{{else}}
+<p class="muted">You don't have a bookmark link yet.</p>
+{{end}}
+
+<form method="POST" action="/account/bookmark/regenerate">
+  <button type="submit">{{if .HasToken}}Regenerate bookmark link{{else}}Create bookmark link{{end}}</button>
+</form>
+
+<p><a href="/">&laquo; Back to library</a></p>
+{{end}}
