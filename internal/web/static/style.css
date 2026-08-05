@@ -10,7 +10,7 @@
    (var()) — custom properties are a ~2016-2017 CSS feature and this engine
    silently drops any declaration that references one, which was the root
    cause of modals rendering with no background on-device. Reference values:
-   fg #111, fg-muted #666, bg #fff, bg-subtle #f7f7f7, border #ddd,
+   fg #111, fg-muted #444, bg #fff, bg-subtle #f7f7f7, border #ddd,
    border-strong #888, accent #111, error #a00, radius 8px, radius-sm 5px,
    shadow 0 1px 2px rgba(0,0,0,0.06), shadow-hover 0 4px 14px rgba(0,0,0,0.12). */
 
@@ -46,7 +46,7 @@ h2 { font-size: 1.1em; margin: 1.2em 0 0.5em; }
 a { color: #111; text-decoration: underline; }
 a:hover { text-decoration: none; }
 
-.muted { color: #666; }
+.muted { color: #444; }
 .error {
   color: #a00;
   border: 1px solid #a00;
@@ -97,22 +97,28 @@ select {
 
 label { display: block; margin: 0.6em 0; }
 
-/* Site header, shared across authenticated pages. No flexbox: nav items are
-   inline-block so they wrap on their own, same as plain text would. */
+/* Site header, shared across authenticated pages. No flexbox: the title and
+   nav are inline-block so they sit on one line and wrap naturally (like
+   text would) if the viewport is too narrow to fit both. */
 .topbar {
   border-bottom: 1px solid #ddd;
   padding-bottom: 0.9em;
   margin-bottom: 1.5em;
 }
 .topbar-main { margin-bottom: 0.4em; }
-.site-title { margin: 0 0 0.3em; font-size: 1.25em; }
+.site-title {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 0.75em 0 0;
+  font-size: 1.25em;
+}
 .site-title a { text-decoration: none; }
-.topnav { margin: 0; }
+.topnav { display: inline-block; vertical-align: middle; margin: 0; }
 .topnav a {
   display: inline-block;
   padding: 0.5em 0.4em;
   text-decoration: none;
-  color: #666;
+  color: #444;
   font-size: 0.95em;
   white-space: nowrap;
 }
@@ -133,17 +139,23 @@ label { display: block; margin: 0.6em 0; }
   .nav-icon { margin-right: 0; width: 1.3em; height: 1.3em; }
 }
 
-/* Search/sort toolbar: a simple two-row table pairing each label with its
-   control (tables are a known-safe layout primitive on this engine),
-   with actions below as an inline-block button group. */
+/* Search/sort toolbar: a simple two-row table pairing each label, its
+   control, and that row's action button (tables are a known-safe layout
+   primitive on this engine) — every row is self-contained instead of
+   collecting actions in a separate block below. */
 .toolbar { margin-bottom: 1.5em; }
-.toolbar-table { width: 100%; border-collapse: collapse; margin-bottom: 0.6em; }
+.toolbar-table { width: 100%; border-collapse: collapse; }
 .toolbar-table td { padding: 0.3em 0; border: none; }
 .toolbar-table td:first-child {
   width: 5em;
   padding-right: 0.6em;
   font-size: 0.9em;
-  color: #666;
+  color: #444;
+  white-space: nowrap;
+}
+.toolbar-table td:last-child {
+  width: 1%;
+  padding-left: 0.6em;
   white-space: nowrap;
 }
 .toolbar-table label { margin: 0; }
@@ -152,9 +164,11 @@ label { display: block; margin: 0.6em 0; }
   display: block;
   width: 100%;
 }
-.toolbar-actions { text-align: right; }
-.toolbar-actions .dir-toggle { width: auto; display: inline-block; margin-right: 0.5em; }
-.toolbar-actions .search-btn { width: auto; display: inline-block; }
+.toolbar-table .dir-toggle,
+.toolbar-table .search-btn {
+  width: auto;
+  white-space: nowrap;
+}
 
 /* Login page */
 .login-card {
@@ -233,7 +247,7 @@ label { display: block; margin: 0.6em 0; }
 .card-author, .card-series {
   margin-top: 0.3em;
   font-size: 0.8em;
-  color: #666;
+  color: #444;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -255,17 +269,19 @@ label { display: block; margin: 0.6em 0; }
   background: #fff;
   text-align: left;
 }
-.shelf-toggle::before {
-  content: "";
+.shelf-check {
   display: inline-block;
-  width: 1em;
+  vertical-align: middle;
+  width: 1.1em;
+  height: 1.1em;
   margin-right: 0.5em;
+  visibility: hidden;
 }
 .shelf-toggle.is-on {
   background: #f7f7f7;
   border-color: #888;
 }
-.shelf-toggle.is-on::before { content: "\2713"; }
+.shelf-toggle.is-on .shelf-check { visibility: visible; }
 
 /* Author/series browse-index pages */
 .name-list { list-style: none; padding: 0; margin: 1em 0; }
@@ -301,11 +317,25 @@ label { display: block; margin: 0.6em 0; }
   -webkit-box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
+/* Book modal: wider, left-aligned, cover-left/actions-right via table (the
+   established safe layout primitive here) instead of the plain centered
+   single-column stack other modals use. */
+.modal-box-wide { max-width: 34em; text-align: left; }
+.modal-layout { width: 100%; border-collapse: collapse; margin-bottom: 0.5em; }
+.modal-layout td { padding: 0; border: none; vertical-align: top; }
+.modal-cover-cell { width: 6.5em; padding-right: 1em; }
+.modal-cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+}
 .modal-box h3 { margin-top: 0; }
 .modal-section-label {
   margin: 1.2em 0 0.5em;
   font-size: 0.9em;
-  color: #666;
+  color: #444;
   text-align: left;
 }
 .btn-download {
