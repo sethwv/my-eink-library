@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS shelf_books (
     PRIMARY KEY (shelf_id, book_id)
 );
 CREATE INDEX IF NOT EXISTS idx_shelf_books_book ON shelf_books(book_id);
+
+CREATE TABLE IF NOT EXISTS book_enrichment (
+    book_id         INTEGER PRIMARY KEY,
+    series          TEXT,
+    series_index    REAL,
+    published_date  TEXT,
+    status          TEXT NOT NULL DEFAULT '',
+    updated_at      INTEGER NOT NULL,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+);
 `
 
 type DB struct {
@@ -87,6 +97,10 @@ func Open(dbPath string) (*DB, error) {
 
 	db := &DB{sql: sdb}
 	if err := db.migrateEnrichmentStatusColumn(); err != nil {
+		sdb.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
+	}
+	if err := db.migrateBookEnrichmentTable(); err != nil {
 		sdb.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
@@ -129,6 +143,36 @@ func (d *DB) migrateEnrichmentStatusColumn() error {
 		}
 	}
 	return nil
+}
+
+// migrateBookEnrichmentTable creates book_enrichment for a database that
+// predates the enrichment/EPUB-data split (schema's CREATE TABLE IF NOT
+// EXISTS only helps brand-new databases), then backfills status from the old
+// books.enrichment_status column so pending/done/no_match/error counts
+// survive the upgrade. series/series_index/published_date are deliberately
+// left blank in the new table: the books columns already hold whatever
+// merged EPUB+Hardcover value is currently displayed, and leaving them there
+// preserves current display until the next enrichment pass (or a manual
+// reset) repopulates book_enrichment cleanly.
+func (d *DB) migrateBookEnrichmentTable() error {
+	if _, err := d.sql.Exec(`
+		CREATE TABLE IF NOT EXISTS book_enrichment (
+		    book_id         INTEGER PRIMARY KEY,
+		    series          TEXT,
+		    series_index    REAL,
+		    published_date  TEXT,
+		    status          TEXT NOT NULL DEFAULT '',
+		    updated_at      INTEGER NOT NULL,
+		    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+		)`); err != nil {
+		return err
+	}
+
+	_, err := d.sql.Exec(`
+		INSERT INTO book_enrichment (book_id, status, updated_at)
+		SELECT id, enrichment_status, updated_at FROM books
+		WHERE enrichment_status != '' AND id NOT IN (SELECT book_id FROM book_enrichment)`)
+	return err
 }
 
 func (d *DB) Close() error {

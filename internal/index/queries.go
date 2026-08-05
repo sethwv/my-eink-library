@@ -17,17 +17,29 @@ const (
 	SortReleased SortKey = "released"
 )
 
+// effectiveSeries/effectiveSeriesIndex/effectivePublishedDate are the
+// Hardcover-enrichment-over-EPUB-scan merged values: book_enrichment wins
+// when present (matching OverrideMetadata's confirmed-override semantics),
+// falling back to the EPUB-scanned books column otherwise.
+const (
+	effectiveSeries        = `COALESCE(be.series, b.series)`
+	effectiveSeriesIndex   = `COALESCE(be.series_index, b.series_index)`
+	effectivePublishedDate = `COALESCE(be.published_date, b.published_date)`
+)
+
 var sortColumns = map[SortKey]string{
-	SortTitle:    "sort_title",
-	SortAuthor:   "sort_author",
-	SortAdded:    "added_at",
-	SortSeries:   "series, series_index",
-	SortReleased: "published_date",
+	SortTitle:    "b.sort_title",
+	SortAuthor:   "b.sort_author",
+	SortAdded:    "b.added_at",
+	SortSeries:   effectiveSeries + ", " + effectiveSeriesIndex,
+	SortReleased: effectivePublishedDate,
 }
 
-const bookColumns = `id, file_path, file_size, file_mtime, title, sort_title, author, sort_author,
-	series, series_index, description, language, publisher, published_date, identifier,
-	cover_path, has_cover, added_at, updated_at, parse_error`
+const bookColumns = `b.id, b.file_path, b.file_size, b.file_mtime, b.title, b.sort_title, b.author, b.sort_author,
+	` + effectiveSeries + `, ` + effectiveSeriesIndex + `, b.description, b.language, b.publisher, ` + effectivePublishedDate + `, b.identifier,
+	b.cover_path, b.has_cover, b.added_at, b.updated_at, b.parse_error`
+
+const bookFrom = `books b LEFT JOIN book_enrichment be ON be.book_id = b.id`
 
 // Filter narrows a book listing. Zero value matches every book. Combine
 // multiple non-empty fields with AND. This is the extension point for future
@@ -64,9 +76,9 @@ func (d *DB) List(sort SortKey, descending bool, page, pageSize int, f Filter) (
 	if sort == SortReleased {
 		// A missing release date should always sink to the bottom of the
 		// list, whichever direction the visible date column is sorted in.
-		orderBy = fmt.Sprintf("(published_date IS NULL OR published_date = ''), %s", orderBy)
+		orderBy = fmt.Sprintf("(%s IS NULL OR %s = ''), %s", effectivePublishedDate, effectivePublishedDate, orderBy)
 	}
-	query := fmt.Sprintf(`SELECT %s FROM books %s ORDER BY %s, id ASC LIMIT ? OFFSET ?`, bookColumns, where, orderBy)
+	query := fmt.Sprintf(`SELECT %s FROM %s %s ORDER BY %s, b.id ASC LIMIT ? OFFSET ?`, bookColumns, bookFrom, where, orderBy)
 	args = append(args, pageSize, offset)
 
 	rows, err := d.sql.Query(query, args...)
@@ -82,7 +94,7 @@ func (d *DB) List(sort SortKey, descending bool, page, pageSize int, f Filter) (
 func (d *DB) Count(f Filter) (int, error) {
 	where, args := buildWhereClause(f)
 	var n int
-	err := d.sql.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM books %s`, where), args...).Scan(&n)
+	err := d.sql.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM %s %s`, bookFrom, where), args...).Scan(&n)
 	return n, err
 }
 
@@ -92,19 +104,19 @@ func buildWhereClause(f Filter) (string, []any) {
 
 	if f.Search != "" {
 		term := "%" + f.Search + "%"
-		conds = append(conds, `(title LIKE ? OR author LIKE ? OR series LIKE ?)`)
+		conds = append(conds, fmt.Sprintf(`(b.title LIKE ? OR b.author LIKE ? OR %s LIKE ?)`, effectiveSeries))
 		args = append(args, term, term, term)
 	}
 	if f.Author != "" {
-		conds = append(conds, `author = ?`)
+		conds = append(conds, `b.author = ?`)
 		args = append(args, f.Author)
 	}
 	if f.Series != "" {
-		conds = append(conds, `series = ?`)
+		conds = append(conds, fmt.Sprintf(`%s = ?`, effectiveSeries))
 		args = append(args, f.Series)
 	}
 	if f.ShelfID != 0 {
-		conds = append(conds, `EXISTS (SELECT 1 FROM shelf_books sb WHERE sb.book_id = books.id AND sb.shelf_id = ?)`)
+		conds = append(conds, `EXISTS (SELECT 1 FROM shelf_books sb WHERE sb.book_id = b.id AND sb.shelf_id = ?)`)
 		args = append(args, f.ShelfID)
 	}
 
@@ -138,11 +150,11 @@ func (d *DB) ListAuthors() ([]NameCount, error) {
 // ListSeries returns every distinct series with how many books it has,
 // ordered alphabetically.
 func (d *DB) ListSeries() ([]NameCount, error) {
-	rows, err := d.sql.Query(`
-		SELECT series, COUNT(*) FROM books
-		WHERE series IS NOT NULL AND series != ''
-		GROUP BY series
-		ORDER BY series`)
+	rows, err := d.sql.Query(fmt.Sprintf(`
+		SELECT %s AS series_name, COUNT(*) FROM %s
+		WHERE %s IS NOT NULL AND %s != ''
+		GROUP BY %s
+		ORDER BY series_name`, effectiveSeries, bookFrom, effectiveSeries, effectiveSeries, effectiveSeries))
 	if err != nil {
 		return nil, fmt.Errorf("list series: %w", err)
 	}
@@ -164,7 +176,7 @@ func scanNameCounts(rows *sql.Rows) ([]NameCount, error) {
 
 // Get returns a single book by id.
 func (d *DB) Get(id int64) (*Book, error) {
-	query := fmt.Sprintf(`SELECT %s FROM books WHERE id = ?`, bookColumns)
+	query := fmt.Sprintf(`SELECT %s FROM %s WHERE b.id = ?`, bookColumns, bookFrom)
 	row := d.sql.QueryRow(query, id)
 	b, err := scanBook(row)
 	if err != nil {
