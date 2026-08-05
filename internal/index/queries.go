@@ -35,9 +35,10 @@ const bookColumns = `id, file_path, file_size, file_mtime, title, sort_title, au
 // List/Count signature change — add a field here and a clause in
 // buildWhereClause.
 type Filter struct {
-	Search string // LIKE across title/author/series
-	Author string // exact match
-	Series string // exact match
+	Search  string // LIKE across title/author/series
+	Author  string // exact match
+	Series  string // exact match
+	ShelfID int64  // books on this shelf (0 = unset)
 }
 
 // List returns a page of books ordered by sort/dir, narrowed by f.
@@ -95,6 +96,10 @@ func buildWhereClause(f Filter) (string, []any) {
 	if f.Series != "" {
 		conds = append(conds, `series = ?`)
 		args = append(args, f.Series)
+	}
+	if f.ShelfID != 0 {
+		conds = append(conds, `EXISTS (SELECT 1 FROM shelf_books sb WHERE sb.book_id = books.id AND sb.shelf_id = ?)`)
+		args = append(args, f.ShelfID)
 	}
 
 	if len(conds) == 0 {

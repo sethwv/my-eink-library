@@ -4,6 +4,7 @@
 <h1>Manage Users</h1>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 
+<div class="table-wrap">
 <table class="admin-users">
 <tr><th>Username</th><th>Admin</th><th></th></tr>
 {{range .Users}}
@@ -22,6 +23,7 @@
 </tr>
 {{end}}
 </table>
+</div>
 
 <h2>Add user</h2>
 <form method="POST" action="/admin/users">

@@ -24,6 +24,16 @@ type Server struct {
 	PageSize    int
 }
 
+const favoritesSlug = "favourites"
+const favoritesName = "Favourites"
+
+// bookView pairs a book with whether the current viewer has favorited it,
+// so library.html can render the star without a second per-book query.
+type bookView struct {
+	index.Book
+	IsFavorite bool
+}
+
 // viewerInfo returns the signed-in username and whether they're an admin,
 // for use in template data across authenticated pages.
 func (s *Server) viewerInfo(r *http.Request) (username string, isAdmin bool) {
@@ -156,10 +166,31 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 
 	username, isAdmin := s.viewerInfo(r)
 
+	views := make([]bookView, len(books))
+	if username != "" {
+		shelfID, err := s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName)
+		if err != nil {
+			http.Error(w, "failed to load favourites", http.StatusInternalServerError)
+			return
+		}
+		favIDs, err := s.DB.ShelfBookIDs(shelfID)
+		if err != nil {
+			http.Error(w, "failed to load favourites", http.StatusInternalServerError)
+			return
+		}
+		for i, b := range books {
+			views[i] = bookView{Book: b, IsFavorite: favIDs[b.ID]}
+		}
+	} else {
+		for i, b := range books {
+			views[i] = bookView{Book: b}
+		}
+	}
+
 	render(w, "library.html", map[string]any{
 		"Title":      p.heading,
 		"Heading":    p.heading,
-		"Books":      books,
+		"Books":      views,
 		"Sort":       sortParam,
 		"Dir":        dir,
 		"ToggleDir":  toggleDir,
@@ -174,6 +205,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"Action":     p.action,
 		"Name":       p.name,
 		"Filtered":   p.filtered,
+		"CurrentURL": r.URL.RequestURI(),
 	})
 }
 
@@ -211,6 +243,62 @@ func (s *Server) SeriesHandler(w http.ResponseWriter, r *http.Request) {
 		defaultSort: index.SortSeries,
 		filtered:    true,
 	})
+}
+
+// FavoritesHandler shows the current user's favourites shelf.
+func (s *Server) FavoritesHandler(w http.ResponseWriter, r *http.Request) {
+	username, _ := auth.UsernameFromContext(r.Context())
+	shelfID, err := s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName)
+	if err != nil {
+		http.Error(w, "failed to load favourites", http.StatusInternalServerError)
+		return
+	}
+	s.renderBookList(w, r, bookListParams{
+		action:      "/favorites",
+		filter:      index.Filter{ShelfID: shelfID},
+		heading:     favoritesName,
+		defaultSort: index.SortTitle,
+		filtered:    true,
+	})
+}
+
+// FavoriteToggle adds or removes a book from the current user's favourites
+// shelf, then redirects back to wherever the request came from.
+func (s *Server) FavoriteToggle(w http.ResponseWriter, r *http.Request) {
+	bookID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	next := safeNext(r.FormValue("next"))
+
+	username, _ := auth.UsernameFromContext(r.Context())
+	shelfID, err := s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName)
+	if err != nil {
+		http.Error(w, "failed to update favourites", http.StatusInternalServerError)
+		return
+	}
+
+	onShelf, err := s.DB.IsBookOnShelf(shelfID, bookID)
+	if err != nil {
+		http.Error(w, "failed to update favourites", http.StatusInternalServerError)
+		return
+	}
+	if onShelf {
+		err = s.DB.RemoveBookFromShelf(shelfID, bookID)
+	} else {
+		err = s.DB.AddBookToShelf(shelfID, bookID)
+	}
+	if err != nil {
+		http.Error(w, "failed to update favourites", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) renderNameIndex(w http.ResponseWriter, r *http.Request, heading, linkBase string, list func() ([]index.NameCount, error)) {
