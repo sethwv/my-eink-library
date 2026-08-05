@@ -1,0 +1,32 @@
+# Go build artifacts
+/eink-library
+/server
+*.exe
+*.test
+*.out
+coverage.txt
+
+# Local dev/data (containers use volumes; this is for local runs outside Docker)
+/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Editor/OS
+.DS_Store
+.idea/
+.vscode/
+
+# Beads: only the jsonl export is tracked, everything else is local tooling
+.agents/
+.codex/
+.beads/*
+!.beads/*.jsonl
+AGENTS.md
+CLAUDE.md
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
+.beads/proxieddb/
