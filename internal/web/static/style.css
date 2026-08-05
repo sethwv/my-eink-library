@@ -16,11 +16,18 @@
 
 * { box-sizing: border-box; }
 
+html {
+  height: 100%;
+  background: var(--bg);
+}
+
 body {
   font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: var(--fg);
   background: var(--bg);
   margin: 0;
+  width: 100%;
+  min-height: 100%;
   line-height: 1.4;
 }
 
@@ -89,19 +96,34 @@ label { display: block; margin: 0.5em 0; }
   padding-bottom: 0.9em;
   margin-bottom: 1.5em;
 }
+.topbar-main {
+  display: flex;
+  align-items: center;
+  gap: 1.25em;
+  flex-wrap: wrap;
+}
 .site-title { margin: 0; font-size: 1.25em; }
 .site-title a { text-decoration: none; }
 .topnav {
   display: flex;
-  gap: 1.25em;
+  gap: 1.1em;
   flex-wrap: wrap;
 }
 .topnav a {
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
   color: var(--fg-muted);
   font-size: 0.95em;
+  white-space: nowrap;
 }
 .topnav a:hover { color: var(--fg); text-decoration: underline; }
+.nav-icon {
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.35em;
+  flex-shrink: 0;
+}
 .topbar-right {
   display: flex;
   align-items: center;
@@ -110,15 +132,59 @@ label { display: block; margin: 0.5em 0; }
   font-size: 0.9em;
 }
 
-/* Search/sort toolbar */
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6em;
-  margin-bottom: 1.5em;
+/* Narrow screens: keep the whole nav on one line by dropping to icon-only
+   (title + tooltip still give the accessible name), never a hidden menu. */
+@media (max-width: 480px) {
+  .site-title { font-size: 1.05em; }
+  .nav-label { display: none; }
+  .nav-icon { margin-right: 0; width: 1.3em; height: 1.3em; }
+  .topnav { gap: 0.9em; }
 }
-.toolbar .search-input { flex: 1 1 14em; min-width: 10em; }
+
+/* Search/sort toolbar: one joined "input-group" row */
+.toolbar { margin-bottom: 1.5em; }
+.input-group {
+  display: flex;
+  width: 100%;
+}
+.input-group input[type="text"],
+.input-group select,
+.input-group button {
+  height: 2.6em;
+  border-radius: 0;
+  border-right-width: 0;
+  margin: 0;
+}
+.input-group input[type="text"]:last-child,
+.input-group select:last-child,
+.input-group button:last-child {
+  border-right-width: 1px;
+}
+.input-group > :first-child {
+  border-top-left-radius: var(--radius-sm);
+  border-bottom-left-radius: var(--radius-sm);
+}
+.input-group > :last-child {
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+}
+.input-group .search-input { flex: 1 1 auto; min-width: 6em; }
+.input-group select { flex: 0 1 auto; max-width: 9em; font: inherit; }
+.input-group button { flex: 0 0 auto; }
+
+@media (max-width: 480px) {
+  .input-group { flex-direction: column; }
+  .input-group input[type="text"],
+  .input-group select,
+  .input-group button {
+    width: 100%;
+    border-right-width: 1px;
+    margin-bottom: -1px;
+  }
+  .input-group > * {
+    border-radius: var(--radius-sm) !important;
+  }
+}
 
 /* Login page */
 .login-card {
@@ -139,6 +205,7 @@ label { display: block; margin: 0.5em 0; }
 .grid {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 1.25em;
   margin: 1em 0;
 }
@@ -160,9 +227,20 @@ label { display: block; margin: 0.5em 0; }
 .card .cover {
   display: block;
   width: 100%;
-  height: 14em;
+  height: auto;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
   background: var(--bg-subtle);
+}
+
+/* Small screens: predictable column counts instead of the desktop fixed
+   card width (which would otherwise force a single column). */
+@media (max-width: 700px) {
+  .grid { gap: 0.75em; }
+  .card { width: calc(33.333% - 0.5em); }
+}
+@media (max-width: 420px) {
+  .card { width: calc(50% - 0.375em); }
 }
 .card-body { padding: 0.6em 0.75em 0.8em; }
 .card-title {
@@ -202,7 +280,6 @@ label { display: block; margin: 0.5em 0; }
   text-decoration: none;
 }
 .shelf-btn:hover { background: rgba(0, 0, 0, 0.65); }
-.shelf-btn.is-on { background: #f5c518; color: #111; }
 
 /* Shelf toggle list inside the "+" modal */
 .shelf-list { list-style: none; padding: 0; margin: 0 0 0.5em; }
