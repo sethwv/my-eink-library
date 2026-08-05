@@ -66,6 +66,7 @@
           <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
           {{if .Author}}<a class="btn-download" href="/authors?name={{urlquery .Author}}">Go to Author</a>{{end}}
           {{if .Series}}<a class="btn-download" href="/series?name={{urlquery .Series}}">Go to Series</a>{{end}}
+          {{if $.IsAdmin}}<a class="btn-download" href="/books/{{.ID}}/hardcover-check">Check Hardcover</a>{{end}}
         </td>
       </tr>
     </table>

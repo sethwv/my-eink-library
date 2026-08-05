@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/swvn/eink-library/internal/auth"
+	"github.com/swvn/eink-library/internal/hardcover"
 	"github.com/swvn/eink-library/internal/index"
 	"github.com/swvn/eink-library/internal/kepub"
 	"github.com/swvn/eink-library/internal/thumbnail"
@@ -22,6 +23,7 @@ type Server struct {
 	DB          *index.DB
 	Covers      *thumbnail.Store
 	Users       *users.Store
+	Hardcover   *hardcover.Client // nil-safe: Enabled() is false with no token, callers check before use
 	LibraryPath string
 	DataDir     string
 	PageSize    int
@@ -579,6 +581,12 @@ func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
 		lastScanDurationMs = v
 	}
 
+	enrichmentStats, err := s.DB.GetEnrichmentStats()
+	if err != nil {
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
+	}
+
 	data := map[string]any{
 		"Title":              "Manage Server",
 		"GoVersion":          runtime.Version(),
@@ -592,6 +600,11 @@ func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
 		"AdminCount":         adminCount,
 		"LastScanAt":         lastScanAt,
 		"LastScanDurationMs": lastScanDurationMs,
+		"HardcoverEnabled":   s.Hardcover.Enabled(),
+		"EnrichmentPending":  enrichmentStats.Pending,
+		"EnrichmentDone":     enrichmentStats.Done,
+		"EnrichmentNoMatch":  enrichmentStats.NoMatch,
+		"EnrichmentErrored":  enrichmentStats.Errored,
 	}
 	mergeInto(data, base)
 	render(w, "admin_server.html", data)
