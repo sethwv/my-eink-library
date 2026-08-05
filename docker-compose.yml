@@ -1,0 +1,19 @@
+services:
+  eink-library:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - LIBRARY_USER=user
+      - LIBRARY_PASS=pass
+      - SESSION_SECRET=mMZGJxurqTP5EqCzWuWXSxaoEh6jFm5D
+      - LIBRARY_PATH=/library
+      - DATA_DIR=/data
+      - PORT=8080
+    volumes:
+      - /Users/seth/Downloads/book-new:/library:ro
+      - eink-library-data:/data
+    restart: unless-stopped
+
+volumes:
+  eink-library-data:

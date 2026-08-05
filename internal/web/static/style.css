@@ -1,0 +1,7 @@
+body { font-family: sans-serif; margin: 1em; color: #111; background: #fff; }
+h1 { font-size: 1.3em; }
+.login-box { max-width: 20em; margin: 2em auto; }
+.login-box input { width: 100%; padding: 0.3em; margin: 0.2em 0 0.6em 0; }
+.error { color: #a00; }
+a { color: #06c; }
+table { border-collapse: collapse; width: 100%; }
