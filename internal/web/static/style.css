@@ -1,3 +1,11 @@
+/* Target browser: Kobo's built-in QtWebKit (~2015-era engine). Confirmed on
+   real hardware to NOT support flexbox or CSS Grid (contrary to earlier
+   assumptions), no aspect-ratio, and to render visible scrollbars on child
+   elements very buggily (can hide all text in that element). Every layout
+   here uses only CSS2.1-era techniques: inline-block, table, position,
+   margin:auto centering. See CLAUDE.md "Conventions & Patterns" for the
+   full constraint list before adding anything fancier. */
+
 :root {
   --fg: #111;
   --fg-muted: #666;
@@ -9,12 +17,14 @@
   --error: #a00;
   --radius: 8px;
   --radius-sm: 5px;
-  --gap: 1em;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-hover: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+}
 
 html {
   height: 100%;
@@ -52,16 +62,16 @@ a:hover { text-decoration: none; }
   margin: 0.75em 0;
 }
 
-/* Buttons and inline forms */
+/* Buttons and inline forms — generous padding throughout for touch targets */
 button, .btn {
   font: inherit;
-  padding: 0.45em 0.9em;
+  padding: 0.6em 1em;
   border: 1px solid var(--border-strong);
+  -webkit-border-radius: var(--radius-sm);
   border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--fg);
   cursor: pointer;
-  transition: background-color 0.15s ease;
 }
 button:hover { background: var(--bg-subtle); }
 .inline-form { display: inline; }
@@ -69,13 +79,14 @@ button:hover { background: var(--bg-subtle); }
   border: none;
   background: none;
   text-decoration: underline;
-  padding: 0;
+  padding: 0.3em;
 }
 
 input[type="text"], input[type="password"] {
   font: inherit;
-  padding: 0.45em 0.6em;
+  padding: 0.6em 0.7em;
   border: 1px solid var(--border);
+  -webkit-border-radius: var(--radius-sm);
   border-radius: var(--radius-sm);
 }
 input[type="text"]:focus, input[type="password"]:focus {
@@ -83,35 +94,30 @@ input[type="text"]:focus, input[type="password"]:focus {
   outline-offset: 1px;
 }
 
-label { display: block; margin: 0.5em 0; }
+select {
+  font: inherit;
+  padding: 0.5em 0.6em;
+  border: 1px solid var(--border);
+  -webkit-border-radius: var(--radius-sm);
+  border-radius: var(--radius-sm);
+}
 
-/* Site header, shared across authenticated pages */
+label { display: block; margin: 0.6em 0; }
+
+/* Site header, shared across authenticated pages. No flexbox: nav items are
+   inline-block so they wrap on their own, same as plain text would. */
 .topbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75em;
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.9em;
   margin-bottom: 1.5em;
 }
-.topbar-main {
-  display: flex;
-  align-items: center;
-  gap: 1.25em;
-  flex-wrap: wrap;
-}
-.site-title { margin: 0; font-size: 1.25em; }
+.topbar-main { margin-bottom: 0.4em; }
+.site-title { margin: 0 0 0.3em; font-size: 1.25em; }
 .site-title a { text-decoration: none; }
-.topnav {
-  display: flex;
-  gap: 1.1em;
-  flex-wrap: wrap;
-}
+.topnav { margin: 0; }
 .topnav a {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
+  padding: 0.5em 0.4em;
   text-decoration: none;
   color: var(--fg-muted);
   font-size: 0.95em;
@@ -119,64 +125,35 @@ label { display: block; margin: 0.5em 0; }
 }
 .topnav a:hover { color: var(--fg); text-decoration: underline; }
 .nav-icon {
+  display: inline-block;
+  vertical-align: middle;
   width: 1.1em;
   height: 1.1em;
   margin-right: 0.35em;
-  flex-shrink: 0;
 }
+.nav-label { vertical-align: middle; }
 /* Narrow screens: keep the whole nav on one line by dropping to icon-only
    (title + tooltip still give the accessible name), never a hidden menu. */
 @media (max-width: 480px) {
   .site-title { font-size: 1.05em; }
   .nav-label { display: none; }
   .nav-icon { margin-right: 0; width: 1.3em; height: 1.3em; }
-  .topnav { gap: 0.9em; }
 }
 
-/* Search/sort toolbar: one joined "input-group" row */
+/* Search/sort toolbar: stacked, full-width controls. No joined "input
+   group" row — that relied on flexbox for equal-height alignment, and
+   there's no reliable non-flex, non-table way to keep that look. */
 .toolbar { margin-bottom: 1.5em; }
-.input-group {
-  display: flex;
+.toolbar label { margin: 0.6em 0 0.2em; font-size: 0.9em; color: var(--fg-muted); }
+.toolbar .search-input,
+.toolbar select,
+.toolbar button {
+  display: block;
   width: 100%;
+  margin-top: 0.3em;
 }
-.input-group input[type="text"],
-.input-group select,
-.input-group button {
-  height: 2.6em;
-  border-radius: 0;
-  border-right-width: 0;
-  margin: 0;
-}
-.input-group input[type="text"]:last-child,
-.input-group select:last-child,
-.input-group button:last-child {
-  border-right-width: 1px;
-}
-.input-group > :first-child {
-  border-top-left-radius: var(--radius-sm);
-  border-bottom-left-radius: var(--radius-sm);
-}
-.input-group > :last-child {
-  border-top-right-radius: var(--radius-sm);
-  border-bottom-right-radius: var(--radius-sm);
-}
-.input-group .search-input { flex: 1 1 auto; min-width: 6em; }
-.input-group select { flex: 0 1 auto; max-width: 9em; font: inherit; }
-.input-group button { flex: 0 0 auto; }
-
-@media (max-width: 480px) {
-  .input-group { flex-direction: column; }
-  .input-group input[type="text"],
-  .input-group select,
-  .input-group button {
-    width: 100%;
-    border-right-width: 1px;
-    margin-bottom: -1px;
-  }
-  .input-group > * {
-    border-radius: var(--radius-sm) !important;
-  }
-}
+.toolbar .dir-toggle { width: auto; display: inline-block; margin-right: 0.5em; }
+.toolbar .search-btn { width: auto; display: inline-block; }
 
 /* Login page */
 .login-card {
@@ -184,55 +161,64 @@ label { display: block; margin: 0.5em 0; }
   margin: 3em auto;
   padding: 1.75em;
   border: 1px solid var(--border);
+  -webkit-border-radius: var(--radius);
   border-radius: var(--radius);
+  -webkit-box-shadow: var(--shadow);
   box-shadow: var(--shadow);
 }
 .login-card input[type="text"],
 .login-card input[type="password"] {
   width: 100%;
 }
-.login-card button { width: 100%; margin-top: 0.5em; }
+.login-card button { width: 100%; margin-top: 0.75em; }
 
-/* Book grid: unified panel cards */
+/* Book grid: unified panel cards, laid out with inline-block (the
+   pre-flexbox equivalent of flex-wrap) instead of display:flex. */
 .grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 1.25em;
+  text-align: left;
   margin: 1em 0;
 }
 .card {
+  display: inline-block;
+  vertical-align: top;
   width: 10.5em;
+  margin: 0 1em 1em 0;
   border: 1px solid var(--border);
+  -webkit-border-radius: var(--radius);
   border-radius: var(--radius);
   background: var(--bg);
+  -webkit-box-shadow: var(--shadow);
   box-shadow: var(--shadow);
   overflow: hidden;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
-.card:hover {
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-1px);
+/* Cover aspect ratio via the classic padding-percentage trick, not the
+   modern (unsupported here) aspect-ratio property. 150% = 2:3 book cover. */
+.cover-wrap {
+  position: relative;
+  padding-top: 150%;
+  height: 0;
+  overflow: hidden;
 }
-.cover-wrap { position: relative; }
 .cover-link { display: block; }
 .card .cover {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
   width: 100%;
-  height: auto;
-  aspect-ratio: 2 / 3;
+  height: 100%;
   object-fit: cover;
   background: var(--bg-subtle);
 }
 
 /* Small screens: predictable column counts instead of the desktop fixed
-   card width (which would otherwise force a single column). */
+   card width (which would otherwise force a single column). Still plain
+   width + inline-block, no flex-basis. */
 @media (max-width: 700px) {
-  .grid { gap: 0.75em; }
-  .card { width: calc(33.333% - 0.5em); }
+  .card { width: calc(33.333% - 0.7em); margin-right: 0.7em; }
 }
 @media (max-width: 420px) {
-  .card { width: calc(50% - 0.375em); }
+  .card { width: calc(50% - 0.6em); margin-right: 0.6em; }
 }
 .card-body { padding: 0.6em 0.75em 0.8em; }
 .card-title {
@@ -243,7 +229,7 @@ label { display: block; margin: 0.5em 0; }
   white-space: nowrap;
 }
 .card-author, .card-series {
-  margin-top: 0.2em;
+  margin-top: 0.3em;
   font-size: 0.8em;
   color: var(--fg-muted);
   overflow: hidden;
@@ -254,34 +240,37 @@ label { display: block; margin: 0.5em 0; }
 .card-author a:hover, .card-series a:hover { text-decoration: underline; }
 .card-series .series-index { font-variant-numeric: tabular-nums; }
 
-/* "+" shelf button, overlaid on the cover corner, opens the shelves modal */
+/* "+"/"-" shelf button, overlaid on the cover corner, opens the shelves
+   modal. Sized generously for a thumb tap. */
 .shelf-btn {
   position: absolute;
   top: 0.4em;
   right: 0.4em;
   display: block;
-  width: 2em;
-  height: 2em;
-  line-height: 1.9em;
+  width: 2.6em;
+  height: 2.6em;
+  line-height: 2.5em;
   text-align: center;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.45);
+  -webkit-border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
   color: #fff;
-  font-size: 1.1em;
+  font-size: 1.2em;
   font-weight: 600;
   text-decoration: none;
 }
-.shelf-btn:hover { background: rgba(0, 0, 0, 0.65); }
+.shelf-btn:hover { background: rgba(0, 0, 0, 0.7); }
 
 /* Shelf toggle list inside the "+" modal */
 .shelf-list { list-style: none; padding: 0; margin: 0 0 0.5em; }
-.shelf-list li { margin: 0.4em 0; }
+.shelf-list li { margin: 0.5em 0; }
 .shelf-toggle-form { margin: 0; }
 .shelf-toggle {
   display: block;
   width: 100%;
-  padding: 0.7em;
+  padding: 0.9em;
   border: 1px solid var(--border);
+  -webkit-border-radius: var(--radius-sm);
   border-radius: var(--radius-sm);
   background: var(--bg);
   text-align: left;
@@ -300,37 +289,46 @@ label { display: block; margin: 0.5em 0; }
 
 /* Author/series browse-index pages */
 .name-list { list-style: none; padding: 0; margin: 1em 0; }
-.name-list li { padding: 0.5em 0; border-bottom: 1px solid var(--border); }
+.name-list li { padding: 0.6em 0; border-bottom: 1px solid var(--border); }
+.name-list a { display: inline-block; padding: 0.3em 0.2em; }
 
-/* Cover-tap download modal (CSS-only, :target based, no JS) */
+/* Modal (download / shelf picker / account / shelves-nav / remove-confirm):
+   shown/hidden by plain ES5 JS (modal.js) toggling this inline style.display
+   directly — CSS :target proved unreliable on the actual target device.
+   Centered with margin:auto (horizontal) and a fixed top offset (vertical)
+   instead of flexbox centering. */
 .modal-overlay {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 1000;
   background: rgba(0, 0, 0, 0.55);
-  align-items: center;
-  justify-content: center;
   padding: 1em;
 }
-.modal-overlay:target { display: flex; }
 .modal-box {
   background: var(--bg);
+  -webkit-border-radius: var(--radius);
   border-radius: var(--radius);
   padding: 1.5em;
+  width: 85%;
   max-width: 20em;
-  width: 100%;
+  margin: 3em auto;
   text-align: center;
+  -webkit-box-shadow: var(--shadow-hover);
   box-shadow: var(--shadow-hover);
 }
 .modal-box h3 { margin-top: 0; }
 .btn-download {
   display: block;
   width: 100%;
-  padding: 0.9em;
+  padding: 1em;
   margin: 0.5em 0;
   font-size: 1.1em;
   border: 1px solid var(--border-strong);
+  -webkit-border-radius: var(--radius-sm);
   border-radius: var(--radius-sm);
   text-decoration: none;
   color: var(--fg);
@@ -338,29 +336,33 @@ label { display: block; margin: 0.5em 0; }
 .btn-download:hover { background: var(--bg-subtle); }
 .modal-close {
   display: inline-block;
+  padding: 0.6em;
   margin-top: 0.5em;
   font-size: 0.9em;
 }
 
-/* Pagination */
+/* Pagination — centered text with inline-block links instead of flexbox */
 .pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1em;
+  text-align: center;
   margin-top: 2em;
   padding-top: 1.5em;
   border-top: 1px solid var(--border);
 }
+.pagination a, .pagination span {
+  display: inline-block;
+  margin: 0 0.6em;
+  padding: 0.3em;
+}
 
-/* Tables (admin users) */
+/* Tables (admin users, server info) */
 .table-wrap {
   border: 1px solid var(--border);
+  -webkit-border-radius: var(--radius);
   border-radius: var(--radius);
   overflow: hidden;
 }
 table { border-collapse: collapse; width: 100%; margin: 0; }
-th, td { text-align: left; padding: 0.5em 0.7em; border-bottom: 1px solid var(--border); }
+th, td { text-align: left; padding: 0.6em 0.7em; border-bottom: 1px solid var(--border); }
 tr:last-child td { border-bottom: none; }
 th { background: var(--bg-subtle); }
-.admin-users form { margin: 0.2em 0; }
+.admin-users form { margin: 0.3em 0; }
