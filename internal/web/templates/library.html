@@ -27,12 +27,19 @@
 <div class="grid">
 {{range .Books}}
 <div class="card">
-  <a class="cover-link" href="#book-{{.ID}}"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
+  <div class="cover-wrap">
+    <a class="cover-link" href="#book-{{.ID}}"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
+    <form method="POST" action="/books/{{.ID}}/favorite" class="favorite-form">
+      <input type="hidden" name="next" value="{{$.CurrentURL}}">
+      <button type="submit" class="favorite-star{{if .IsFavorite}} is-favorite{{end}}" aria-label="{{if .IsFavorite}}Remove from favourites{{else}}Add to favourites{{end}}">{{if .IsFavorite}}&#9733;{{else}}&#9734;{{end}}</button>
+    </form>
+  </div>
   <div class="card-body">
     <div class="card-title">{{.Title}}</div>
-    <div class="card-chips">
-      {{if .Author}}<a class="chip" href="/authors?name={{urlquery .Author}}">{{.Author}}</a>{{end}}
-      {{if .Series}}<a class="chip chip-series" href="/series?name={{urlquery .Series}}">{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</a>{{end}}
+    <div class="card-byline">
+      {{if .Author}}<a href="/authors?name={{urlquery .Author}}">{{.Author}}</a>{{end}}
+      {{if and .Author .Series}}<span class="sep">&middot;</span>{{end}}
+      {{if .Series}}<a href="/series?name={{urlquery .Series}}">{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</a>{{end}}
     </div>
   </div>
 </div>
