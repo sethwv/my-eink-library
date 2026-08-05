@@ -13,6 +13,7 @@ import (
 
 	"github.com/swvn/eink-library/internal/auth"
 	"github.com/swvn/eink-library/internal/config"
+	"github.com/swvn/eink-library/internal/hardcover"
 	"github.com/swvn/eink-library/internal/index"
 	"github.com/swvn/eink-library/internal/thumbnail"
 	"github.com/swvn/eink-library/internal/users"
@@ -86,16 +87,21 @@ func main() {
 	}
 
 	authn := auth.New(cfg.SessionSecret, cfg.SessionTTL, userStore)
+	hc := hardcover.New(cfg.HardcoverToken)
 	srv := &web.Server{
 		Auth:        authn,
 		DB:          db,
 		Covers:      covers,
 		Users:       userStore,
+		Hardcover:   hc,
 		LibraryPath: cfg.LibraryPath,
 		DataDir:     cfg.DataDir,
 		PageSize:    cfg.PageSize,
 		SiteName:    cfg.SiteName,
 		StartedAt:   time.Now(),
+	}
+	if hc.Enabled() {
+		go srv.RunEnrichmentQueue(ctx)
 	}
 
 	mux := http.NewServeMux()
@@ -123,6 +129,8 @@ func main() {
 	mux.Handle("POST /admin/server/rescan", authn.RequireAdmin(http.HandlerFunc(srv.ServerRescan)))
 	mux.Handle("GET /account/bookmark", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmark)))
 	mux.Handle("POST /account/bookmark/regenerate", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmarkRegenerate)))
+	mux.Handle("GET /books/{id}/hardcover-check", authn.RequireAdmin(http.HandlerFunc(srv.BookHardcoverCheck)))
+	mux.Handle("POST /books/{id}/hardcover-apply", authn.RequireAdmin(http.HandlerFunc(srv.BookHardcoverApply)))
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

@@ -1,0 +1,36 @@
+{{define "content"}}
+{{template "topbar" .}}
+
+<h1>Check Hardcover</h1>
+<p class="muted">{{.CurrentTitle}}</p>
+
+{{if not .Enabled}}
+<p class="muted">Hardcover enrichment isn't configured (no API token set).</p>
+{{else if not .Found}}
+<p class="muted">No confident match found on Hardcover for this book.</p>
+{{else}}
+<div class="table-wrap">
+<table>
+<tr><th>Field</th><th>Current</th><th>Hardcover</th></tr>
+<tr><td>Title</td><td>{{.CurrentTitle}}</td><td>{{.MatchTitle}}</td></tr>
+<tr><td>Series</td><td>{{.CurrentSeries}}</td><td>{{.MatchSeries}}</td></tr>
+<tr><td>Series #</td><td>{{if .CurrentSeriesIndex}}{{.CurrentSeriesIndex}}{{end}}</td><td>{{.MatchSeriesIndex}}</td></tr>
+<tr><td>Released</td><td>{{.CurrentPublished}}</td><td>{{.MatchReleaseDate}}</td></tr>
+</table>
+</div>
+
+<form method="POST" action="/books/{{.BookID}}/hardcover-apply">
+  <label for="title">Title (blank = leave unchanged)</label>
+  <input type="text" id="title" name="title" value="{{.MatchTitle}}">
+  <label for="series">Series (blank = leave unchanged)</label>
+  <input type="text" id="series" name="series" value="{{.MatchSeries}}">
+  <label for="series_index">Series # (blank = leave unchanged)</label>
+  <input type="text" id="series_index" name="series_index" value="{{.MatchSeriesIndex}}">
+  <label for="published_date">Released (blank = leave unchanged)</label>
+  <input type="text" id="published_date" name="published_date" value="{{.MatchReleaseDate}}">
+  <button type="submit">Apply</button>
+</form>
+{{end}}
+
+<p><a href="/">&laquo; Back to library</a></p>
+{{end}}

@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS books (
 
     added_at        INTEGER NOT NULL,
     updated_at      INTEGER NOT NULL,
-    parse_error     TEXT
+    parse_error     TEXT,
+
+    enrichment_status TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_books_sort_title  ON books(sort_title);
@@ -83,7 +85,50 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
 
-	return &DB{sql: sdb}, nil
+	db := &DB{sql: sdb}
+	if err := db.migrateEnrichmentStatusColumn(); err != nil {
+		sdb.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
+	}
+
+	return db, nil
+}
+
+// migrateEnrichmentStatusColumn adds enrichment_status to a books table that
+// predates it. CREATE TABLE IF NOT EXISTS in schema only applies to
+// brand-new databases, so an existing index.db needs the column added in
+// place — there's no migration framework here, just an additive,
+// idempotent ALTER TABLE guarded by checking what columns already exist.
+func (d *DB) migrateEnrichmentStatusColumn() error {
+	rows, err := d.sql.Query(`PRAGMA table_info(books)`)
+	if err != nil {
+		return err
+	}
+	hasColumn := false
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
+			rows.Close()
+			return err
+		}
+		if name == "enrichment_status" {
+			hasColumn = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+
+	if !hasColumn {
+		if _, err := d.sql.Exec(`ALTER TABLE books ADD COLUMN enrichment_status TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (d *DB) Close() error {

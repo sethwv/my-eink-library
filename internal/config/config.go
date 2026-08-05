@@ -9,27 +9,29 @@ import (
 )
 
 type Config struct {
-	LibraryPath   string
-	DataDir       string
-	LibraryUser   string
-	LibraryPass   string
-	SessionSecret string
-	Port          string
-	SiteName      string
-	CoverWidth    int
-	PageSize      int
-	SessionTTL    time.Duration
+	LibraryPath    string
+	DataDir        string
+	LibraryUser    string
+	LibraryPass    string
+	SessionSecret  string
+	Port           string
+	SiteName       string
+	CoverWidth     int
+	PageSize       int
+	SessionTTL     time.Duration
+	HardcoverToken string
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		LibraryPath:   getenv("LIBRARY_PATH", "/library"),
-		DataDir:       getenv("DATA_DIR", "/data"),
-		LibraryUser:   os.Getenv("LIBRARY_USER"),
-		LibraryPass:   os.Getenv("LIBRARY_PASS"),
-		SessionSecret: os.Getenv("SESSION_SECRET"),
-		Port:          getenv("PORT", "8080"),
-		SiteName:      getenv("SITE_NAME", "eink-library"),
+		LibraryPath:    getenv("LIBRARY_PATH", "/library"),
+		DataDir:        getenv("DATA_DIR", "/data"),
+		LibraryUser:    os.Getenv("LIBRARY_USER"),
+		LibraryPass:    os.Getenv("LIBRARY_PASS"),
+		SessionSecret:  os.Getenv("SESSION_SECRET"),
+		Port:           getenv("PORT", "8080"),
+		SiteName:       getenv("SITE_NAME", "eink-library"),
+		HardcoverToken: os.Getenv("HARDCOVER_API_TOKEN"),
 	}
 
 	var err error
