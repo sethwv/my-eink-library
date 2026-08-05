@@ -23,6 +23,10 @@ func render(w http.ResponseWriter, page string, data any) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Some older browser engines cache GET responses aggressively, including
+	// distinct ?q=/?sort= query variations — force revalidation so paging,
+	// searching, and navigating "home" always reflect the current state.
+	w.Header().Set("Cache-Control", "no-cache")
 	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}

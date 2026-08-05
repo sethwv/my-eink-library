@@ -15,11 +15,11 @@
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <span class="nav-label">Series</span>
       </a>
-      <a href="#shelves-nav-modal" title="Shelves">
+      <a href="#" onclick="return openModal('shelves-nav-modal');" title="Shelves">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18"/><path d="M21 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
         <span class="nav-label">Shelves</span>
       </a>
-      <a href="#account-modal" title="Account">
+      <a href="#" onclick="return openModal('account-modal');" title="Account">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19a6 6 0 0 1 11 0"/></svg>
         <span class="nav-label">{{.Username}}</span>
       </a>
@@ -35,7 +35,7 @@
     <li><a class="shelf-toggle" href="/favorites">{{.Name}}</a></li>
     {{end}}
     </ul>
-    <a class="modal-close" href="#">Close</a>
+    <a class="modal-close" href="#" onclick="return closeModal('shelves-nav-modal');">Close</a>
   </div>
 </div>
 
@@ -49,7 +49,7 @@
       {{end}}
       <li><form method="POST" action="/logout"><button type="submit" class="shelf-toggle">Log out</button></form></li>
     </ul>
-    <a class="modal-close" href="#">Close</a>
+    <a class="modal-close" href="#" onclick="return closeModal('account-modal');">Close</a>
   </div>
 </div>
 {{end}}

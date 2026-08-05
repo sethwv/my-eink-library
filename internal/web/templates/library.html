@@ -6,16 +6,18 @@
 
 <form method="GET" action="{{.Action}}" class="toolbar">
   {{if .Name}}<input type="hidden" name="name" value="{{.Name}}">{{end}}
-  <div class="input-group">
-    <input type="text" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input" aria-label="Search">
-    <select name="sort" onchange="this.form.submit()" aria-label="Sort by">
-      <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
-      <option value="author" {{if eq .Sort "author"}}selected{{end}}>Author</option>
-      <option value="series" {{if eq .Sort "series"}}selected{{end}}>Series</option>
-      <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
-      <option value="released" {{if eq .Sort "released"}}selected{{end}}>Release date</option>
-    </select>
-    <button type="submit" name="dir" value="{{.ToggleDir}}" class="dir-toggle" aria-label="Toggle sort direction">{{if eq .Dir "asc"}}&uarr;{{else}}&darr;{{end}}</button>
+  <label for="q">Search</label>
+  <input type="text" id="q" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input">
+  <label for="sort">Sort by</label>
+  <select id="sort" name="sort" onchange="this.form.submit()">
+    <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
+    <option value="author" {{if eq .Sort "author"}}selected{{end}}>Author</option>
+    <option value="series" {{if eq .Sort "series"}}selected{{end}}>Series</option>
+    <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
+    <option value="released" {{if eq .Sort "released"}}selected{{end}}>Release date</option>
+  </select>
+  <div>
+    <button type="submit" name="dir" value="{{.ToggleDir}}" class="dir-toggle">{{if eq .Dir "asc"}}&uarr; asc{{else}}&darr; desc{{end}}</button>
     <button type="submit" class="search-btn">Search</button>
   </div>
 </form>
@@ -29,11 +31,11 @@
 {{$book := .}}
 <div class="card">
   <div class="cover-wrap">
-    <a class="cover-link" href="#book-{{.ID}}"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
+    <a class="cover-link" href="#" onclick="return openModal('book-{{.ID}}');"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
     {{if $.ViewingShelfID}}
-    <a href="#remove-{{.ID}}" class="shelf-btn" aria-label="Remove from {{$.ShelfName}}">&minus;</a>
+    <a href="#" onclick="return openModal('remove-{{.ID}}');" class="shelf-btn" aria-label="Remove from {{$.ShelfName}}">&minus;</a>
     {{else}}
-    <a href="#shelves-{{.ID}}" class="shelf-btn" aria-label="Add to shelf">+</a>
+    <a href="#" onclick="return openModal('shelves-{{.ID}}');" class="shelf-btn" aria-label="Add to shelf">+</a>
     {{end}}
   </div>
   <div class="card-body">
@@ -47,7 +49,7 @@
     <h3>{{.Title}}</h3>
     <a class="btn-download" href="/books/{{.ID}}/download">Download EPUB</a>
     <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
-    <a class="modal-close" href="#">Cancel</a>
+    <a class="modal-close" href="#" onclick="return closeModal('book-{{.ID}}');">Cancel</a>
   </div>
 </div>
 {{if $.ViewingShelfID}}
@@ -59,7 +61,7 @@
       <input type="hidden" name="next" value="{{$.CurrentURL}}">
       <button type="submit" class="btn-download">Remove</button>
     </form>
-    <a class="modal-close" href="#">Cancel</a>
+    <a class="modal-close" href="#" onclick="return closeModal('remove-{{$book.ID}}');">Cancel</a>
   </div>
 </div>
 {{else}}
@@ -70,13 +72,13 @@
     {{range $.Shelves}}
     <li>
       <form method="POST" action="/books/{{$book.ID}}/shelves/{{.ID}}" class="shelf-toggle-form">
-        <input type="hidden" name="next" value="{{$.CurrentURL}}#shelves-{{$book.ID}}">
+        <input type="hidden" name="next" value="{{$.CurrentURL}}">
         <button type="submit" class="shelf-toggle{{if index $.ShelfMemberships .ID $book.ID}} is-on{{end}}">{{.Name}}</button>
       </form>
     </li>
     {{end}}
     </ul>
-    <a class="modal-close" href="#">Close</a>
+    <a class="modal-close" href="#" onclick="return closeModal('shelves-{{$book.ID}}');">Close</a>
   </div>
 </div>
 {{end}}
@@ -88,6 +90,4 @@
 <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
 {{if .HasNext}}<a href="{{.Action}}?sort={{.Sort}}&dir={{.Dir}}&page={{.NextPage}}&q={{.Query}}{{if .Name}}&name={{urlquery .Name}}{{end}}">next &raquo;</a>{{end}}
 </nav>
-
-<script src="/static/shelves.js" defer></script>
 {{end}}
