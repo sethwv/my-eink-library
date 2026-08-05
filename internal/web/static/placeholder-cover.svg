@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="220" viewBox="0 0 150 220">
+<rect width="150" height="220" fill="#ddd" stroke="#999"/>
+<text x="75" y="115" font-family="sans-serif" font-size="14" fill="#666" text-anchor="middle">No Cover</text>
+</svg>

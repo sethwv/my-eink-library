@@ -1,0 +1,38 @@
+{{define "content"}}
+<h1>Library</h1>
+<form method="GET" action="/" style="margin-bottom:1em;">
+  <label>Sort by
+    <select name="sort" onchange="this.form.submit()">
+      <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
+      <option value="author" {{if eq .Sort "author"}}selected{{end}}>Author</option>
+      <option value="series" {{if eq .Sort "series"}}selected{{end}}>Series</option>
+      <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
+    </select>
+  </label>
+  <a href="/?sort={{.Sort}}&dir={{.ToggleDir}}&page={{.Page}}">{{if eq .Dir "asc"}}↑ asc{{else}}↓ desc{{end}}</a>
+  <button type="submit" style="display:none">Go</button>
+</form>
+
+<table>
+{{range .Books}}
+<tr>
+  <td><img src="/covers/{{.ID}}" alt="" width="60"></td>
+  <td>
+    <strong>{{.Title}}</strong><br>
+    {{if .Author}}{{.Author}}<br>{{end}}
+    {{if .Series}}{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}<br>{{end}}
+    <a href="/books/{{.ID}}/download">EPUB</a> |
+    <a href="/books/{{.ID}}/download.kepub">KEPUB</a>
+  </td>
+</tr>
+{{end}}
+</table>
+
+<p>
+{{if gt .Page 1}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.PrevPage}}">&laquo; prev</a>{{end}}
+Page {{.Page}} of {{.TotalPages}}
+{{if .HasNext}}<a href="/?sort={{.Sort}}&dir={{.Dir}}&page={{.NextPage}}">next &raquo;</a>{{end}}
+</p>
+
+<form method="POST" action="/logout"><button type="submit">Log out</button></form>
+{{end}}
