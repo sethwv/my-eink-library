@@ -86,7 +86,17 @@ func main() {
 	}
 
 	authn := auth.New(cfg.SessionSecret, cfg.SessionTTL, userStore)
-	srv := &web.Server{Auth: authn, DB: db, Covers: covers, Users: userStore, LibraryPath: cfg.LibraryPath, PageSize: cfg.PageSize}
+	srv := &web.Server{
+		Auth:        authn,
+		DB:          db,
+		Covers:      covers,
+		Users:       userStore,
+		LibraryPath: cfg.LibraryPath,
+		DataDir:     cfg.DataDir,
+		PageSize:    cfg.PageSize,
+		SiteName:    cfg.SiteName,
+		StartedAt:   time.Now(),
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +119,8 @@ func main() {
 	mux.Handle("POST /admin/users", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersCreate)))
 	mux.Handle("POST /admin/users/{id}/delete", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersDelete)))
 	mux.Handle("POST /admin/users/{id}/reset-password", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersResetPassword)))
+	mux.Handle("GET /admin/server", authn.RequireAdmin(http.HandlerFunc(srv.ServerInfo)))
+	mux.Handle("POST /admin/server/rescan", authn.RequireAdmin(http.HandlerFunc(srv.ServerRescan)))
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

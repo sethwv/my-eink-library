@@ -57,6 +57,7 @@ All configuration is via environment variables:
 | `LIBRARY_PASS` | *(required)* | bootstrap admin password (first run only) |
 | `SESSION_SECRET` | *(required)* | signing key for session cookies |
 | `PORT` | `8080` | HTTP listen port |
+| `SITE_NAME` | `eink-library` | display name shown in the nav, login page, and browser tab |
 | `COVER_WIDTH` | `300` | cover thumbnail width in px |
 | `PAGE_SIZE` | `48` | books per grid page |
 | `SESSION_TTL` | `720h` | how long a login session lasts |

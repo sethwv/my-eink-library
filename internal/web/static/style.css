@@ -124,14 +124,6 @@ label { display: block; margin: 0.5em 0; }
   margin-right: 0.35em;
   flex-shrink: 0;
 }
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75em;
-  flex-wrap: wrap;
-  font-size: 0.9em;
-}
-
 /* Narrow screens: keep the whole nav on one line by dropping to icon-only
    (title + tooltip still give the accessible name), never a hidden menu. */
 @media (max-width: 480px) {
