@@ -63,7 +63,7 @@ func main() {
 	if err := db.Scan(cfg.LibraryPath, covers); err != nil {
 		log.Fatalf("initial scan: %v", err)
 	}
-	if n, err := db.Count(); err == nil {
+	if n, err := db.Count(index.Filter{}); err == nil {
 		log.Printf("indexed %d books", n)
 	}
 
@@ -98,6 +98,8 @@ func main() {
 	mux.HandleFunc("POST /login", srv.LoginSubmit)
 	mux.Handle("POST /logout", authn.RequireAuth(http.HandlerFunc(srv.Logout)))
 	mux.Handle("GET /", authn.RequireAuth(http.HandlerFunc(srv.LibraryGrid)))
+	mux.Handle("GET /authors", authn.RequireAuth(http.HandlerFunc(srv.AuthorsHandler)))
+	mux.Handle("GET /series", authn.RequireAuth(http.HandlerFunc(srv.SeriesHandler)))
 	mux.Handle("GET /covers/{id}", authn.RequireAuth(http.HandlerFunc(srv.Cover)))
 	mux.Handle("GET /books/{id}/download", authn.RequireAuth(http.HandlerFunc(srv.DownloadEPUB)))
 	mux.Handle("GET /books/{id}/download.kepub", authn.RequireAuth(http.HandlerFunc(srv.DownloadKepub)))

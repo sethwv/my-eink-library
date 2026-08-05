@@ -1,12 +1,5 @@
 {{define "content"}}
-<header class="topbar">
-  <h1 class="site-title"><a href="/">eink-library</a></h1>
-  <div class="topbar-right">
-    <span class="muted">{{.Username}}</span>
-    <a href="/">Library</a>
-    <form method="POST" action="/logout" class="inline-form"><button type="submit" class="btn-link">Log out</button></form>
-  </div>
-</header>
+{{template "topbar" .}}
 
 <h1>Manage Users</h1>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}

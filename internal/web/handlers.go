@@ -81,19 +81,37 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	s.renderBookList(w, r, bookListParams{
+		action:      "/",
+		filter:      index.Filter{Search: strings.TrimSpace(q.Get("q"))},
+		heading:     "Library",
+		defaultSort: index.SortTitle,
+		filtered:    false,
+	})
+}
+
+var validSortParams = map[string]bool{"title": true, "author": true, "series": true, "added": true, "released": true}
+
+// bookListParams configures one call to renderBookList: the shared
+// sort/page/search machinery behind the library grid and every filtered
+// view (author, series, and future ones like shelves/favorites).
+type bookListParams struct {
+	action      string       // form action / link base path, e.g. "/" or "/authors"
+	name        string       // carried through as a hidden "name" param on filtered views
+	filter      index.Filter // Author/Series (if any) pre-set by the caller; Search is filled in from the request
+	heading     string
+	defaultSort index.SortKey
+	filtered    bool // show the "back to library" link
+}
+
+func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookListParams) {
+	q := r.URL.Query()
 
 	sortParam := q.Get("sort")
-	sort := index.SortTitle
-	switch sortParam {
-	case "author":
-		sort = index.SortAuthor
-	case "series":
-		sort = index.SortSeries
-	case "added":
-		sort = index.SortAdded
-	default:
-		sortParam = "title"
+	if !validSortParams[sortParam] {
+		sortParam = string(p.defaultSort)
 	}
+	sort := index.SortKey(sortParam)
 
 	dir := q.Get("dir")
 	if dir != "asc" && dir != "desc" {
@@ -112,13 +130,15 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 	}
 
 	search := strings.TrimSpace(q.Get("q"))
+	filter := p.filter
+	filter.Search = search
 
-	books, err := s.DB.List(sort, descending, page, pageSize, search)
+	books, err := s.DB.List(sort, descending, page, pageSize, filter)
 	if err != nil {
 		http.Error(w, "failed to load library", http.StatusInternalServerError)
 		return
 	}
-	total, err := s.DB.CountSearch(search)
+	total, err := s.DB.Count(filter)
 	if err != nil {
 		http.Error(w, "failed to load library", http.StatusInternalServerError)
 		return
@@ -137,7 +157,8 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 	username, isAdmin := s.viewerInfo(r)
 
 	render(w, "library.html", map[string]any{
-		"Title":      "Library",
+		"Title":      p.heading,
+		"Heading":    p.heading,
 		"Books":      books,
 		"Sort":       sortParam,
 		"Dir":        dir,
@@ -150,6 +171,64 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 		"Username":   username,
 		"IsAdmin":    isAdmin,
 		"Query":      search,
+		"Action":     p.action,
+		"Name":       p.name,
+		"Filtered":   p.filtered,
+	})
+}
+
+// AuthorsHandler is dual-mode: with no ?name=, it lists every author (browse
+// index); with ?name=, it shows that author's books via renderBookList.
+func (s *Server) AuthorsHandler(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		s.renderNameIndex(w, r, "Authors", "/authors", s.DB.ListAuthors)
+		return
+	}
+	s.renderBookList(w, r, bookListParams{
+		action:      "/authors",
+		name:        name,
+		filter:      index.Filter{Author: name},
+		heading:     "Books by " + name,
+		defaultSort: index.SortTitle,
+		filtered:    true,
+	})
+}
+
+// SeriesHandler is dual-mode: with no ?name=, it lists every series (browse
+// index); with ?name=, it shows that series' books via renderBookList.
+func (s *Server) SeriesHandler(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		s.renderNameIndex(w, r, "Series", "/series", s.DB.ListSeries)
+		return
+	}
+	s.renderBookList(w, r, bookListParams{
+		action:      "/series",
+		name:        name,
+		filter:      index.Filter{Series: name},
+		heading:     "Series: " + name,
+		defaultSort: index.SortSeries,
+		filtered:    true,
+	})
+}
+
+func (s *Server) renderNameIndex(w http.ResponseWriter, r *http.Request, heading, linkBase string, list func() ([]index.NameCount, error)) {
+	items, err := list()
+	if err != nil {
+		http.Error(w, "failed to load list", http.StatusInternalServerError)
+		return
+	}
+
+	username, isAdmin := s.viewerInfo(r)
+
+	render(w, "name_index.html", map[string]any{
+		"Title":    heading,
+		"Heading":  heading,
+		"Items":    items,
+		"LinkBase": linkBase,
+		"Username": username,
+		"IsAdmin":  isAdmin,
 	})
 }
 

@@ -1,0 +1,17 @@
+{{define "content"}}
+{{template "topbar" .}}
+
+<h1>{{.Heading}}</h1>
+
+{{if not .Items}}
+<p class="muted">Nothing here yet.</p>
+{{end}}
+
+<ul class="name-list">
+{{range .Items}}
+<li><a href="{{$.LinkBase}}?name={{urlquery .Name}}">{{.Name}}</a> <span class="muted">({{.Count}})</span></li>
+{{end}}
+</ul>
+
+<p><a href="/">&laquo; Back to library</a></p>
+{{end}}

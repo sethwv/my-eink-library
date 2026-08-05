@@ -82,6 +82,11 @@ label { display: block; margin: 0.5em 0; }
 }
 .site-title { margin: 0; }
 .site-title a { text-decoration: none; }
+.topnav {
+  display: flex;
+  gap: 1em;
+  flex-wrap: wrap;
+}
 .topbar-right {
   display: flex;
   align-items: center;
@@ -135,9 +140,68 @@ label { display: block; margin: 0.5em 0; }
 }
 .card-body { margin-top: 0.4em; }
 .card-title { font-weight: bold; font-size: 0.95em; }
-.card-author, .card-series { font-size: 0.85em; color: var(--fg-muted); }
-.card-actions { margin-top: 0.3em; font-size: 0.85em; }
-.card-actions a { margin-right: 0.6em; }
+.cover-link { display: block; }
+
+/* Author/series chips: distinct tap targets, separate from the cover-tap modal */
+.card-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25em;
+  margin-top: 0.3em;
+}
+.chip {
+  display: inline-block;
+  font-size: 0.78em;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2em 0.6em;
+  text-decoration: none;
+}
+.chip:hover { background: #eee; }
+
+/* Author/series browse-index pages */
+.name-list { list-style: none; padding: 0; margin: 1em 0; }
+.name-list li { padding: 0.4em 0; border-bottom: 1px solid var(--border); }
+
+/* Cover-tap download modal (CSS-only, :target based, no JS) */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  align-items: center;
+  justify-content: center;
+  padding: 1em;
+}
+.modal-overlay:target { display: flex; }
+.modal-box {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 1.5em;
+  max-width: 20em;
+  width: 100%;
+  text-align: center;
+}
+.modal-box h3 { margin-top: 0; }
+.btn-download {
+  display: block;
+  width: 100%;
+  padding: 0.9em;
+  margin: 0.5em 0;
+  font-size: 1.1em;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--fg);
+}
+.btn-download:hover { background: #eee; }
+.modal-close {
+  display: inline-block;
+  margin-top: 0.5em;
+  font-size: 0.9em;
+}
 
 /* Pagination */
 .pagination {
