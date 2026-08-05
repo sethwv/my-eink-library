@@ -41,7 +41,11 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 	username, _ := auth.UsernameFromContext(r.Context())
 	isAdmin := false
 	if username != "" {
-		isAdmin = s.Users.IsAdmin(username)
+		// A restricted (bookmark-token) session shouldn't be offered admin
+		// links even if the account is an admin — reaching /admin/* still
+		// redirects to a password step-up regardless, but hiding the links
+		// keeps the UI honest about the "view & shelves only" state.
+		isAdmin = s.Users.IsAdmin(username) && !auth.IsRestricted(r.Context())
 		if _, err = s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName); err != nil {
 			return nil, nil, err
 		}
@@ -602,10 +606,8 @@ func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }
 
-// AccountBookmark shows the current bookmark-token status and, immediately
-// after a (re)generate action redirected here with ?new=, the one-time
-// plaintext bookmark URL — it can never be shown again after this, since
-// only a bcrypt hash of the token is stored.
+// AccountBookmark shows the current bookmark-token status and a button to
+// create/regenerate one.
 func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {
 	base, _, err := s.baseData(r)
 	if err != nil {
@@ -615,20 +617,18 @@ func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.UsernameFromContext(r.Context())
 
 	data := map[string]any{
-		"Title":       "Bookmark Link",
-		"HasToken":    s.Users.HasBookmarkToken(username),
-		"BookmarkURL": "",
-	}
-	if newToken := r.URL.Query().Get("new"); newToken != "" {
-		data["BookmarkURL"] = bookmarkURL(r, newToken)
+		"Title":    "Bookmark Link",
+		"HasToken": s.Users.HasBookmarkToken(username),
 	}
 	mergeInto(data, base)
 	render(w, "account_bookmark.html", data)
 }
 
-// AccountBookmarkRegenerate revokes any existing bookmark token and issues a
-// new one in a single action, then redirects back to AccountBookmark with
-// the new plaintext token in the query string so it can be displayed once.
+// AccountBookmarkRegenerate revokes any existing bookmark token, issues a
+// new one, and redirects the browser straight to the tokened library URL
+// (not back to an informational page) — copy/paste is unreliable on e-reader
+// browsers, so the address bar itself needs to show the bookmarkable URL,
+// ready for the browser's own "bookmark this page" action.
 func (s *Server) AccountBookmarkRegenerate(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.UsernameFromContext(r.Context())
 	token, err := s.Users.GenerateBookmarkToken(username)
@@ -636,7 +636,7 @@ func (s *Server) AccountBookmarkRegenerate(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "failed to generate bookmark link", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/account/bookmark?new="+token, http.StatusSeeOther)
+	http.Redirect(w, r, bookmarkURL(r, token), http.StatusSeeOther)
 }
 
 func bookmarkURL(r *http.Request, token string) string {

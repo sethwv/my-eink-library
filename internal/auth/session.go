@@ -37,10 +37,33 @@ func (a *Authenticator) CheckPassword(username, password string) bool {
 	return a.users.CheckPassword(username, password)
 }
 
-// IssueSession sets a signed session cookie for username.
+// IssueSession sets a signed, full-access session cookie for username —
+// used after a password login. Full sessions can reach admin routes and
+// other sensitive actions; see IssueRestrictedSession for the bookmark-
+// token equivalent.
 func (a *Authenticator) IssueSession(w http.ResponseWriter, r *http.Request, username string) {
+	a.issueSession(w, r, username, false)
+}
+
+// IssueRestrictedSession sets a signed session cookie for username limited
+// to view/shelves-only access. Issued opportunistically when a bookmark
+// token authenticates a request, so cookie-capable browsing within the
+// session doesn't need the token on every link — without handing the token
+// holder admin powers or the ability to change passwords, since anyone with
+// the bookmark link has a weaker guarantee than someone who typed a
+// password. Reaching an admin route with a restricted session redirects to
+// a password prompt (RequireFull) rather than 403ing outright, so the
+// legitimate account owner can step up to a full session in place.
+func (a *Authenticator) IssueRestrictedSession(w http.ResponseWriter, r *http.Request, username string) {
+	a.issueSession(w, r, username, true)
+}
+
+func (a *Authenticator) issueSession(w http.ResponseWriter, r *http.Request, username string, restricted bool) {
 	expires := time.Now().Add(a.ttl)
 	payload := username + "|" + strconv.FormatInt(expires.Unix(), 10)
+	if restricted {
+		payload += "|restricted"
+	}
 	token := a.sign(payload)
 
 	http.SetCookie(w, &http.Cookie{
@@ -66,31 +89,35 @@ func (a *Authenticator) ClearSession(w http.ResponseWriter) {
 	})
 }
 
-// VerifySession reports the signed-in username if the request carries a
-// valid, unexpired session cookie.
-func (a *Authenticator) VerifySession(r *http.Request) (string, bool) {
+// VerifySession reports the signed-in username and whether the session is
+// restricted (bookmark-token-issued: view/shelves only, see
+// IssueRestrictedSession) if the request carries a valid, unexpired session
+// cookie. A cookie issued before restricted sessions existed has no third
+// field and is treated as full, matching its original (only) meaning.
+func (a *Authenticator) VerifySession(r *http.Request) (username string, restricted bool, ok bool) {
 	c, err := r.Cookie(CookieName)
 	if err != nil || c.Value == "" {
-		return "", false
+		return "", false, false
 	}
 
-	payload, ok := a.verify(c.Value)
-	if !ok {
-		return "", false
+	payload, verified := a.verify(c.Value)
+	if !verified {
+		return "", false, false
 	}
 
-	parts := strings.SplitN(payload, "|", 2)
-	if len(parts) != 2 || parts[0] == "" {
-		return "", false
+	parts := strings.SplitN(payload, "|", 3)
+	if len(parts) < 2 || parts[0] == "" {
+		return "", false, false
 	}
 	exp, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
-		return "", false
+		return "", false, false
 	}
 	if time.Now().Unix() >= exp {
-		return "", false
+		return "", false, false
 	}
-	return parts[0], true
+	restricted = len(parts) == 3 && parts[2] == "restricted"
+	return parts[0], restricted, true
 }
 
 func (a *Authenticator) sign(payload string) string {
