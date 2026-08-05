@@ -206,8 +206,8 @@ label { display: block; margin: 0.6em 0; }
 .card {
   display: inline-block;
   vertical-align: top;
-  width: 10.5em;
-  margin: 0 1em 1em 0;
+  width: 10.2em;
+  margin: 0 0.8em 1em 0;
   border: 1px solid #ddd;
   -webkit-border-radius: 8px;
   border-radius: 8px;
@@ -362,6 +362,7 @@ label { display: block; margin: 0.6em 0; }
 .modal-dates {
   font-size: 0.85em;
   color: #444;
+  text-align: center;
 }
 .modal-dates span { margin-right: 1em; }
 .modal-description {
@@ -388,6 +389,20 @@ label { display: block; margin: 0.6em 0; }
   color: #111;
 }
 .btn-download:hover { background: #f7f7f7; }
+/* Compact secondary action (Check Hardcover), not a full-width primary
+   button like the download/nav links above. */
+.btn-hardcover {
+  display: inline-block;
+  padding: 0.4em 0.9em;
+  margin: 0.8em 0 0;
+  font-size: 0.85em;
+  border: 1px solid #888;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+  text-decoration: none;
+  color: #111;
+}
+.btn-hardcover:hover { background: #f7f7f7; }
 /* Pagination — centered text with inline-block links instead of flexbox */
 .pagination {
   text-align: center;

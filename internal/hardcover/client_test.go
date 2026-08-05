@@ -33,7 +33,7 @@ func TestSearch_SendsBearerTokenAndVariables(t *testing.T) {
 	c.http = srv.Client()
 	overrideEndpointForTest(t, srv.URL)
 
-	matches, err := c.Search(context.Background(), "Mistborn", "Brandon Sanderson")
+	matches, err := c.Search(context.Background(), "Mistborn", "Brandon Sanderson", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestSearch_SurfacesGraphQLErrors(t *testing.T) {
 	c.http = srv.Client()
 	overrideEndpointForTest(t, srv.URL)
 
-	if _, err := c.Search(context.Background(), "Mistborn", "Brandon Sanderson"); err == nil {
+	if _, err := c.Search(context.Background(), "Mistborn", "Brandon Sanderson", ""); err == nil {
 		t.Fatal("expected an error from a GraphQL errors response")
 	} else if !strings.Contains(err.Error(), "rate limited") {
 		t.Errorf("error = %v, want it to mention %q", err, "rate limited")
@@ -94,10 +94,10 @@ func TestClient_ThrottlesRequests(t *testing.T) {
 	overrideEndpointForTest(t, srv.URL)
 
 	start := time.Now()
-	if _, err := c.Search(context.Background(), "a", "b"); err != nil {
+	if _, err := c.Search(context.Background(), "a", "b", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Search(context.Background(), "c", "d"); err != nil {
+	if _, err := c.Search(context.Background(), "c", "d", ""); err != nil {
 		t.Fatal(err)
 	}
 	if elapsed := time.Since(start); elapsed < minInterval {

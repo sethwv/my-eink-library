@@ -619,6 +619,28 @@ func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }
 
+// ServerReimport triggers a synchronous full library reimport, re-parsing
+// every EPUB regardless of whether its file has changed (unlike a normal
+// rescan, which skips unchanged files) — used to pick up EPUB metadata
+// parsing fixes on books that are already indexed.
+func (s *Server) ServerReimport(w http.ResponseWriter, r *http.Request) {
+	if err := s.DB.Reimport(s.LibraryPath, s.Covers); err != nil {
+		http.Error(w, "reimport failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
+}
+
+// ServerEnrichmentReset clears all Hardcover-derived enrichment data so the
+// background queue re-processes every book from scratch.
+func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
+	if err := s.DB.ResetEnrichment(); err != nil {
+		http.Error(w, "enrichment reset failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
+}
+
 // AccountBookmark shows the current bookmark-token status and a button to
 // create/regenerate one.
 func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {

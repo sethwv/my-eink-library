@@ -46,7 +46,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 		}
 
 		c := candidates[0]
-		matches, err := s.Hardcover.Search(ctx, c.Title, c.Author)
+		matches, err := s.Hardcover.Search(ctx, c.Title, c.Author, c.Identifier)
 		if err != nil {
 			log.Printf("enrichment queue: search failed for book %d: %v", c.ID, err)
 			if err := s.DB.SetEnrichmentStatus(c.ID, "error"); err != nil {
@@ -115,7 +115,7 @@ func (s *Server) BookHardcoverCheck(w http.ResponseWriter, r *http.Request) {
 		"Enabled":            s.Hardcover.Enabled(),
 	}
 	if s.Hardcover.Enabled() {
-		matches, err := s.Hardcover.Search(r.Context(), book.Title, book.Author)
+		matches, err := s.Hardcover.Search(r.Context(), book.Title, book.Author, book.Identifier)
 		if err != nil {
 			log.Printf("hardcover check failed for book %d: %v", id, err)
 		} else if best, ok := hardcover.BestConfidentMatch(matches, book.Author); ok {

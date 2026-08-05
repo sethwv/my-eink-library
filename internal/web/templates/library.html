@@ -66,7 +66,6 @@
           <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
           {{if .Author}}<a class="btn-download" href="/authors?name={{urlquery .Author}}">Go to Author</a>{{end}}
           {{if .Series}}<a class="btn-download" href="/series?name={{urlquery .Series}}">Go to Series</a>{{end}}
-          {{if $.IsAdmin}}<a class="btn-download" href="/books/{{.ID}}/hardcover-check">Check Hardcover</a>{{end}}
         </td>
       </tr>
     </table>
@@ -75,7 +74,6 @@
         {{if .AddedAt}}<span>Added {{formatUnix .AddedAt}}</span>{{end}}
         {{if .PublishedAt}}<span>Released {{formatPublished .PublishedAt}}</span>{{end}}
       </div>
-      {{if .Description}}<p class="modal-description">{{plainText .Description}}</p>{{end}}
     </div>
     <div class="modal-section-label">Shelves</div>
     <ul class="shelf-list">
@@ -88,6 +86,8 @@
     </li>
     {{end}}
     </ul>
+    {{if .Description}}<p class="modal-description">{{plainText .Description}}</p>{{end}}
+    {{if $.IsAdmin}}<a class="btn-hardcover" href="/books/{{.ID}}/hardcover-check">Check Hardcover</a>{{end}}
   </div>
 </div>
 {{end}}

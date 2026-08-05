@@ -29,14 +29,24 @@ type opfPackage struct {
 }
 
 type opfMetadata struct {
-	Title       []string  `xml:"http://purl.org/dc/elements/1.1/ title"`
-	Creator     []string  `xml:"http://purl.org/dc/elements/1.1/ creator"`
-	Identifier  []string  `xml:"http://purl.org/dc/elements/1.1/ identifier"`
-	Language    []string  `xml:"http://purl.org/dc/elements/1.1/ language"`
-	Publisher   []string  `xml:"http://purl.org/dc/elements/1.1/ publisher"`
-	Date        []string  `xml:"http://purl.org/dc/elements/1.1/ date"`
-	Description []string  `xml:"http://purl.org/dc/elements/1.1/ description"`
-	Meta        []opfMeta `xml:"meta"`
+	Title       []string        `xml:"http://purl.org/dc/elements/1.1/ title"`
+	Creator     []string        `xml:"http://purl.org/dc/elements/1.1/ creator"`
+	Identifier  []opfIdentifier `xml:"http://purl.org/dc/elements/1.1/ identifier"`
+	Language    []string        `xml:"http://purl.org/dc/elements/1.1/ language"`
+	Publisher   []string        `xml:"http://purl.org/dc/elements/1.1/ publisher"`
+	Date        []string        `xml:"http://purl.org/dc/elements/1.1/ date"`
+	Description []string        `xml:"http://purl.org/dc/elements/1.1/ description"`
+	Meta        []opfMeta       `xml:"meta"`
+}
+
+// opfIdentifier is a single dc:identifier element. scheme (typically
+// opf:scheme="ISBN"/"ASIN"/etc.) distinguishes an ISBN/ASIN from a Calibre
+// UUID or other identifier scheme sharing the same element. The struct tag
+// omits a namespace so it matches the attribute by local name regardless of
+// which prefix (or none) the source EPUB used for it.
+type opfIdentifier struct {
+	Scheme string `xml:"scheme,attr"`
+	Value  string `xml:",chardata"`
 }
 
 type opfMeta struct {
@@ -158,7 +168,16 @@ func buildMetadata(pkg *opfPackage) Metadata {
 		m.Description = strings.TrimSpace(pkg.Metadata.Description[0])
 	}
 	if len(pkg.Metadata.Identifier) > 0 {
-		m.Identifier = strings.TrimSpace(pkg.Metadata.Identifier[0])
+		// Prefer an identifier explicitly scheme-tagged as an ISBN/ASIN over
+		// whatever happens to be first (often a Calibre UUID); fall back to
+		// the first identifier when nothing is scheme-tagged.
+		m.Identifier = strings.TrimSpace(pkg.Metadata.Identifier[0].Value)
+		for _, id := range pkg.Metadata.Identifier {
+			switch strings.ToUpper(strings.TrimSpace(id.Scheme)) {
+			case "ISBN", "ISBN-13", "ISBN-10", "ASIN", "MOBI-ASIN":
+				m.Identifier = strings.TrimSpace(id.Value)
+			}
+		}
 	}
 
 	// Calibre's series convention, the de facto standard for EPUB series metadata.

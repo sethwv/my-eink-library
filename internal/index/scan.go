@@ -24,10 +24,12 @@ type CoverSaver interface {
 // Scan walks libraryPath for .epub files and upserts them into the index,
 // then deletes rows for files that no longer exist. Per-file parse errors
 // are logged and stored on the row rather than aborting the scan. Records
-// last_scan_at/last_scan_duration_ms in the meta table on success.
+// last_scan_at/last_scan_duration_ms in the meta table on success. Files
+// whose size/mtime haven't changed since the last scan are skipped without
+// re-parsing; use Reimport to force a full re-parse.
 func (d *DB) Scan(libraryPath string, saver CoverSaver) error {
 	start := time.Now()
-	if err := d.scan(libraryPath, saver); err != nil {
+	if err := d.scan(libraryPath, saver, false); err != nil {
 		return err
 	}
 
@@ -36,7 +38,23 @@ func (d *DB) Scan(libraryPath string, saver CoverSaver) error {
 	return nil
 }
 
-func (d *DB) scan(libraryPath string, saver CoverSaver) error {
+// Reimport is like Scan but re-parses every EPUB regardless of whether its
+// file has changed, so an EPUB-metadata-parsing fix (e.g. improved
+// identifier extraction) applies to books that are already indexed. Each
+// book's added_at is preserved: the UPDATE path used for existing files
+// never touches that column, only the INSERT path (new files) does.
+func (d *DB) Reimport(libraryPath string, saver CoverSaver) error {
+	start := time.Now()
+	if err := d.scan(libraryPath, saver, true); err != nil {
+		return err
+	}
+
+	_ = d.SetMeta("last_scan_at", strconv.FormatInt(time.Now().Unix(), 10))
+	_ = d.SetMeta("last_scan_duration_ms", strconv.FormatInt(time.Since(start).Milliseconds(), 10))
+	return nil
+}
+
+func (d *DB) scan(libraryPath string, saver CoverSaver, force bool) error {
 	seen := make(map[string]bool)
 
 	err := filepath.WalkDir(libraryPath, func(path string, entry fs.DirEntry, err error) error {
@@ -63,7 +81,7 @@ func (d *DB) scan(libraryPath string, saver CoverSaver) error {
 			return nil
 		}
 
-		if err := d.upsertIfChanged(rel, path, info, saver); err != nil {
+		if err := d.upsertIfChanged(rel, path, info, saver, force); err != nil {
 			log.Printf("scan: upsert error for %s: %v", rel, err)
 		}
 		return nil
@@ -79,7 +97,7 @@ func (d *DB) scan(libraryPath string, saver CoverSaver) error {
 	return nil
 }
 
-func (d *DB) upsertIfChanged(relPath, fullPath string, info fs.FileInfo, saver CoverSaver) error {
+func (d *DB) upsertIfChanged(relPath, fullPath string, info fs.FileInfo, saver CoverSaver, force bool) error {
 	size := info.Size()
 	mtime := info.ModTime().Unix()
 
@@ -93,7 +111,7 @@ func (d *DB) upsertIfChanged(relPath, fullPath string, info fs.FileInfo, saver C
 	case err != nil:
 		return err
 	default:
-		if existingSize == size && existingMtime == mtime {
+		if !force && existingSize == size && existingMtime == mtime {
 			return nil // unchanged, skip re-parsing
 		}
 	}
@@ -217,7 +235,7 @@ func (d *DB) UpsertPath(libraryPath, relPath string, saver CoverSaver) error {
 	if err != nil {
 		return err
 	}
-	return d.upsertIfChanged(relPath, fullPath, info, saver)
+	return d.upsertIfChanged(relPath, fullPath, info, saver, false)
 }
 
 func nullableString(s string) any {

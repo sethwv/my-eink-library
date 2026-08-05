@@ -23,6 +23,11 @@
   <button type="submit">Rescan library now</button>
 </form>
 
+<form method="POST" action="/admin/server/reimport" style="margin-top:1em;">
+  <button type="submit">Force full reimport (re-parse every book)</button>
+  <p class="muted">Re-parses every EPUB from scratch, even unchanged ones &mdash; slower than a normal rescan, but picks up EPUB metadata fixes on already-indexed books. Each book's added date is kept.</p>
+</form>
+
 <h1>Hardcover Enrichment</h1>
 {{if not .HardcoverEnabled}}
 <p class="muted">Not configured (no API token set).</p>
@@ -36,6 +41,11 @@
 <tr><td>Errored</td><td>{{.EnrichmentErrored}}</td></tr>
 </table>
 </div>
+
+<form method="POST" action="/admin/server/enrichment-reset" style="margin-top:1em;">
+  <button type="submit">Clear all enrichment data &amp; requeue</button>
+  <p class="muted">Clears every book's Hardcover-derived series/date and status, without touching EPUB-scanned data. The background queue picks all books back up automatically.</p>
+</form>
 {{end}}
 
 <p><a href="/">&laquo; Back to library</a></p>

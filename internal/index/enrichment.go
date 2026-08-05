@@ -1,26 +1,35 @@
 package index
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
 
 // EnrichmentCandidate is the minimal data needed to search Hardcover for a
 // book and decide whether to fill in blanks.
 type EnrichmentCandidate struct {
-	ID     int64
-	Title  string
-	Author string
+	ID         int64
+	Title      string
+	Author     string
+	Identifier string
 }
 
 // BooksNeedingEnrichment returns up to limit books that haven't been checked
-// against Hardcover yet (enrichment_status = ”) and are missing series or
+// against Hardcover yet (enrichment status = ”) and are missing series or
 // release-date metadata — the only fields auto-fill ever touches. Already
 // `done`/`no_match`/`error` books are skipped so a restart resumes instead
-// of reprocessing the whole library.
+// of reprocessing the whole library. Both the status and the series/date
+// blankness checks look at the merged (book_enrichment-over-books) value.
 func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 	rows, err := d.sql.Query(`
-		SELECT id, title, author FROM books
-		WHERE enrichment_status = ''
-		AND (series IS NULL OR series = '' OR published_date IS NULL OR published_date = '')
-		ORDER BY id
+		SELECT b.id, b.title, b.author, COALESCE(b.identifier, '') FROM books b
+		LEFT JOIN book_enrichment be ON be.book_id = b.id
+		WHERE COALESCE(be.status, '') = ''
+		AND (
+			COALESCE(be.series, b.series) IS NULL OR COALESCE(be.series, b.series) = ''
+			OR COALESCE(be.published_date, b.published_date) IS NULL OR COALESCE(be.published_date, b.published_date) = ''
+		)
+		ORDER BY b.id
 		LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list books needing enrichment: %w", err)
@@ -30,7 +39,7 @@ func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 	var out []EnrichmentCandidate
 	for rows.Next() {
 		var c EnrichmentCandidate
-		if err := rows.Scan(&c.ID, &c.Title, &c.Author); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &c.Author, &c.Identifier); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -42,13 +51,16 @@ func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 // book, so it isn't retried every scan/queue pass. Valid statuses: "done",
 // "no_match", "error".
 func (d *DB) SetEnrichmentStatus(bookID int64, status string) error {
-	_, err := d.sql.Exec(`UPDATE books SET enrichment_status = ? WHERE id = ?`, status, bookID)
+	_, err := d.sql.Exec(`
+		INSERT INTO book_enrichment (book_id, status, updated_at) VALUES (?, ?, strftime('%s','now'))
+		ON CONFLICT(book_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`,
+		bookID, status)
 	return err
 }
 
 // EnrichmentStats summarizes enrichment progress for the admin page.
 type EnrichmentStats struct {
-	Pending int // enrichment_status = '' and still missing series/date
+	Pending int // status = '' and still missing series/date
 	Done    int
 	NoMatch int
 	Errored int
@@ -58,41 +70,101 @@ func (d *DB) GetEnrichmentStats() (EnrichmentStats, error) {
 	var s EnrichmentStats
 	err := d.sql.QueryRow(`
 		SELECT
-			COUNT(*) FILTER (WHERE enrichment_status = '' AND (series IS NULL OR series = '' OR published_date IS NULL OR published_date = '')),
-			COUNT(*) FILTER (WHERE enrichment_status = 'done'),
-			COUNT(*) FILTER (WHERE enrichment_status = 'no_match'),
-			COUNT(*) FILTER (WHERE enrichment_status = 'error')
-		FROM books`).Scan(&s.Pending, &s.Done, &s.NoMatch, &s.Errored)
+			COUNT(*) FILTER (WHERE COALESCE(be.status, '') = '' AND (
+				COALESCE(be.series, b.series) IS NULL OR COALESCE(be.series, b.series) = ''
+				OR COALESCE(be.published_date, b.published_date) IS NULL OR COALESCE(be.published_date, b.published_date) = ''
+			)),
+			COUNT(*) FILTER (WHERE be.status = 'done'),
+			COUNT(*) FILTER (WHERE be.status = 'no_match'),
+			COUNT(*) FILTER (WHERE be.status = 'error')
+		FROM books b
+		LEFT JOIN book_enrichment be ON be.book_id = b.id`).Scan(&s.Pending, &s.Done, &s.NoMatch, &s.Errored)
 	return s, err
 }
 
-// FillBlankMetadata sets series/series_index/published_date only where the
-// book's current value is blank — the auto-fill path, which never
-// overwrites data that's already there.
-func (d *DB) FillBlankMetadata(bookID int64, series string, seriesIndex float64, publishedDate string) error {
+// currentMerged returns the book's current merged (book_enrichment-over-
+// books) series/series_index/published_date, the same values a listing read
+// would see.
+func (d *DB) currentMerged(bookID int64) (series string, seriesIndex float64, publishedDate string, err error) {
+	var s, p sql.NullString
+	var si sql.NullFloat64
+	err = d.sql.QueryRow(`
+		SELECT COALESCE(be.series, b.series), COALESCE(be.series_index, b.series_index), COALESCE(be.published_date, b.published_date)
+		FROM books b LEFT JOIN book_enrichment be ON be.book_id = b.id
+		WHERE b.id = ?`, bookID).Scan(&s, &si, &p)
+	return s.String, si.Float64, p.String, err
+}
+
+func (d *DB) upsertEnrichment(bookID int64, series string, seriesIndex float64, publishedDate, status string) error {
 	_, err := d.sql.Exec(`
-		UPDATE books SET
-			series = CASE WHEN series IS NULL OR series = '' THEN ? ELSE series END,
-			series_index = CASE WHEN series IS NULL OR series = '' THEN ? ELSE series_index END,
-			published_date = CASE WHEN published_date IS NULL OR published_date = '' THEN ? ELSE published_date END
-		WHERE id = ?`,
-		nullIfEmpty(series), seriesIndex, nullIfEmpty(publishedDate), bookID)
+		INSERT INTO book_enrichment (book_id, series, series_index, published_date, status, updated_at)
+		VALUES (?, ?, ?, ?, ?, strftime('%s','now'))
+		ON CONFLICT(book_id) DO UPDATE SET
+			series = excluded.series,
+			series_index = excluded.series_index,
+			published_date = excluded.published_date,
+			status = excluded.status,
+			updated_at = excluded.updated_at`,
+		bookID, nullIfEmpty(series), seriesIndex, nullIfEmpty(publishedDate), status)
 	return err
 }
 
-// OverrideMetadata unconditionally sets title/series/series_index/published_date
-// — the manual, confirmed-by-a-human override path. Blank strings passed in
-// mean "leave this field alone" (the confirm form only submits fields the
-// admin chose to accept), not "clear it".
+// FillBlankMetadata sets series/series_index/published_date in
+// book_enrichment only where the book's current merged (book_enrichment-over-
+// books) value is blank — the auto-fill path, which never overwrites data
+// that's already there, whether that data came from the EPUB or a prior
+// enrichment. Also marks the book "done".
+func (d *DB) FillBlankMetadata(bookID int64, series string, seriesIndex float64, publishedDate string) error {
+	curSeries, curSeriesIndex, curPublishedDate, err := d.currentMerged(bookID)
+	if err != nil {
+		return err
+	}
+
+	finalSeries, finalSeriesIndex, finalDate := curSeries, curSeriesIndex, curPublishedDate
+	if curSeries == "" {
+		finalSeries, finalSeriesIndex = series, seriesIndex
+	}
+	if curPublishedDate == "" {
+		finalDate = publishedDate
+	}
+
+	return d.upsertEnrichment(bookID, finalSeries, finalSeriesIndex, finalDate, "done")
+}
+
+// OverrideMetadata unconditionally sets series/series_index/published_date
+// in book_enrichment (and title directly on books) — the manual,
+// confirmed-by-a-human override path. Blank strings passed in mean "leave
+// this field alone" (the confirm form only submits fields the admin chose
+// to accept), not "clear it". Title isn't enrichment-derived data subject to
+// the rescan-clobber problem, so it stays a direct books update.
 func (d *DB) OverrideMetadata(bookID int64, title, series string, seriesIndex float64, publishedDate string) error {
-	_, err := d.sql.Exec(`
-		UPDATE books SET
-			title = CASE WHEN ? != '' THEN ? ELSE title END,
-			series = CASE WHEN ? != '' THEN ? ELSE series END,
-			series_index = CASE WHEN ? != '' THEN ? ELSE series_index END,
-			published_date = CASE WHEN ? != '' THEN ? ELSE published_date END
-		WHERE id = ?`,
-		title, title, series, series, series, seriesIndex, publishedDate, publishedDate, bookID)
+	if title != "" {
+		if _, err := d.sql.Exec(`UPDATE books SET title = ? WHERE id = ?`, title, bookID); err != nil {
+			return err
+		}
+	}
+
+	curSeries, curSeriesIndex, curPublishedDate, err := d.currentMerged(bookID)
+	if err != nil {
+		return err
+	}
+
+	finalSeries, finalSeriesIndex, finalDate := curSeries, curSeriesIndex, curPublishedDate
+	if series != "" {
+		finalSeries, finalSeriesIndex = series, seriesIndex
+	}
+	if publishedDate != "" {
+		finalDate = publishedDate
+	}
+
+	return d.upsertEnrichment(bookID, finalSeries, finalSeriesIndex, finalDate, "done")
+}
+
+// ResetEnrichment clears all Hardcover-derived data for every book, without
+// touching books' own EPUB-scanned data at all. BooksNeedingEnrichment then
+// naturally picks every book back up on the queue's next pass.
+func (d *DB) ResetEnrichment() error {
+	_, err := d.sql.Exec(`DELETE FROM book_enrichment`)
 	return err
 }
 
