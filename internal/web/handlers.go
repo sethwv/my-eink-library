@@ -128,7 +128,7 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 		action:      "/",
 		filter:      index.Filter{Search: strings.TrimSpace(q.Get("q"))},
 		heading:     "Library",
-		defaultSort: index.SortTitle,
+		defaultSort: index.SortAdded,
 	})
 }
 

@@ -7,12 +7,12 @@
   {{if .Name}}<input type="hidden" name="name" value="{{.Name}}">{{end}}
   <table class="toolbar-table">
     <tr>
-      <td><label for="q">Search</label></td>
+      <!-- <td><label for="q">Search</label></td> -->
       <td><input type="text" id="q" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input"></td>
       <td><button type="submit" class="search-btn">Search</button></td>
     </tr>
     <tr>
-      <td><label for="sort">Sort by</label></td>
+      <!-- <td><label for="sort">Sort by</label></td> -->
       <td>
         <select id="sort" name="sort" onchange="this.form.submit()">
           <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
@@ -22,7 +22,17 @@
           <option value="released" {{if eq .Sort "released"}}selected{{end}}>Release date</option>
         </select>
       </td>
-      <td><button type="submit" name="dir" value="{{.ToggleDir}}" class="dir-toggle">{{if eq .Dir "asc"}}&uarr; Ascending{{else}}&darr; Descending{{end}}</button></td>
+      <td>
+        <button type="submit" name="dir" value="{{.ToggleDir}}" class="dir-toggle">
+          {{if eq .Dir "asc"}}
+          <svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+          Ascending
+          {{else}}
+          <svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          Descending
+          {{end}}
+        </button>
+      </td>
     </tr>
   </table>
 </form>
@@ -46,11 +56,11 @@
 </div>
 <div id="book-{{.ID}}" class="modal-overlay">
   <div class="modal-box modal-box-wide">
+    <h3>{{.Title}}</h3>
     <table class="modal-layout">
       <tr>
         <td class="modal-cover-cell"><img class="modal-cover" src="/covers/{{.ID}}" alt="{{.Title}} cover"></td>
         <td class="modal-actions-cell">
-          <h3>{{.Title}}</h3>
           <a class="btn-download" href="/books/{{.ID}}/download">Download EPUB</a>
           <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
           {{if .Author}}<a class="btn-download" href="/authors?name={{urlquery .Author}}">Go to Author</a>{{end}}
