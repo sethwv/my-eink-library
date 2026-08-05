@@ -32,6 +32,9 @@ body {
   width: 100%;
   min-height: 100%;
   line-height: 1.4;
+  /* Positioning context for .modal-overlay (position:absolute) so its
+     left/right:0 spans the document's width. */
+  position: relative;
 }
 
 .container {
@@ -265,7 +268,7 @@ label { display: block; margin: 0.6em 0; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.card-author, .card-series {
+.card-author, .card-series, .card-date {
   margin-top: 0.3em;
   font-size: 0.8em;
   color: #444;
@@ -310,20 +313,43 @@ label { display: block; margin: 0.6em 0; }
 .name-list a { display: inline-block; padding: 0.3em 0.2em; }
 
 /* Modal (download / account / shelves-nav): shown/hidden by plain ES5 JS
-   (modal.js) toggling this inline style.display directly — CSS :target
-   proved unreliable on the actual target device. Centered with margin:auto
-   (horizontal) and a fixed top offset (vertical) instead of flexbox
-   centering. Clicking the overlay backdrop itself (outside .modal-box)
-   closes the modal, handled centrally in modal.js. */
-.modal-overlay {
+   (modal.js) toggling inline style.display directly — CSS :target proved
+   unreliable on the actual target device.
+
+   Two separate elements, deliberately not one: a book with a long
+   description can make .modal-box taller than one viewport, and this
+   engine's inner-element scrollbars are known-buggy (see the constraints
+   note at the top of this file), so the box can't have its own scroll
+   region — it needs to be an ordinary part of the page that scrolls with
+   everything else. But the dark backdrop needs to cover the full screen
+   at all times regardless of scroll position, which a normal-flow element
+   can't do on its own. So:
+   - #modal-backdrop (in layout.html, shared by every modal, only one is
+     ever open at a time): position:fixed, covers the viewport, purely the
+     dark tint + a click-anywhere-on-it close target. Its size never
+     depends on document height, so there's nothing to get wrong here.
+   - .modal-overlay (one per modal): position:absolute, sized to fit its
+     own content (not stretched to the document), positioned at the
+     current scroll offset when opened (modal.js sets `top` to
+     window.scrollY) so it appears right where the user is looking
+     regardless of where its markup happens to live in the page, then
+     scrolls away normally like any other document content. */
+#modal-backdrop {
   display: none;
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 1000;
+  z-index: 999;
   background: rgba(0, 0, 0, 0.55);
+}
+.modal-overlay {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1000;
   padding: 1em;
 }
 .modal-box {
@@ -356,6 +382,17 @@ label { display: block; margin: 0.6em 0; }
   border-radius: 5px;
 }
 .modal-box h3 { margin-top: 0; text-align: center;}
+.modal-meta { margin-top: 0.5em; }
+.modal-dates {
+  font-size: 0.85em;
+  color: #444;
+}
+.modal-dates span { margin-right: 1em; }
+.modal-description {
+  margin: 0.6em 0 0;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
 .modal-section-label {
   margin: 1.2em 0 0.5em;
   font-size: 0.9em;
