@@ -129,7 +129,6 @@ func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
 		filter:      index.Filter{Search: strings.TrimSpace(q.Get("q"))},
 		heading:     "Library",
 		defaultSort: index.SortTitle,
-		filtered:    false,
 	})
 }
 
@@ -144,7 +143,6 @@ type bookListParams struct {
 	filter         index.Filter // Author/Series (if any) pre-set by the caller; Search is filled in from the request
 	heading        string
 	defaultSort    index.SortKey
-	filtered       bool   // show the "back to library" link
 	viewingShelfID int64 // set only when viewing a specific shelf (e.g. Favourites); its shelf-toggle button removes the book from the page instead of just flipping the checkmark
 }
 
@@ -228,7 +226,6 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"Query":            search,
 		"Action":           p.action,
 		"Name":             p.name,
-		"Filtered":         p.filtered,
 		"ShelfMemberships": memberships,
 		"ViewingShelfID":   p.viewingShelfID,
 	}
@@ -250,7 +247,6 @@ func (s *Server) AuthorsHandler(w http.ResponseWriter, r *http.Request) {
 		filter:      index.Filter{Author: name},
 		heading:     "Books by " + name,
 		defaultSort: index.SortTitle,
-		filtered:    true,
 	})
 }
 
@@ -268,7 +264,6 @@ func (s *Server) SeriesHandler(w http.ResponseWriter, r *http.Request) {
 		filter:      index.Filter{Series: name},
 		heading:     "Series: " + name,
 		defaultSort: index.SortSeries,
-		filtered:    true,
 	})
 }
 
@@ -285,7 +280,6 @@ func (s *Server) FavoritesHandler(w http.ResponseWriter, r *http.Request) {
 		filter:         index.Filter{ShelfID: shelfID},
 		heading:        favoritesName,
 		defaultSort:    index.SortTitle,
-		filtered:       true,
 		viewingShelfID: shelfID,
 	})
 }
