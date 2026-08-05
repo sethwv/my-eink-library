@@ -40,10 +40,10 @@ body {
 .container {
   max-width: 60em;
   margin: 0 auto;
-  padding: 1em 0.25em 3em;
+  padding: 1em 1em 3em;
 }
 
-h1 { font-size: 1.4em; margin: 0.4em .75em; }
+h1 { font-size: 1.4em; margin: 0.4em 0; }
 h2 { font-size: 1.1em; margin: 1.2em 0 0.5em; }
 
 a { color: #111; text-decoration: underline; }
@@ -58,10 +58,13 @@ a:hover { text-decoration: none; }
   margin: 0.75em 0;
 }
 
-/* Buttons and inline forms — generous padding throughout for touch targets */
+/* Buttons and inline forms — generous, matching padding throughout, both
+   for touch targets and so a text input, a <select>, and a button sitting
+   in the same row (the toolbar) line up at the same height without
+   needing a hardcoded pixel height anywhere. */
 button, .btn {
   font: inherit;
-  padding: 0.6em 1em;
+  padding: 0.65em 1em;
   border: 1px solid #888;
   -webkit-border-radius: 5px;
   border-radius: 5px;
@@ -80,7 +83,7 @@ button:hover { background: #f7f7f7; }
 
 input[type="text"], input[type="password"] {
   font: inherit;
-  padding: 0.6em 0.7em;
+  padding: 0.65em 0.7em;
   border: 1px solid #ddd;
   -webkit-border-radius: 5px;
   border-radius: 5px;
@@ -92,7 +95,7 @@ input[type="text"]:focus, input[type="password"]:focus {
 
 select {
   font: inherit;
-  padding: 0.5em 0.6em;
+  padding: 0.65em 0.6em;
   border: 1px solid #ddd;
   -webkit-border-radius: 5px;
   border-radius: 5px;
@@ -111,8 +114,6 @@ label { display: block; margin: 0.6em 0; }
   border-bottom: 1px solid #ddd;
   padding-bottom: 0.5em;
   margin-bottom: 1.5em;
-  padding-right: 1em;
-  padding-left: 1em;
 }
 .topbar-main { margin-bottom: 0.4em; overflow: hidden; }
 .site-title {
@@ -147,40 +148,27 @@ label { display: block; margin: 0.6em 0; }
   .nav-icon { margin-right: 0; width: 1.3em; height: 1.3em; }
 }
 
-/* Search/sort toolbar: a simple two-row table pairing each label, its
-   control, and that row's action button (tables are a known-safe layout
-   primitive on this engine) — every row is self-contained instead of
-   collecting actions in a separate block below. */
-.toolbar { margin: 1em; }
-/* .toolbar { margin-bottom: 1.5em; } */
+/* Search/sort toolbar: a simple two-row table pairing each row's control
+   (search input / sort select) with that row's action button (tables are
+   a known-safe layout primitive on this engine) — every row is
+   self-contained instead of collecting actions in a separate block below.
+   Two columns, not three: there's no label column (removed in favor of
+   the placeholder text/visible options carrying the same information). */
+.toolbar { margin: 0 0 1.5em; }
 .toolbar-table { width: 100%; border-collapse: collapse; }
-.toolbar-table td { padding: 0.3em 0; border: none; }
-.toolbar-table td:first-child {
-  width: 5em;
-  padding-right: 0.6em;
-  font-size: 0.9em;
-  color: #444;
-  white-space: nowrap;
-}
+.toolbar-table td { padding: 0.3em 0; border: none; vertical-align: middle; }
 .toolbar-table td:last-child {
   width: 1%;
   padding-left: 0.6em;
   white-space: nowrap;
 }
-.toolbar-table label { margin: 0; }
 .toolbar-table .search-input,
 .toolbar-table select {
   display: block;
   width: 100%;
-  height: 45px;
-  /* height: 2.5em */
 }
 .toolbar-table .dir-toggle,
 .toolbar-table .search-btn {
-  width: 10.5em;
-  /* width: 100%; */
-  height: 45px;
-  /* height: 2.5em; */
   white-space: nowrap;
 }
 .dir-icon {
@@ -219,8 +207,7 @@ label { display: block; margin: 0.6em 0; }
   display: inline-block;
   vertical-align: top;
   width: 10.5em;
-  margin: 0 .5em 1em .5em;
-  /* margin: 0 1em 1em 0; */
+  margin: 0 1em 1em 0;
   border: 1px solid #ddd;
   -webkit-border-radius: 8px;
   border-radius: 8px;
@@ -249,17 +236,6 @@ label { display: block; margin: 0.6em 0; }
   background: #f7f7f7;
 }
 
-/* Small screens: predictable column counts instead of the desktop fixed
-   card width (which would otherwise force a single column). Still plain
-   width + inline-block, no flex-basis. */
-@media (max-width: 700px) {
-  .card { margin-right: 0.7em; }
-  /* .card { width: calc(33.333% - 0.7em); margin-right: 0.7em; } */
-}
-@media (max-width: 420px) {
-  .card { margin-right: 0.6em; }
-  /* .card { width: calc(50% - 0.6em); margin-right: 0.6em; } */
-}
 .card-body { padding: 0.6em 0.75em 0.8em; }
 .card-title {
   font-weight: 600;
