@@ -27,14 +27,6 @@ type Server struct {
 const favoritesSlug = "favourites"
 const favoritesName = "Favourites"
 
-// bookView pairs a book with whether the current viewer has it on any
-// shelf, so library.html can highlight the "+" button without a second
-// per-book query.
-type bookView struct {
-	index.Book
-	OnAnyShelf bool
-}
-
 // viewerInfo returns the signed-in username and whether they're an admin,
 // for use in template data across authenticated pages.
 func (s *Server) viewerInfo(r *http.Request) (username string, isAdmin bool) {
@@ -107,12 +99,14 @@ var validSortParams = map[string]bool{"title": true, "author": true, "series": t
 // sort/page/search machinery behind the library grid and every filtered
 // view (author, series, and future ones like shelves/favorites).
 type bookListParams struct {
-	action      string       // form action / link base path, e.g. "/" or "/authors"
-	name        string       // carried through as a hidden "name" param on filtered views
-	filter      index.Filter // Author/Series (if any) pre-set by the caller; Search is filled in from the request
-	heading     string
-	defaultSort index.SortKey
-	filtered    bool // show the "back to library" link
+	action         string       // form action / link base path, e.g. "/" or "/authors"
+	name           string       // carried through as a hidden "name" param on filtered views
+	filter         index.Filter // Author/Series (if any) pre-set by the caller; Search is filled in from the request
+	heading        string
+	defaultSort    index.SortKey
+	filtered       bool   // show the "back to library" link
+	viewingShelfID int64  // set only when viewing a specific shelf (e.g. Favourites); swaps the "+" for a "-"-with-confirm
+	shelfName      string // display name for the remove-confirm modal, paired with viewingShelfID
 }
 
 func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookListParams) {
@@ -167,7 +161,6 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 
 	username, isAdmin := s.viewerInfo(r)
 
-	views := make([]bookView, len(books))
 	var shelves []index.Shelf
 	memberships := map[int64]map[int64]bool{}
 	if username != "" {
@@ -188,26 +181,12 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 			}
 			memberships[sh.ID] = ids
 		}
-		for i, b := range books {
-			onAny := false
-			for _, sh := range shelves {
-				if memberships[sh.ID][b.ID] {
-					onAny = true
-					break
-				}
-			}
-			views[i] = bookView{Book: b, OnAnyShelf: onAny}
-		}
-	} else {
-		for i, b := range books {
-			views[i] = bookView{Book: b}
-		}
 	}
 
 	render(w, "library.html", map[string]any{
 		"Title":            p.heading,
 		"Heading":          p.heading,
-		"Books":            views,
+		"Books":            books,
 		"Sort":             sortParam,
 		"Dir":              dir,
 		"ToggleDir":        toggleDir,
@@ -225,6 +204,8 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"CurrentURL":       r.URL.RequestURI(),
 		"Shelves":          shelves,
 		"ShelfMemberships": memberships,
+		"ViewingShelfID":   p.viewingShelfID,
+		"ShelfName":        p.shelfName,
 	})
 }
 
@@ -273,11 +254,13 @@ func (s *Server) FavoritesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderBookList(w, r, bookListParams{
-		action:      "/favorites",
-		filter:      index.Filter{ShelfID: shelfID},
-		heading:     favoritesName,
-		defaultSort: index.SortTitle,
-		filtered:    true,
+		action:         "/favorites",
+		filter:         index.Filter{ShelfID: shelfID},
+		heading:        favoritesName,
+		defaultSort:    index.SortTitle,
+		filtered:       true,
+		viewingShelfID: shelfID,
+		shelfName:      favoritesName,
 	})
 }
 

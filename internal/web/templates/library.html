@@ -6,18 +6,18 @@
 
 <form method="GET" action="{{.Action}}" class="toolbar">
   {{if .Name}}<input type="hidden" name="name" value="{{.Name}}">{{end}}
-  <input type="text" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input">
-  <label>Sort by
-    <select name="sort" onchange="this.form.submit()">
+  <div class="input-group">
+    <input type="text" name="q" value="{{.Query}}" placeholder="Search title, author, series" class="search-input" aria-label="Search">
+    <select name="sort" onchange="this.form.submit()" aria-label="Sort by">
       <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
       <option value="author" {{if eq .Sort "author"}}selected{{end}}>Author</option>
       <option value="series" {{if eq .Sort "series"}}selected{{end}}>Series</option>
       <option value="added" {{if eq .Sort "added"}}selected{{end}}>Date added</option>
       <option value="released" {{if eq .Sort "released"}}selected{{end}}>Release date</option>
     </select>
-  </label>
-  <a href="{{.Action}}?sort={{.Sort}}&dir={{.ToggleDir}}&page={{.Page}}&q={{.Query}}{{if .Name}}&name={{urlquery .Name}}{{end}}">{{if eq .Dir "asc"}}↑ asc{{else}}↓ desc{{end}}</a>
-  <button type="submit">Search</button>
+    <button type="submit" name="dir" value="{{.ToggleDir}}" class="dir-toggle" aria-label="Toggle sort direction">{{if eq .Dir "asc"}}&uarr;{{else}}&darr;{{end}}</button>
+    <button type="submit" class="search-btn">Search</button>
+  </div>
 </form>
 
 {{if not .Books}}
@@ -30,7 +30,11 @@
 <div class="card">
   <div class="cover-wrap">
     <a class="cover-link" href="#book-{{.ID}}"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
-    <a href="#shelves-{{.ID}}" class="shelf-btn{{if .OnAnyShelf}} is-on{{end}}" aria-label="Add to shelf">+</a>
+    {{if $.ViewingShelfID}}
+    <a href="#remove-{{.ID}}" class="shelf-btn" aria-label="Remove from {{$.ShelfName}}">&minus;</a>
+    {{else}}
+    <a href="#shelves-{{.ID}}" class="shelf-btn" aria-label="Add to shelf">+</a>
+    {{end}}
   </div>
   <div class="card-body">
     <div class="card-title">{{.Title}}</div>
@@ -46,6 +50,19 @@
     <a class="modal-close" href="#">Cancel</a>
   </div>
 </div>
+{{if $.ViewingShelfID}}
+<div id="remove-{{$book.ID}}" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Remove from {{$.ShelfName}}?</h3>
+    <p class="muted">{{$book.Title}}</p>
+    <form method="POST" action="/books/{{$book.ID}}/shelves/{{$.ViewingShelfID}}">
+      <input type="hidden" name="next" value="{{$.CurrentURL}}">
+      <button type="submit" class="btn-download">Remove</button>
+    </form>
+    <a class="modal-close" href="#">Cancel</a>
+  </div>
+</div>
+{{else}}
 <div id="shelves-{{$book.ID}}" class="modal-overlay">
   <div class="modal-box">
     <h3>{{$book.Title}}</h3>
@@ -62,6 +79,7 @@
     <a class="modal-close" href="#">Close</a>
   </div>
 </div>
+{{end}}
 {{end}}
 </div>
 
