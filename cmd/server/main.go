@@ -104,7 +104,7 @@ func main() {
 	mux.Handle("GET /covers/{id}", authn.RequireAuth(http.HandlerFunc(srv.Cover)))
 	mux.Handle("GET /books/{id}/download", authn.RequireAuth(http.HandlerFunc(srv.DownloadEPUB)))
 	mux.Handle("GET /books/{id}/download.kepub", authn.RequireAuth(http.HandlerFunc(srv.DownloadKepub)))
-	mux.Handle("POST /books/{id}/favorite", authn.RequireAuth(http.HandlerFunc(srv.FavoriteToggle)))
+	mux.Handle("POST /books/{id}/shelves/{shelfID}", authn.RequireAuth(http.HandlerFunc(srv.ShelfToggle)))
 	mux.Handle("GET /admin/users", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsers)))
 	mux.Handle("POST /admin/users", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersCreate)))
 	mux.Handle("POST /admin/users/{id}/delete", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersDelete)))

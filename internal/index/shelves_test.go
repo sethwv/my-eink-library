@@ -34,6 +34,54 @@ func TestEnsureSystemShelf_CreatesAndReuses(t *testing.T) {
 	}
 }
 
+func TestListShelves_SystemFirstAndPerUserIsolation(t *testing.T) {
+	db := openTestDB(t)
+
+	favID, err := db.EnsureSystemShelf("alice", "favourites", "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.EnsureSystemShelf("bob", "favourites", "Favourites"); err != nil {
+		t.Fatal(err)
+	}
+
+	shelves, err := db.ListShelves("alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shelves) != 1 {
+		t.Fatalf("expected 1 shelf for alice, got %d", len(shelves))
+	}
+	if shelves[0].ID != favID || shelves[0].Username != "alice" || !shelves[0].IsSystem {
+		t.Errorf("ListShelves(alice) = %+v, want favourites shelf owned by alice", shelves[0])
+	}
+}
+
+func TestGetShelf_FoundAndNotFound(t *testing.T) {
+	db := openTestDB(t)
+
+	id, err := db.EnsureSystemShelf("alice", "favourites", "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sh, err := db.GetShelf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sh == nil || sh.Username != "alice" || sh.Slug != "favourites" {
+		t.Errorf("GetShelf(%d) = %+v, want alice's favourites shelf", id, sh)
+	}
+
+	missing, err := db.GetShelf(999999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if missing != nil {
+		t.Errorf("GetShelf(missing) = %+v, want nil", missing)
+	}
+}
+
 func TestShelfBooks_AddRemoveIsOn(t *testing.T) {
 	db := openTestDB(t)
 	shelfID, err := db.EnsureSystemShelf("alice", "favourites", "Favourites")

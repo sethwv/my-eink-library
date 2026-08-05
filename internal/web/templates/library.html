@@ -26,21 +26,16 @@
 
 <div class="grid">
 {{range .Books}}
+{{$book := .}}
 <div class="card">
   <div class="cover-wrap">
     <a class="cover-link" href="#book-{{.ID}}"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
-    <form method="POST" action="/books/{{.ID}}/favorite" class="favorite-form">
-      <input type="hidden" name="next" value="{{$.CurrentURL}}">
-      <button type="submit" class="favorite-star{{if .IsFavorite}} is-favorite{{end}}" aria-label="{{if .IsFavorite}}Remove from favourites{{else}}Add to favourites{{end}}">{{if .IsFavorite}}&#9733;{{else}}&#9734;{{end}}</button>
-    </form>
+    <a href="#shelves-{{.ID}}" class="shelf-btn{{if .OnAnyShelf}} is-on{{end}}" aria-label="Add to shelf">+</a>
   </div>
   <div class="card-body">
     <div class="card-title">{{.Title}}</div>
-    <div class="card-byline">
-      {{if .Author}}<a href="/authors?name={{urlquery .Author}}">{{.Author}}</a>{{end}}
-      {{if and .Author .Series}}<span class="sep">&middot;</span>{{end}}
-      {{if .Series}}<a href="/series?name={{urlquery .Series}}">{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</a>{{end}}
-    </div>
+    {{if .Author}}<div class="card-author"><a href="/authors?name={{urlquery .Author}}">{{.Author}}</a></div>{{end}}
+    {{if .Series}}<div class="card-series">{{if .SeriesIndex}}<span class="series-index">{{.SeriesIndex}}</span> &middot; {{end}}<a href="/series?name={{urlquery .Series}}">{{.Series}}</a></div>{{end}}
   </div>
 </div>
 <div id="book-{{.ID}}" class="modal-overlay">
@@ -51,6 +46,22 @@
     <a class="modal-close" href="#">Cancel</a>
   </div>
 </div>
+<div id="shelves-{{$book.ID}}" class="modal-overlay">
+  <div class="modal-box">
+    <h3>{{$book.Title}}</h3>
+    <ul class="shelf-list">
+    {{range $.Shelves}}
+    <li>
+      <form method="POST" action="/books/{{$book.ID}}/shelves/{{.ID}}" class="shelf-toggle-form">
+        <input type="hidden" name="next" value="{{$.CurrentURL}}#shelves-{{$book.ID}}">
+        <button type="submit" class="shelf-toggle{{if index $.ShelfMemberships .ID $book.ID}} is-on{{end}}">{{.Name}}</button>
+      </form>
+    </li>
+    {{end}}
+    </ul>
+    <a class="modal-close" href="#">Close</a>
+  </div>
+</div>
 {{end}}
 </div>
 
@@ -59,4 +70,6 @@
 <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
 {{if .HasNext}}<a href="{{.Action}}?sort={{.Sort}}&dir={{.Dir}}&page={{.NextPage}}&q={{.Query}}{{if .Name}}&name={{urlquery .Name}}{{end}}">next &raquo;</a>{{end}}
 </nav>
+
+<script src="/static/shelves.js" defer></script>
 {{end}}
