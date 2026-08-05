@@ -121,6 +121,8 @@ func main() {
 	mux.Handle("POST /admin/users/{id}/reset-password", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersResetPassword)))
 	mux.Handle("GET /admin/server", authn.RequireAdmin(http.HandlerFunc(srv.ServerInfo)))
 	mux.Handle("POST /admin/server/rescan", authn.RequireAdmin(http.HandlerFunc(srv.ServerRescan)))
+	mux.Handle("GET /account/bookmark", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmark)))
+	mux.Handle("POST /account/bookmark/regenerate", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmarkRegenerate)))
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

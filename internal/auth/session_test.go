@@ -174,6 +174,50 @@ func TestRequireAdmin_ForbidsNonAdmin(t *testing.T) {
 	}
 }
 
+func TestRequireAuth_AllowsValidBookmarkToken(t *testing.T) {
+	store := testStore(t) // "reader" created as non-admin
+	a := New("test-signing-secret", time.Hour, store)
+	var gotUsername string
+	handler := a.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUsername, _ = UsernameFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	token, err := store.GenerateBookmarkToken("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/?token="+token, nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if gotUsername != "reader" {
+		t.Errorf("username in context = %q, want %q", gotUsername, "reader")
+	}
+	if len(w.Result().Cookies()) != 1 {
+		t.Error("expected a session cookie to be issued alongside a valid token, so cookie-capable navigation doesn't need the token on every link")
+	}
+}
+
+func TestRequireAuth_RejectsInvalidBookmarkToken(t *testing.T) {
+	a := testAuthenticator(t)
+	handler := a.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/?token=not-a-real-token", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want %d (redirect to login)", w.Code, http.StatusSeeOther)
+	}
+}
+
 func TestRequireAdmin_AllowsAdmin(t *testing.T) {
 	store := testStore(t)
 	if err := store.Create("admin", "s3cret", true); err != nil {

@@ -57,6 +57,14 @@ a:hover { text-decoration: none; }
   padding: 0.5em 0.75em;
   margin: 0.75em 0;
 }
+.bookmark-url-box {
+  border: 1px solid #888;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+  padding: 0.75em 1em;
+  margin: 0.75em 0;
+}
+.bookmark-url-box p { word-wrap: break-word; margin: 0.5em 0 0; }
 
 /* Buttons and inline forms — generous, matching padding throughout, both
    for touch targets and so a text input, a <select>, and a button sitting

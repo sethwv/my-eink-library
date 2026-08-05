@@ -155,3 +155,74 @@ func TestResetPassword(t *testing.T) {
 		t.Error("expected new password to work")
 	}
 }
+
+func TestBookmarkToken_GenerateVerifyRevoke(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.Create("bob", "s3cret", false); err != nil {
+		t.Fatal(err)
+	}
+
+	if s.HasBookmarkToken("bob") {
+		t.Error("expected no bookmark token before one is generated")
+	}
+
+	token, err := s.GenerateBookmarkToken("bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token == "" {
+		t.Fatal("expected a non-empty token")
+	}
+	if !s.HasBookmarkToken("bob") {
+		t.Error("expected HasBookmarkToken to be true after generating one")
+	}
+
+	username, ok := s.VerifyBookmarkToken(token)
+	if !ok || username != "bob" {
+		t.Errorf("VerifyBookmarkToken(token) = %q, %v; want bob, true", username, ok)
+	}
+
+	if _, ok := s.VerifyBookmarkToken("not-the-right-token"); ok {
+		t.Error("expected a wrong token to fail verification")
+	}
+	if _, ok := s.VerifyBookmarkToken(""); ok {
+		t.Error("expected an empty token to fail verification")
+	}
+
+	if err := s.RevokeBookmarkToken("bob"); err != nil {
+		t.Fatal(err)
+	}
+	if s.HasBookmarkToken("bob") {
+		t.Error("expected no bookmark token after revoking")
+	}
+	if _, ok := s.VerifyBookmarkToken(token); ok {
+		t.Error("expected the old token to stop working after revoking")
+	}
+}
+
+func TestBookmarkToken_RegenerateInvalidatesPrevious(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.Create("bob", "s3cret", false); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := s.GenerateBookmarkToken("bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.GenerateBookmarkToken("bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("expected regenerating to produce a different token")
+	}
+
+	if _, ok := s.VerifyBookmarkToken(first); ok {
+		t.Error("expected the first token to stop working once regenerated")
+	}
+	username, ok := s.VerifyBookmarkToken(second)
+	if !ok || username != "bob" {
+		t.Errorf("VerifyBookmarkToken(second) = %q, %v; want bob, true", username, ok)
+	}
+}

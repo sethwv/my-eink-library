@@ -11,11 +11,26 @@ type contextKey int
 const usernameContextKey contextKey = iota
 
 // RequireAuth redirects to /login (preserving the original path as ?next=)
-// unless the request carries a valid session cookie. The verified username
-// is attached to the request context for downstream handlers/RequireAdmin.
+// unless the request carries a valid session cookie or a valid ?token=
+// bookmark token — the latter checked on every request, not just once to
+// establish a cookie, since a bookmarking e-reader's cookie handling isn't
+// fully trusted (see internal/users.Store.VerifyBookmarkToken). When a
+// request is authenticated via token, a session cookie is also issued
+// opportunistically so any cookie-capable browsing within the session
+// doesn't need the token on every link — but the token alone must keep
+// working even if that cookie never sticks. The verified username is
+// attached to the request context for downstream handlers/RequireAdmin.
 func (a *Authenticator) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, ok := a.VerifySession(r)
+		if !ok {
+			if token := r.URL.Query().Get("token"); token != "" {
+				if u, valid := a.users.VerifyBookmarkToken(token); valid {
+					username, ok = u, true
+					a.IssueSession(w, r, username)
+				}
+			}
+		}
 		if !ok {
 			nextPath := url.QueryEscape(r.URL.RequestURI())
 			http.Redirect(w, r, "/login?next="+nextPath, http.StatusSeeOther)
