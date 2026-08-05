@@ -37,10 +37,10 @@ body {
 .container {
   max-width: 60em;
   margin: 0 auto;
-  padding: 1em 1.25em 3em;
+  padding: 1em 0.25em 3em;
 }
 
-h1 { font-size: 1.4em; margin: 0.4em 0; }
+h1 { font-size: 1.4em; margin: 0.4em .75em; }
 h2 { font-size: 1.1em; margin: 1.2em 0 0.5em; }
 
 a { color: #111; text-decoration: underline; }
@@ -97,23 +97,28 @@ select {
 
 label { display: block; margin: 0.6em 0; }
 
-/* Site header, shared across authenticated pages. No flexbox: the title and
-   nav are inline-block so they sit on one line and wrap naturally (like
-   text would) if the viewport is too narrow to fit both. */
+/* Site header, shared across authenticated pages. No flexbox: the title
+   floats left and the nav floats right (floats predate flexbox and are
+   about as safe as CSS gets on this engine) so they sit on one line with
+   the nav anchored to the right edge; topbar-main clears the floats via
+   overflow:hidden (a classic clearfix) so it doesn't collapse to zero
+   height. Narrow viewports still wrap naturally since floated elements
+   drop below one another once they no longer fit side by side. */
 .topbar {
   border-bottom: 1px solid #ddd;
-  padding-bottom: 0.9em;
+  padding-bottom: 0.5em;
   margin-bottom: 1.5em;
+  padding-right: 1em;
+  padding-left: 1em;
 }
-.topbar-main { margin-bottom: 0.4em; }
+.topbar-main { margin-bottom: 0.4em; overflow: hidden; }
 .site-title {
-  display: inline-block;
-  vertical-align: middle;
-  margin: 0 0.75em 0 0;
+  float: left;
+  margin: 0.2em 0.75em 0 0;
   font-size: 1.25em;
 }
 .site-title a { text-decoration: none; }
-.topnav { display: inline-block; vertical-align: middle; margin: 0; }
+.topnav { float: right; margin: 0; }
 .topnav a {
   display: inline-block;
   padding: 0.5em 0.4em;
@@ -143,7 +148,8 @@ label { display: block; margin: 0.6em 0; }
    control, and that row's action button (tables are a known-safe layout
    primitive on this engine) — every row is self-contained instead of
    collecting actions in a separate block below. */
-.toolbar { margin-bottom: 1.5em; }
+.toolbar { margin: 1em; }
+/* .toolbar { margin-bottom: 1.5em; } */
 .toolbar-table { width: 100%; border-collapse: collapse; }
 .toolbar-table td { padding: 0.3em 0; border: none; }
 .toolbar-table td:first-child {
@@ -163,11 +169,23 @@ label { display: block; margin: 0.6em 0; }
 .toolbar-table select {
   display: block;
   width: 100%;
+  height: 45px;
+  /* height: 2.5em */
 }
 .toolbar-table .dir-toggle,
 .toolbar-table .search-btn {
-  width: auto;
+  width: 10.5em;
+  /* width: 100%; */
+  height: 45px;
+  /* height: 2.5em; */
   white-space: nowrap;
+}
+.dir-icon {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.3em;
 }
 
 /* Login page */
@@ -198,7 +216,8 @@ label { display: block; margin: 0.6em 0; }
   display: inline-block;
   vertical-align: top;
   width: 10.5em;
-  margin: 0 1em 1em 0;
+  margin: 0 .5em 1em .5em;
+  /* margin: 0 1em 1em 0; */
   border: 1px solid #ddd;
   -webkit-border-radius: 8px;
   border-radius: 8px;
@@ -231,10 +250,12 @@ label { display: block; margin: 0.6em 0; }
    card width (which would otherwise force a single column). Still plain
    width + inline-block, no flex-basis. */
 @media (max-width: 700px) {
-  .card { width: calc(33.333% - 0.7em); margin-right: 0.7em; }
+  .card { margin-right: 0.7em; }
+  /* .card { width: calc(33.333% - 0.7em); margin-right: 0.7em; } */
 }
 @media (max-width: 420px) {
-  .card { width: calc(50% - 0.6em); margin-right: 0.6em; }
+  .card { margin-right: 0.6em; }
+  /* .card { width: calc(50% - 0.6em); margin-right: 0.6em; } */
 }
 .card-body { padding: 0.6em 0.75em 0.8em; }
 .card-title {
@@ -323,15 +344,18 @@ label { display: block; margin: 0.6em 0; }
 .modal-box-wide { max-width: 34em; text-align: left; }
 .modal-layout { width: 100%; border-collapse: collapse; margin-bottom: 0.5em; }
 .modal-layout td { padding: 0; border: none; vertical-align: top; }
-.modal-cover-cell { width: 6.5em; padding-right: 1em; }
+.modal-layout td.modal-cover-cell { width: 33%; padding-right: 1.5em; text-align: center; vertical-align: middle; }
+.modal-layout td.modal-actions-cell { width: 67%; }
 .modal-cover {
   display: block;
   width: 100%;
+  max-width: 6.5em;
   height: auto;
+  margin: 0 auto;
   -webkit-border-radius: 5px;
   border-radius: 5px;
 }
-.modal-box h3 { margin-top: 0; }
+.modal-box h3 { margin-top: 0; text-align: center;}
 .modal-section-label {
   margin: 1.2em 0 0.5em;
   font-size: 0.9em;
