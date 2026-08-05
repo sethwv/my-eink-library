@@ -27,11 +27,12 @@ type Server struct {
 const favoritesSlug = "favourites"
 const favoritesName = "Favourites"
 
-// bookView pairs a book with whether the current viewer has favorited it,
-// so library.html can render the star without a second per-book query.
+// bookView pairs a book with whether the current viewer has it on any
+// shelf, so library.html can highlight the "+" button without a second
+// per-book query.
 type bookView struct {
 	index.Book
-	IsFavorite bool
+	OnAnyShelf bool
 }
 
 // viewerInfo returns the signed-in username and whether they're an admin,
@@ -167,19 +168,35 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	username, isAdmin := s.viewerInfo(r)
 
 	views := make([]bookView, len(books))
+	var shelves []index.Shelf
+	memberships := map[int64]map[int64]bool{}
 	if username != "" {
-		shelfID, err := s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName)
-		if err != nil {
-			http.Error(w, "failed to load favourites", http.StatusInternalServerError)
+		if _, err := s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName); err != nil {
+			http.Error(w, "failed to load shelves", http.StatusInternalServerError)
 			return
 		}
-		favIDs, err := s.DB.ShelfBookIDs(shelfID)
+		shelves, err = s.DB.ListShelves(username)
 		if err != nil {
-			http.Error(w, "failed to load favourites", http.StatusInternalServerError)
+			http.Error(w, "failed to load shelves", http.StatusInternalServerError)
 			return
+		}
+		for _, sh := range shelves {
+			ids, err := s.DB.ShelfBookIDs(sh.ID)
+			if err != nil {
+				http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+				return
+			}
+			memberships[sh.ID] = ids
 		}
 		for i, b := range books {
-			views[i] = bookView{Book: b, IsFavorite: favIDs[b.ID]}
+			onAny := false
+			for _, sh := range shelves {
+				if memberships[sh.ID][b.ID] {
+					onAny = true
+					break
+				}
+			}
+			views[i] = bookView{Book: b, OnAnyShelf: onAny}
 		}
 	} else {
 		for i, b := range books {
@@ -188,24 +205,26 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	}
 
 	render(w, "library.html", map[string]any{
-		"Title":      p.heading,
-		"Heading":    p.heading,
-		"Books":      views,
-		"Sort":       sortParam,
-		"Dir":        dir,
-		"ToggleDir":  toggleDir,
-		"Page":       page,
-		"PrevPage":   page - 1,
-		"NextPage":   page + 1,
-		"HasNext":    page < totalPages,
-		"TotalPages": totalPages,
-		"Username":   username,
-		"IsAdmin":    isAdmin,
-		"Query":      search,
-		"Action":     p.action,
-		"Name":       p.name,
-		"Filtered":   p.filtered,
-		"CurrentURL": r.URL.RequestURI(),
+		"Title":            p.heading,
+		"Heading":          p.heading,
+		"Books":            views,
+		"Sort":             sortParam,
+		"Dir":              dir,
+		"ToggleDir":        toggleDir,
+		"Page":             page,
+		"PrevPage":         page - 1,
+		"NextPage":         page + 1,
+		"HasNext":          page < totalPages,
+		"TotalPages":       totalPages,
+		"Username":         username,
+		"IsAdmin":          isAdmin,
+		"Query":            search,
+		"Action":           p.action,
+		"Name":             p.name,
+		"Filtered":         p.filtered,
+		"CurrentURL":       r.URL.RequestURI(),
+		"Shelves":          shelves,
+		"ShelfMemberships": memberships,
 	})
 }
 
@@ -262,10 +281,16 @@ func (s *Server) FavoritesHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// FavoriteToggle adds or removes a book from the current user's favourites
-// shelf, then redirects back to wherever the request came from.
-func (s *Server) FavoriteToggle(w http.ResponseWriter, r *http.Request) {
+// ShelfToggle adds or removes a book from one of the current user's shelves,
+// then redirects back to wherever the request came from. Ownership of the
+// shelf is checked — a shelf id alone doesn't prove it belongs to this user.
+func (s *Server) ShelfToggle(w http.ResponseWriter, r *http.Request) {
 	bookID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	shelfID, err := strconv.ParseInt(r.PathValue("shelfID"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -277,15 +302,19 @@ func (s *Server) FavoriteToggle(w http.ResponseWriter, r *http.Request) {
 	next := safeNext(r.FormValue("next"))
 
 	username, _ := auth.UsernameFromContext(r.Context())
-	shelfID, err := s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName)
+	shelf, err := s.DB.GetShelf(shelfID)
 	if err != nil {
-		http.Error(w, "failed to update favourites", http.StatusInternalServerError)
+		http.Error(w, "failed to update shelf", http.StatusInternalServerError)
+		return
+	}
+	if shelf == nil || shelf.Username != username {
+		http.NotFound(w, r)
 		return
 	}
 
 	onShelf, err := s.DB.IsBookOnShelf(shelfID, bookID)
 	if err != nil {
-		http.Error(w, "failed to update favourites", http.StatusInternalServerError)
+		http.Error(w, "failed to update shelf", http.StatusInternalServerError)
 		return
 	}
 	if onShelf {
@@ -294,7 +323,7 @@ func (s *Server) FavoriteToggle(w http.ResponseWriter, r *http.Request) {
 		err = s.DB.AddBookToShelf(shelfID, bookID)
 	}
 	if err != nil {
-		http.Error(w, "failed to update favourites", http.StatusInternalServerError)
+		http.Error(w, "failed to update shelf", http.StatusInternalServerError)
 		return
 	}
 

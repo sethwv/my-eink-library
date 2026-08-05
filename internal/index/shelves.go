@@ -39,6 +39,49 @@ func (d *DB) EnsureSystemShelf(username, slug, name string) (int64, error) {
 	return res.LastInsertId()
 }
 
+// ListShelves returns every shelf owned by username, system shelves first.
+func (d *DB) ListShelves(username string) ([]Shelf, error) {
+	rows, err := d.sql.Query(
+		`SELECT id, username, slug, name, is_system FROM shelves WHERE username = ? ORDER BY is_system DESC, name`,
+		username,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var shelves []Shelf
+	for rows.Next() {
+		var sh Shelf
+		var isSystem int
+		if err := rows.Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem); err != nil {
+			return nil, err
+		}
+		sh.IsSystem = isSystem != 0
+		shelves = append(shelves, sh)
+	}
+	return shelves, rows.Err()
+}
+
+// GetShelf returns the shelf with the given id, or nil if it doesn't exist.
+// Callers must check Shelf.Username against the current user before acting
+// on it — a shelf id alone doesn't prove ownership.
+func (d *DB) GetShelf(id int64) (*Shelf, error) {
+	var sh Shelf
+	var isSystem int
+	err := d.sql.QueryRow(
+		`SELECT id, username, slug, name, is_system FROM shelves WHERE id = ?`, id,
+	).Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sh.IsSystem = isSystem != 0
+	return &sh, nil
+}
+
 // IsBookOnShelf reports whether bookID is already on shelfID.
 func (d *DB) IsBookOnShelf(shelfID, bookID int64) (bool, error) {
 	var exists int
