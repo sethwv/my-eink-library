@@ -60,21 +60,23 @@
     <h3>{{.Title}}</h3>
     <table class="modal-layout">
       <tr>
-        <td class="modal-cover-cell"><img class="modal-cover" src="/covers/{{.ID}}" alt="{{.Title}} cover"></td>
+        <td class="modal-cover-cell">
+          <img class="modal-cover" src="/covers/{{.ID}}" alt="{{.Title}} cover">
+          {{if or .AddedAt .PublishedAt}}
+          <div class="modal-dates">
+            {{if .AddedAt}}<span>Added {{formatUnix .AddedAt}}</span>{{end}}
+            {{if .PublishedAt}}<span>Released {{formatPublished .PublishedAt}}</span>{{end}}
+          </div>
+          {{end}}
+        </td>
         <td class="modal-actions-cell">
           <a class="btn-download" href="/books/{{.ID}}/download">Download EPUB</a>
           <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
-          {{if .Author}}<a class="btn-download" href="/authors?name={{urlquery .Author}}">Go to Author</a>{{end}}
-          {{if .Series}}<a class="btn-download" href="/series?name={{urlquery .Series}}">Go to Series</a>{{end}}
+          {{if .Author}}<a class="btn-download" href="/authors?name={{urlquery .Author}}">Go to {{.Author}}</a>{{end}}
+          {{if .Series}}<a class="btn-download" href="/series?name={{urlquery .Series}}">Go to {{.Series}}</a>{{end}}
         </td>
       </tr>
     </table>
-    <div class="modal-meta">
-      <div class="modal-dates">
-        {{if .AddedAt}}<span>Added {{formatUnix .AddedAt}}</span>{{end}}
-        {{if .PublishedAt}}<span>Released {{formatPublished .PublishedAt}}</span>{{end}}
-      </div>
-    </div>
     <div class="modal-section-label">Shelves</div>
     <ul class="shelf-list">
     {{range $.Shelves}}

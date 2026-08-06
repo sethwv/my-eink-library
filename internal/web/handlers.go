@@ -59,6 +59,7 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 	data = map[string]any{
 		"Username":   username,
 		"IsAdmin":    isAdmin,
+		"Restricted": auth.IsRestricted(r.Context()),
 		"Shelves":    shelves,
 		"SiteName":   s.SiteName,
 		"CurrentURL": r.URL.RequestURI(),

@@ -40,7 +40,7 @@ body {
 .container {
   max-width: 60em;
   margin: 0 auto;
-  padding: 1em 1em 3em;
+  padding: 1em 0.75em 3em;
 }
 
 h1 { font-size: 1.4em; margin: 0.4em 0; }
@@ -102,26 +102,29 @@ select {
 
 label { display: block; margin: 0.6em 0; }
 
-/* Site header, shared across authenticated pages. No flexbox: the title
-   floats left and the nav floats right (floats predate flexbox and are
-   about as safe as CSS gets on this engine) so they sit on one line with
-   the nav anchored to the right edge; topbar-main clears the floats via
-   overflow:hidden (a classic clearfix) so it doesn't collapse to zero
-   height. Narrow viewports still wrap naturally since floated elements
-   drop below one another once they no longer fit side by side. */
+/* Site header, shared across authenticated pages. No flexbox: title and nav
+   sit in a two-cell table row (the same known-safe alignment primitive used
+   for the book modal's cover+actions layout — see .modal-layout below) so
+   both cells share one vertical-align:middle line, keeping the title and
+   nav icons/labels centered against each other regardless of their
+   different font-sizes/padding. Floats (the previous approach) don't share
+   an inline formatting context, so vertical-align couldn't align them. */
 .topbar {
   border-bottom: 1px solid #ddd;
   padding-bottom: 0.5em;
   margin-bottom: 1.5em;
 }
-.topbar-main { margin-bottom: 0.4em; overflow: hidden; }
+.topbar-main { margin-bottom: 0.4em; }
+.topbar-table { width: 100%; border-collapse: collapse; }
+.topbar-table td { padding: 0; border: none; vertical-align: middle; }
+.site-title-cell { width: 1%; white-space: nowrap; }
+.topnav-cell { text-align: right; }
 .site-title {
-  float: left;
-  margin: 0.2em 0.75em 0 0;
+  margin: 0;
   font-size: 1.25em;
 }
 .site-title a { text-decoration: none; }
-.topnav { float: right; margin: 0; }
+.topnav { margin: 0; }
 .topnav a {
   display: inline-block;
   padding: 0.5em 0.4em;
@@ -206,8 +209,8 @@ label { display: block; margin: 0.6em 0; }
 .card {
   display: inline-block;
   vertical-align: top;
-  width: 10.2em;
-  margin: 0 0.8em 1em 0;
+  width: 9.6em;
+  margin: 0 0.5em 1em 0;
   border: 1px solid #ddd;
   -webkit-border-radius: 8px;
   border-radius: 8px;
@@ -358,13 +361,13 @@ label { display: block; margin: 0.6em 0; }
   border-radius: 5px;
 }
 .modal-box h3 { margin-top: 0; text-align: center;}
-.modal-meta { margin-top: 0.5em; }
 .modal-dates {
+  margin-top: 0.5em;
   font-size: 0.85em;
   color: #444;
   text-align: center;
 }
-.modal-dates span { margin-right: 1em; }
+.modal-dates span { display: block; margin-top: 0.2em; }
 .modal-description {
   margin: 0.6em 0 0;
   font-size: 0.9em;
