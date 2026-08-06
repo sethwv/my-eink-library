@@ -2,11 +2,18 @@ package hardcover
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
 // Match is the metadata Hardcover has for a book, normalized down to the
-// fields this app cares about.
+// fields this app cares about. Description/Genres/Pages/ISBNs/Rating all
+// come back on the same search document as Title/Series/etc — Hardcover's
+// Typesense-backed search index returns the full document regardless of the
+// `fields` search-weighting param — so no extra API call is needed to get
+// them (see internal/hardcover's Detail for the two fields, cover image and
+// publisher, that aren't in the search document and do need one).
 type Match struct {
 	ID          string
 	Title       string
@@ -14,6 +21,11 @@ type Match struct {
 	Series      string
 	SeriesIndex float64
 	ReleaseDate string // "YYYY-MM-DD", as Hardcover returns it — parseable by internal/web's formatPublished
+	Description string
+	Genres      []string
+	Pages       int
+	ISBNs       []string
+	Rating      float64
 }
 
 // searchQuery uses a GraphQL variable for the search term rather than
@@ -36,6 +48,11 @@ type searchResponse struct {
 					Title          string   `json:"title"`
 					AuthorNames    []string `json:"author_names"`
 					ReleaseDate    string   `json:"release_date"`
+					Description    string   `json:"description"`
+					Genres         []string `json:"genres"`
+					Pages          int      `json:"pages"`
+					ISBNs          []string `json:"isbns"`
+					Rating         float64  `json:"rating"`
 					FeaturedSeries struct {
 						Position float64 `json:"position"`
 						Series   struct {
@@ -74,9 +91,65 @@ func (c *Client) Search(ctx context.Context, title, author, identifier string) (
 			Series:      d.FeaturedSeries.Series.Name,
 			SeriesIndex: d.FeaturedSeries.Position,
 			ReleaseDate: d.ReleaseDate,
+			Description: d.Description,
+			Genres:      d.Genres,
+			Pages:       d.Pages,
+			ISBNs:       d.ISBNs,
+			Rating:      d.Rating,
 		})
 	}
 	return matches, nil
+}
+
+// Detail is the one field Hardcover only exposes via the full `books`
+// GraphQL type, not the search document (see Match) — publisher name.
+// Fetched with exactly one extra request per confidently matched book (not
+// one request per field), once BestConfidentMatch has resolved an ID.
+type Detail struct {
+	Publisher string
+}
+
+const detailQuery = `query BookDetail($id: Int!) {
+  books_by_pk(id: $id) {
+    default_physical_edition {
+      publisher {
+        name
+      }
+    }
+  }
+}`
+
+type detailResponse struct {
+	BooksByPK *struct {
+		DefaultPhysicalEdition *struct {
+			Publisher *struct {
+				Name string `json:"name"`
+			} `json:"publisher"`
+		} `json:"default_physical_edition"`
+	} `json:"books_by_pk"`
+}
+
+// Detail fetches the publisher for a Hardcover book ID (as returned in
+// Match.ID). Returns a zero Detail, no error, if the book has none.
+func (c *Client) Detail(ctx context.Context, id string) (Detail, error) {
+	bookID, err := strconv.Atoi(id)
+	if err != nil {
+		return Detail{}, fmt.Errorf("hardcover: invalid book id %q: %w", id, err)
+	}
+
+	var resp detailResponse
+	if err := c.do(ctx, detailQuery, map[string]any{"id": bookID}, &resp); err != nil {
+		return Detail{}, err
+	}
+	if resp.BooksByPK == nil {
+		return Detail{}, nil
+	}
+
+	var d Detail
+	if ed := resp.BooksByPK.DefaultPhysicalEdition; ed != nil && ed.Publisher != nil {
+		d.Publisher = ed.Publisher.Name
+	}
+	return d, nil
 }
 
 // looksLikeISBNOrASIN is a loose shape check (digits/X for ISBN-10, all

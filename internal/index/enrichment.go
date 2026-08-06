@@ -3,6 +3,7 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 // EnrichmentCandidate is the minimal data needed to search Hardcover for a
@@ -12,6 +13,23 @@ type EnrichmentCandidate struct {
 	Title      string
 	Author     string
 	Identifier string
+}
+
+// HardcoverFields is everything a Hardcover match can contribute to a book,
+// passed to ApplyEnrichment. Blank/zero fields mean "Hardcover didn't have
+// this", not "clear the existing value" — see ApplyEnrichment for how each
+// field is merged.
+type HardcoverFields struct {
+	Title         string
+	Series        string
+	SeriesIndex   float64
+	PublishedDate string
+	Description   string
+	Genres        []string
+	Publisher     string
+	Pages         int
+	ISBN          string
+	Rating        float64
 }
 
 // BooksNeedingEnrichment returns up to limit books that haven't been checked
@@ -82,82 +100,141 @@ func (d *DB) GetEnrichmentStats() (EnrichmentStats, error) {
 	return s, err
 }
 
-// currentMerged returns the book's current merged (book_enrichment-over-
-// books) series/series_index/published_date, the same values a listing read
-// would see.
-func (d *DB) currentMerged(bookID int64) (series string, seriesIndex float64, publishedDate string, err error) {
-	var s, p sql.NullString
-	var si sql.NullFloat64
-	err = d.sql.QueryRow(`
-		SELECT COALESCE(be.series, b.series), COALESCE(be.series_index, b.series_index), COALESCE(be.published_date, b.published_date)
-		FROM books b LEFT JOIN book_enrichment be ON be.book_id = b.id
-		WHERE b.id = ?`, bookID).Scan(&s, &si, &p)
-	return s.String, si.Float64, p.String, err
+// mergedFields is the book's current merged (book_enrichment-over-books)
+// values for every field ApplyEnrichment/OverrideMetadata can touch — the
+// same values a listing read would see.
+type mergedFields struct {
+	title         string
+	series        string
+	seriesIndex   float64
+	publishedDate string
+	description   string
+	genres        string // raw CSV, as stored
+	publisher     string
+	pages         int64
+	isbn          string
+	rating        float64
 }
 
-func (d *DB) upsertEnrichment(bookID int64, series string, seriesIndex float64, publishedDate, status string) error {
+func (d *DB) currentEnrichmentMerged(bookID int64) (mergedFields, error) {
+	var m mergedFields
+	var title, series, publishedDate, description, genres, publisher, isbn sql.NullString
+	var seriesIndex, rating sql.NullFloat64
+	var pages sql.NullInt64
+	err := d.sql.QueryRow(`
+		SELECT `+effectiveTitle+`, `+effectiveSeries+`, `+effectiveSeriesIndex+`, `+effectivePublishedDate+`,
+			`+effectiveDescription+`, be.genres, `+effectivePublisher+`, be.pages, be.isbn, be.rating
+		FROM books b LEFT JOIN book_enrichment be ON be.book_id = b.id
+		WHERE b.id = ?`, bookID).Scan(&title, &series, &seriesIndex, &publishedDate, &description, &genres, &publisher, &pages, &isbn, &rating)
+	if err != nil {
+		return m, err
+	}
+	m.title = title.String
+	m.series = series.String
+	m.seriesIndex = seriesIndex.Float64
+	m.publishedDate = publishedDate.String
+	m.description = description.String
+	m.genres = genres.String
+	m.publisher = publisher.String
+	m.pages = pages.Int64
+	m.isbn = isbn.String
+	m.rating = rating.Float64
+	return m, nil
+}
+
+func (d *DB) upsertEnrichment(bookID int64, f mergedFields, status string) error {
 	_, err := d.sql.Exec(`
-		INSERT INTO book_enrichment (book_id, series, series_index, published_date, status, updated_at)
-		VALUES (?, ?, ?, ?, ?, strftime('%s','now'))
+		INSERT INTO book_enrichment (book_id, title, series, series_index, published_date, description, genres, publisher, pages, isbn, rating, status, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
 		ON CONFLICT(book_id) DO UPDATE SET
+			title = excluded.title,
 			series = excluded.series,
 			series_index = excluded.series_index,
 			published_date = excluded.published_date,
+			description = excluded.description,
+			genres = excluded.genres,
+			publisher = excluded.publisher,
+			pages = excluded.pages,
+			isbn = excluded.isbn,
+			rating = excluded.rating,
 			status = excluded.status,
 			updated_at = excluded.updated_at`,
-		bookID, nullIfEmpty(series), seriesIndex, nullIfEmpty(publishedDate), status)
+		bookID, nullIfEmpty(f.title), nullIfEmpty(f.series), f.seriesIndex, nullIfEmpty(f.publishedDate),
+		nullIfEmpty(f.description), nullIfEmpty(f.genres), nullIfEmpty(f.publisher),
+		nullIfZeroInt(f.pages), nullIfEmpty(f.isbn), nullIfZeroFloat(f.rating), status)
 	return err
 }
 
-// FillBlankMetadata sets series/series_index/published_date in
-// book_enrichment only where the book's current merged (book_enrichment-over-
-// books) value is blank — the auto-fill path, which never overwrites data
-// that's already there, whether that data came from the EPUB or a prior
-// enrichment. Also marks the book "done".
-func (d *DB) FillBlankMetadata(bookID int64, series string, seriesIndex float64, publishedDate string) error {
-	curSeries, curSeriesIndex, curPublishedDate, err := d.currentMerged(bookID)
+// ApplyEnrichment is the background queue's auto-fill path for a confident
+// Hardcover match. Title is always overwritten with Hardcover's title (per
+// product decision — Hardcover's title is trusted over whatever the EPUB's
+// OPF metadata says); every other field is filled in only where the book's
+// current merged value is blank, matching the existing series/date
+// auto-fill behavior so nothing already present (from the EPUB or a prior
+// enrichment) gets clobbered. Also marks the book "done".
+func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields) error {
+	cur, err := d.currentEnrichmentMerged(bookID)
 	if err != nil {
 		return err
 	}
 
-	finalSeries, finalSeriesIndex, finalDate := curSeries, curSeriesIndex, curPublishedDate
-	if curSeries == "" {
-		finalSeries, finalSeriesIndex = series, seriesIndex
+	final := cur
+	if hc.Title != "" {
+		final.title = hc.Title
 	}
-	if curPublishedDate == "" {
-		finalDate = publishedDate
+	if cur.series == "" {
+		final.series, final.seriesIndex = hc.Series, hc.SeriesIndex
+	}
+	if cur.publishedDate == "" {
+		final.publishedDate = hc.PublishedDate
+	}
+	if cur.description == "" {
+		final.description = hc.Description
+	}
+	if cur.genres == "" && len(hc.Genres) > 0 {
+		final.genres = joinCSV(hc.Genres)
+	}
+	if cur.publisher == "" {
+		final.publisher = hc.Publisher
+	}
+	if cur.pages == 0 {
+		final.pages = int64(hc.Pages)
+	}
+	if cur.isbn == "" {
+		final.isbn = hc.ISBN
+	}
+	if cur.rating == 0 {
+		final.rating = hc.Rating
 	}
 
-	return d.upsertEnrichment(bookID, finalSeries, finalSeriesIndex, finalDate, "done")
+	return d.upsertEnrichment(bookID, final, "done")
 }
 
-// OverrideMetadata unconditionally sets series/series_index/published_date
-// in book_enrichment (and title directly on books) — the manual,
-// confirmed-by-a-human override path. Blank strings passed in mean "leave
-// this field alone" (the confirm form only submits fields the admin chose
-// to accept), not "clear it". Title isn't enrichment-derived data subject to
-// the rescan-clobber problem, so it stays a direct books update.
+// OverrideMetadata unconditionally sets title/series/series_index/
+// published_date in book_enrichment — the manual, confirmed-by-a-human
+// override path (Check Hardcover / Apply admin flow). Blank strings passed
+// in mean "leave this field alone" (the confirm form only submits fields the
+// admin chose to accept), not "clear it". Title is written into
+// book_enrichment (not directly to books) so it survives a later rescan, the
+// same as ApplyEnrichment's automatic path.
 func (d *DB) OverrideMetadata(bookID int64, title, series string, seriesIndex float64, publishedDate string) error {
-	if title != "" {
-		if _, err := d.sql.Exec(`UPDATE books SET title = ? WHERE id = ?`, title, bookID); err != nil {
-			return err
-		}
-	}
-
-	curSeries, curSeriesIndex, curPublishedDate, err := d.currentMerged(bookID)
+	cur, err := d.currentEnrichmentMerged(bookID)
 	if err != nil {
 		return err
 	}
 
-	finalSeries, finalSeriesIndex, finalDate := curSeries, curSeriesIndex, curPublishedDate
+	final := cur
+	if title != "" {
+		final.title = title
+	}
 	if series != "" {
-		finalSeries, finalSeriesIndex = series, seriesIndex
+		final.series, final.seriesIndex = series, seriesIndex
 	}
 	if publishedDate != "" {
-		finalDate = publishedDate
+		final.publishedDate = publishedDate
 	}
 
-	return d.upsertEnrichment(bookID, finalSeries, finalSeriesIndex, finalDate, "done")
+	return d.upsertEnrichment(bookID, final, "done")
 }
 
 // ResetEnrichment clears all Hardcover-derived data for every book, without
@@ -173,4 +250,29 @@ func nullIfEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+func nullIfZeroInt(n int64) any {
+	if n == 0 {
+		return nil
+	}
+	return n
+}
+
+func nullIfZeroFloat(f float64) any {
+	if f == 0 {
+		return nil
+	}
+	return f
+}
+
+func joinCSV(items []string) string {
+	return strings.Join(items, ",")
+}
+
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, ",")
 }

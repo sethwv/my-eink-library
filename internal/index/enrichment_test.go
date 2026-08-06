@@ -76,7 +76,7 @@ func TestGetEnrichmentStats(t *testing.T) {
 	}
 }
 
-func TestFillBlankMetadata_OnlyFillsBlanks(t *testing.T) {
+func TestApplyEnrichment_FillsBlanksButAlwaysOverwritesTitle(t *testing.T) {
 	libDir := t.TempDir()
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Has Series Already", "Amy Zed", "Existing Saga", 2)
 
@@ -90,7 +90,18 @@ func TestFillBlankMetadata_OnlyFillsBlanks(t *testing.T) {
 	}
 	id := books[0].ID
 
-	if err := db.FillBlankMetadata(id, "New Series", 9, "2021-06-01"); err != nil {
+	if err := db.ApplyEnrichment(id, HardcoverFields{
+		Title:         "Hardcover Title",
+		Series:        "New Series",
+		SeriesIndex:   9,
+		PublishedDate: "2021-06-01",
+		Description:   "A description from Hardcover",
+		Genres:        []string{"Fantasy", "Adventure"},
+		Publisher:     "Some Press",
+		Pages:         321,
+		ISBN:          "9781234567897",
+		Rating:        4.2,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -98,11 +109,26 @@ func TestFillBlankMetadata_OnlyFillsBlanks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got.Title != "Hardcover Title" {
+		t.Errorf("Title = %q, want the Hardcover title (title is always overwritten on a confident match)", got.Title)
+	}
 	if got.Series != "Existing Saga" || got.SeriesIndex != 2 {
 		t.Errorf("expected existing series to be left alone, got Series=%q SeriesIndex=%v", got.Series, got.SeriesIndex)
 	}
 	if got.PublishedAt != "2021-06-01" {
 		t.Errorf("PublishedAt = %q, want the fill-in value since it was blank", got.PublishedAt)
+	}
+	if got.Description != "A description from Hardcover" {
+		t.Errorf("Description = %q, want the fill-in value since it was blank", got.Description)
+	}
+	if got.Publisher != "Some Press" {
+		t.Errorf("Publisher = %q, want the fill-in value since it was blank", got.Publisher)
+	}
+	if got.Pages != 321 || got.ISBN != "9781234567897" || got.Rating != 4.2 {
+		t.Errorf("got Pages=%d ISBN=%q Rating=%v, want the fill-in values", got.Pages, got.ISBN, got.Rating)
+	}
+	if len(got.Genres) != 2 || got.Genres[0] != "Fantasy" || got.Genres[1] != "Adventure" {
+		t.Errorf("Genres = %v, want [Fantasy Adventure]", got.Genres)
 	}
 }
 

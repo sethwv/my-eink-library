@@ -17,14 +17,20 @@ const (
 	SortReleased SortKey = "released"
 )
 
-// effectiveSeries/effectiveSeriesIndex/effectivePublishedDate are the
-// Hardcover-enrichment-over-EPUB-scan merged values: book_enrichment wins
-// when present (matching OverrideMetadata's confirmed-override semantics),
-// falling back to the EPUB-scanned books column otherwise.
+// effectiveSeries/effectiveSeriesIndex/effectivePublishedDate/effectiveTitle/
+// effectiveDescription/effectivePublisher are the Hardcover-enrichment-over-
+// EPUB-scan merged values: book_enrichment wins when present, falling back
+// to the EPUB-scanned books column otherwise. Title is included here (rather
+// than written directly to books.title) specifically so an automatic
+// Hardcover title overwrite survives a later rescan — a rescan only ever
+// rewrites books.* from fresh EPUB parsing, never book_enrichment.
 const (
 	effectiveSeries        = `COALESCE(be.series, b.series)`
 	effectiveSeriesIndex   = `COALESCE(be.series_index, b.series_index)`
 	effectivePublishedDate = `COALESCE(be.published_date, b.published_date)`
+	effectiveTitle         = `COALESCE(be.title, b.title)`
+	effectiveDescription   = `COALESCE(be.description, b.description)`
+	effectivePublisher     = `COALESCE(be.publisher, b.publisher)`
 )
 
 var sortColumns = map[SortKey]string{
@@ -35,9 +41,10 @@ var sortColumns = map[SortKey]string{
 	SortReleased: effectivePublishedDate,
 }
 
-const bookColumns = `b.id, b.file_path, b.file_size, b.file_mtime, b.title, b.sort_title, b.author, b.sort_author,
-	` + effectiveSeries + `, ` + effectiveSeriesIndex + `, b.description, b.language, b.publisher, ` + effectivePublishedDate + `, b.identifier,
-	b.cover_path, b.has_cover, b.added_at, b.updated_at, b.parse_error`
+const bookColumns = `b.id, b.file_path, b.file_size, b.file_mtime, ` + effectiveTitle + `, b.sort_title, b.author, b.sort_author,
+	` + effectiveSeries + `, ` + effectiveSeriesIndex + `, ` + effectiveDescription + `, b.language, ` + effectivePublisher + `, ` + effectivePublishedDate + `, b.identifier,
+	b.cover_path, b.has_cover, b.added_at, b.updated_at, b.parse_error,
+	be.genres, be.pages, be.isbn, be.rating`
 
 const bookFrom = `books b LEFT JOIN book_enrichment be ON be.book_id = b.id`
 
@@ -196,12 +203,16 @@ func scanBook(row rowScanner) (*Book, error) {
 	var b Book
 	var series, description, language, publisher, publishedAt, identifier, coverPath, parseError sql.NullString
 	var seriesIndex sql.NullFloat64
+	var genres, isbn sql.NullString
+	var pages sql.NullInt64
+	var rating sql.NullFloat64
 	var hasCover int
 
 	err := row.Scan(
 		&b.ID, &b.FilePath, &b.FileSize, &b.FileMtime, &b.Title, &b.SortTitle, &b.Author, &b.SortAuthor,
 		&series, &seriesIndex, &description, &language, &publisher, &publishedAt, &identifier,
 		&coverPath, &hasCover, &b.AddedAt, &b.UpdatedAt, &parseError,
+		&genres, &pages, &isbn, &rating,
 	)
 	if err != nil {
 		return nil, err
@@ -217,6 +228,10 @@ func scanBook(row rowScanner) (*Book, error) {
 	b.CoverPath = coverPath.String
 	b.HasCover = hasCover != 0
 	b.ParseError = parseError.String
+	b.Genres = splitCSV(genres.String)
+	b.Pages = int(pages.Int64)
+	b.ISBN = isbn.String
+	b.Rating = rating.Float64
 
 	return &b, nil
 }

@@ -22,4 +22,11 @@ type Book struct {
 	AddedAt     int64
 	UpdatedAt   int64
 	ParseError  string
+
+	// Hardcover-only fields: no EPUB-scanned equivalent, so these come
+	// straight from book_enrichment with no COALESCE fallback.
+	Genres []string
+	Pages  int
+	ISBN   string
+	Rating float64
 }

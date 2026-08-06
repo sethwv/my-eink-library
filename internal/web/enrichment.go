@@ -5,9 +5,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/swvn/eink-library/internal/hardcover"
+	"github.com/swvn/eink-library/internal/index"
 )
 
 // idlePollInterval is how long the background enrichment queue waits before
@@ -61,8 +63,31 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			}
 			continue
 		}
-		if err := s.DB.FillBlankMetadata(c.ID, best.Series, best.SeriesIndex, best.ReleaseDate); err != nil {
-			log.Printf("enrichment queue: fill metadata failed for book %d: %v", c.ID, err)
+
+		// Publisher isn't in the search document (see hardcover.Match), so
+		// it needs one more request — best-effort: a failure here shouldn't
+		// stop the rest of the match (series/date/title/etc.) from applying.
+		var publisher string
+		if detail, err := s.Hardcover.Detail(ctx, best.ID); err != nil {
+			log.Printf("enrichment queue: detail lookup failed for book %d: %v", c.ID, err)
+		} else {
+			publisher = detail.Publisher
+		}
+
+		fields := index.HardcoverFields{
+			Title:         best.Title,
+			Series:        best.Series,
+			SeriesIndex:   best.SeriesIndex,
+			PublishedDate: best.ReleaseDate,
+			Description:   best.Description,
+			Genres:        best.Genres,
+			Publisher:     publisher,
+			Pages:         best.Pages,
+			ISBN:          firstISBN(best.ISBNs),
+			Rating:        best.Rating,
+		}
+		if err := s.DB.ApplyEnrichment(c.ID, fields); err != nil {
+			log.Printf("enrichment queue: apply enrichment failed for book %d: %v", c.ID, err)
 			s.DB.SetEnrichmentStatus(c.ID, "error")
 			continue
 		}
@@ -70,6 +95,20 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			log.Printf("enrichment queue: mark done failed for book %d: %v", c.ID, err)
 		}
 	}
+}
+
+// firstISBN prefers an ISBN-13 (13 digits) when present, otherwise the first
+// ISBN Hardcover returned.
+func firstISBN(isbns []string) string {
+	for _, i := range isbns {
+		if len(strings.ReplaceAll(i, "-", "")) == 13 {
+			return i
+		}
+	}
+	if len(isbns) > 0 {
+		return isbns[0]
+	}
+	return ""
 }
 
 func sleepOrDone(ctx context.Context, d time.Duration) {
