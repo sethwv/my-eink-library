@@ -65,12 +65,27 @@ func (a *Authenticator) RequireFull(next http.Handler) http.Handler {
 	}))
 }
 
-// RequireAdmin wraps RequireFull (so a restricted session step-up-prompts
-// rather than 403ing) and additionally 403s any non-admin user.
-func (a *Authenticator) RequireAdmin(next http.Handler) http.Handler {
+// RequireManageUsers wraps RequireFull (so a restricted session step-up-
+// prompts rather than 403ing) and additionally 403s any user who can't
+// manage other users (role admin or user_manager).
+func (a *Authenticator) RequireManageUsers(next http.Handler) http.Handler {
 	return a.RequireFull(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, _ := UsernameFromContext(r.Context())
-		if !a.users.IsAdmin(username) {
+		if !a.users.CanManageUsers(username) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}))
+}
+
+// RequireManageServer wraps RequireFull (so a restricted session step-up-
+// prompts rather than 403ing) and additionally 403s any user who can't
+// manage server/library settings (role admin or server_manager).
+func (a *Authenticator) RequireManageServer(next http.Handler) http.Handler {
+	return a.RequireFull(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, _ := UsernameFromContext(r.Context())
+		if !a.users.CanManageServer(username) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

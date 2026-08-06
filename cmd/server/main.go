@@ -103,6 +103,11 @@ func main() {
 	if hc.Enabled() {
 		go srv.RunEnrichmentQueue(ctx)
 	}
+	if smtpSettings, err := userStore.GetSMTPSettings(); err != nil {
+		log.Printf("load smtp settings: %v", err)
+	} else if smtpSettings.Enabled() {
+		go srv.RunDigestScheduler(ctx)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +117,12 @@ func main() {
 	mux.Handle("GET /static/", web.StaticHandler())
 	mux.HandleFunc("GET /login", srv.LoginPage)
 	mux.HandleFunc("POST /login", srv.LoginSubmit)
+	mux.HandleFunc("GET /forgot-password", srv.ForgotPasswordPage)
+	mux.HandleFunc("POST /forgot-password", srv.ForgotPasswordSubmit)
+	mux.HandleFunc("GET /reset-password", srv.ResetPasswordPage)
+	mux.HandleFunc("POST /reset-password", srv.ResetPasswordSubmit)
+	mux.HandleFunc("GET /invite/accept", srv.InviteAcceptPage)
+	mux.HandleFunc("POST /invite/accept", srv.InviteAcceptSubmit)
 	mux.Handle("POST /logout", authn.RequireAuth(http.HandlerFunc(srv.Logout)))
 	mux.Handle("GET /", authn.RequireAuth(http.HandlerFunc(srv.LibraryGrid)))
 	mux.Handle("GET /authors", authn.RequireAuth(http.HandlerFunc(srv.AuthorsHandler)))
@@ -121,18 +132,26 @@ func main() {
 	mux.Handle("GET /books/{id}/download", authn.RequireAuth(http.HandlerFunc(srv.DownloadEPUB)))
 	mux.Handle("GET /books/{id}/download.kepub", authn.RequireAuth(http.HandlerFunc(srv.DownloadKepub)))
 	mux.Handle("POST /books/{id}/shelves/{shelfID}", authn.RequireAuth(http.HandlerFunc(srv.ShelfToggle)))
-	mux.Handle("GET /admin/users", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsers)))
-	mux.Handle("POST /admin/users", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersCreate)))
-	mux.Handle("POST /admin/users/{id}/delete", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersDelete)))
-	mux.Handle("POST /admin/users/{id}/reset-password", authn.RequireAdmin(http.HandlerFunc(srv.AdminUsersResetPassword)))
-	mux.Handle("GET /admin/server", authn.RequireAdmin(http.HandlerFunc(srv.ServerInfo)))
-	mux.Handle("POST /admin/server/rescan", authn.RequireAdmin(http.HandlerFunc(srv.ServerRescan)))
-	mux.Handle("POST /admin/server/reimport", authn.RequireAdmin(http.HandlerFunc(srv.ServerReimport)))
-	mux.Handle("POST /admin/server/enrichment-reset", authn.RequireAdmin(http.HandlerFunc(srv.ServerEnrichmentReset)))
+	mux.Handle("GET /admin/users", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsers)))
+	mux.Handle("POST /admin/users", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersCreate)))
+	mux.Handle("POST /admin/users/{id}/role", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersSetRole)))
+	mux.Handle("POST /admin/users/{id}/delete", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersDelete)))
+	mux.Handle("POST /admin/users/{id}/reset-password", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersResetPassword)))
+	mux.Handle("POST /admin/users/invite", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersInvite)))
+	mux.Handle("POST /admin/users/{id}/invite/resend", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersResendInvite)))
+	mux.Handle("GET /admin/server", authn.RequireManageServer(http.HandlerFunc(srv.ServerInfo)))
+	mux.Handle("POST /admin/server/rescan", authn.RequireManageServer(http.HandlerFunc(srv.ServerRescan)))
+	mux.Handle("POST /admin/server/reimport", authn.RequireManageServer(http.HandlerFunc(srv.ServerReimport)))
+	mux.Handle("POST /admin/server/enrichment-reset", authn.RequireManageServer(http.HandlerFunc(srv.ServerEnrichmentReset)))
+	mux.Handle("POST /admin/server/smtp", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPSave)))
+	mux.Handle("POST /admin/server/smtp/test", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPTest)))
 	mux.Handle("GET /account/bookmark", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmark)))
 	mux.Handle("POST /account/bookmark/regenerate", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmarkRegenerate)))
-	mux.Handle("GET /books/{id}/hardcover-check", authn.RequireAdmin(http.HandlerFunc(srv.BookHardcoverCheck)))
-	mux.Handle("POST /books/{id}/hardcover-apply", authn.RequireAdmin(http.HandlerFunc(srv.BookHardcoverApply)))
+	mux.Handle("GET /account/password", authn.RequireAuth(http.HandlerFunc(srv.AccountPassword)))
+	mux.Handle("POST /account/password", authn.RequireAuth(http.HandlerFunc(srv.AccountPasswordSubmit)))
+	mux.Handle("POST /account/digest", authn.RequireAuth(http.HandlerFunc(srv.AccountDigestToggle)))
+	mux.Handle("GET /books/{id}/hardcover-check", authn.RequireManageServer(http.HandlerFunc(srv.BookHardcoverCheck)))
+	mux.Handle("POST /books/{id}/hardcover-apply", authn.RequireManageServer(http.HandlerFunc(srv.BookHardcoverApply)))
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

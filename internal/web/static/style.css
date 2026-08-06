@@ -80,14 +80,14 @@ button:hover { background: #f7f7f7; }
   padding: 0.3em;
 }
 
-input[type="text"], input[type="password"] {
+input[type="text"], input[type="password"], input[type="email"], input[type="number"] {
   font: inherit;
   padding: 0.65em 0.7em;
   border: 1px solid #ddd;
   -webkit-border-radius: 5px;
   border-radius: 5px;
 }
-input[type="text"]:focus, input[type="password"]:focus {
+input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focus, input[type="number"]:focus {
   outline: 2px solid #888;
   outline-offset: 1px;
 }
@@ -194,7 +194,8 @@ label { display: block; margin: 0.6em 0; }
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 .login-card input[type="text"],
-.login-card input[type="password"] {
+.login-card input[type="password"],
+.login-card input[type="email"] {
   width: 100%;
 }
 .login-card button { width: 100%; margin-top: 0.75em; }

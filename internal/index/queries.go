@@ -54,10 +54,11 @@ const bookFrom = `books b LEFT JOIN book_enrichment be ON be.book_id = b.id`
 // List/Count signature change — add a field here and a clause in
 // buildWhereClause.
 type Filter struct {
-	Search  string // LIKE across title/author/series
-	Author  string // exact match
-	Series  string // exact match
-	ShelfID int64  // books on this shelf (0 = unset)
+	Search     string // LIKE across title/author/series
+	Author     string // exact match
+	Series     string // exact match
+	ShelfID    int64  // books on this shelf (0 = unset)
+	AddedAfter int64  // unix seconds; books with added_at >= this (0 = unset)
 }
 
 // List returns a page of books ordered by sort/dir, narrowed by f.
@@ -125,6 +126,10 @@ func buildWhereClause(f Filter) (string, []any) {
 	if f.ShelfID != 0 {
 		conds = append(conds, `EXISTS (SELECT 1 FROM shelf_books sb WHERE sb.book_id = b.id AND sb.shelf_id = ?)`)
 		args = append(args, f.ShelfID)
+	}
+	if f.AddedAfter != 0 {
+		conds = append(conds, `b.added_at >= ?`)
+		args = append(args, f.AddedAfter)
 	}
 
 	if len(conds) == 0 {

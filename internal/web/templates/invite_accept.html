@@ -1,0 +1,16 @@
+{{define "content"}}
+<div class="login-card">
+  <h1>Accept Invite</h1>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  {{if not .Invalid}}
+  <form method="POST" action="/invite/accept">
+    <input type="hidden" name="token" value="{{.Token}}">
+    <label>Set a password
+      <input type="password" name="password" autofocus required>
+    </label>
+    <button type="submit">Set password &amp; finish</button>
+  </form>
+  {{end}}
+  <p><a href="/login">&laquo; Back to log in</a></p>
+</div>
+{{end}}
