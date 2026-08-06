@@ -14,6 +14,7 @@ import (
 	"github.com/swvn/eink-library/internal/hardcover"
 	"github.com/swvn/eink-library/internal/index"
 	"github.com/swvn/eink-library/internal/kepub"
+	"github.com/swvn/eink-library/internal/mail"
 	"github.com/swvn/eink-library/internal/thumbnail"
 	"github.com/swvn/eink-library/internal/users"
 )
@@ -42,12 +43,19 @@ const favoritesName = "Favourites"
 func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index.Shelf, err error) {
 	username, _ := auth.UsernameFromContext(r.Context())
 	isAdmin := false
+	canManageUsers := false
+	canManageServer := false
+	canBookmark := false
 	if username != "" {
 		// A restricted (bookmark-token) session shouldn't be offered admin
-		// links even if the account is an admin — reaching /admin/* still
+		// links even if the account has them, since reaching /admin/* still
 		// redirects to a password step-up regardless, but hiding the links
 		// keeps the UI honest about the "view & shelves only" state.
-		isAdmin = s.Users.IsAdmin(username) && !auth.IsRestricted(r.Context())
+		full := !auth.IsRestricted(r.Context())
+		isAdmin = s.Users.IsAdmin(username) && full
+		canManageUsers = s.Users.CanManageUsers(username) && full
+		canManageServer = s.Users.CanManageServer(username) && full
+		canBookmark = s.Users.CanUseBookmark(username)
 		if _, err = s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName); err != nil {
 			return nil, nil, err
 		}
@@ -57,12 +65,15 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 	}
 
 	data = map[string]any{
-		"Username":   username,
-		"IsAdmin":    isAdmin,
-		"Restricted": auth.IsRestricted(r.Context()),
-		"Shelves":    shelves,
-		"SiteName":   s.SiteName,
-		"CurrentURL": r.URL.RequestURI(),
+		"Username":        username,
+		"IsAdmin":         isAdmin,
+		"CanManageUsers":  canManageUsers,
+		"CanManageServer": canManageServer,
+		"CanBookmark":     canBookmark,
+		"Restricted":      auth.IsRestricted(r.Context()),
+		"Shelves":         shelves,
+		"SiteName":        s.SiteName,
+		"CurrentURL":      r.URL.RequestURI(),
 	}
 	return data, shelves, nil
 }
@@ -492,14 +503,130 @@ func (s *Server) AdminUsersCreate(w http.ResponseWriter, r *http.Request) {
 
 	username := r.FormValue("username")
 	password := r.FormValue("password")
-	isAdmin := r.FormValue("is_admin") == "on"
+	role := r.FormValue("role")
+	canBookmark := r.FormValue("can_bookmark") == "on"
+	email := r.FormValue("email")
 
-	if err := s.Users.Create(username, password, isAdmin); err != nil {
+	if err := s.Users.Create(username, password, role, canBookmark, email); err != nil {
 		s.renderAdminUsersError(w, r, err.Error())
 		return
 	}
 
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// AdminUsersSetRole updates an existing user's role and bookmark-link
+// permission in place, without deleting/recreating the account.
+func (s *Server) AdminUsersSetRole(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	role := r.FormValue("role")
+	canBookmark := r.FormValue("can_bookmark") == "on"
+
+	if err := s.Users.SetRole(id, role, canBookmark); err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// AdminUsersInvite creates a pending account and emails the invitee a link
+// to set their own password.
+func (s *Server) AdminUsersInvite(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	username := r.FormValue("username")
+	email := r.FormValue("email")
+	role := r.FormValue("role")
+
+	token, err := s.Users.InviteUser(username, email, role, true)
+	if err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+
+	if err := s.sendInviteEmail(r, email, token); err != nil {
+		log.Printf("send invite email to %s: %v", email, err)
+		s.renderAdminUsersError(w, r, "user created, but the invite email failed to send: "+err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// AdminUsersResendInvite reissues a fresh invite token/email for a user
+// whose invite is still pending.
+func (s *Server) AdminUsersResendInvite(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	list, err := s.Users.List()
+	if err != nil {
+		http.Error(w, "failed to load users", http.StatusInternalServerError)
+		return
+	}
+	var email string
+	for _, u := range list {
+		if u.ID == id {
+			email = u.Email
+		}
+	}
+	if email == "" {
+		s.renderAdminUsersError(w, r, "user has no email on file")
+		return
+	}
+
+	token, err := s.Users.ResendInvite(id)
+	if err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+	if err := s.sendInviteEmail(r, email, token); err != nil {
+		log.Printf("resend invite email to %s: %v", email, err)
+		s.renderAdminUsersError(w, r, "invite reissued, but the email failed to send: "+err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+func (s *Server) sendInviteEmail(r *http.Request, to, token string) error {
+	settings, err := s.Users.GetSMTPSettings()
+	if err != nil {
+		return err
+	}
+	if !settings.Enabled() {
+		return fmt.Errorf("SMTP is not configured")
+	}
+	link := siteOrigin(r) + "/invite/accept?token=" + token
+	body := fmt.Sprintf(
+		"You've been invited to %s.\n\nSet your password to finish creating your account:\n%s\n\nThis link expires in 7 days.",
+		s.SiteName, link,
+	)
+	return mail.Send(settings, to, "You're invited to "+s.SiteName, body)
+}
+
+func siteOrigin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
 }
 
 func (s *Server) AdminUsersDelete(w http.ResponseWriter, r *http.Request) {
@@ -537,32 +664,22 @@ func (s *Server) AdminUsersResetPassword(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInfo shows admin-only read-only server/library stats.
-func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
-	base, _, err := s.baseData(r)
-	if err != nil {
-		http.Error(w, "failed to load page", http.StatusInternalServerError)
-		return
-	}
-
+func (s *Server) serverInfoData() (map[string]any, error) {
 	bookCount, err := s.DB.Count(index.Filter{})
 	if err != nil {
-		http.Error(w, "failed to load stats", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	authors, err := s.DB.ListAuthors()
 	if err != nil {
-		http.Error(w, "failed to load stats", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	series, err := s.DB.ListSeries()
 	if err != nil {
-		http.Error(w, "failed to load stats", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	userList, err := s.Users.List()
 	if err != nil {
-		http.Error(w, "failed to load stats", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	adminCount := 0
 	for _, u := range userList {
@@ -584,11 +701,15 @@ func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
 
 	enrichmentStats, err := s.DB.GetEnrichmentStats()
 	if err != nil {
-		http.Error(w, "failed to load stats", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
-	data := map[string]any{
+	smtp, err := s.Users.GetSMTPSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
 		"Title":              "Manage Server",
 		"GoVersion":          runtime.Version(),
 		"Uptime":             time.Since(s.StartedAt).Round(time.Second).String(),
@@ -606,9 +727,117 @@ func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
 		"EnrichmentDone":     enrichmentStats.Done,
 		"EnrichmentNoMatch":  enrichmentStats.NoMatch,
 		"EnrichmentErrored":  enrichmentStats.Errored,
+		"SMTPConfigured":     smtp.Enabled(),
+		"SMTPHost":           smtp.Host,
+		"SMTPPort":           smtp.Port,
+		"SMTPEncryption":     smtp.Encryption,
+		"SMTPUsername":       smtp.Username,
+		"SMTPFromName":       smtp.FromName,
+		"SMTPFromAddress":    smtp.FromAddress,
+	}, nil
+}
+
+func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data, err := s.serverInfoData()
+	if err != nil {
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
 	}
 	mergeInto(data, base)
 	render(w, "admin_server.html", data)
+}
+
+func (s *Server) renderAdminServerError(w http.ResponseWriter, r *http.Request, errMsg, statusMsg string) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data, err := s.serverInfoData()
+	if err != nil {
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
+	}
+	if errMsg != "" {
+		data["Error"] = errMsg
+	}
+	if statusMsg != "" {
+		data["Status"] = statusMsg
+	}
+	mergeInto(data, base)
+	render(w, "admin_server.html", data)
+}
+
+// ServerSMTPSave saves the admin-configured SMTP settings. An empty
+// submitted password means "keep the existing password" rather than
+// clearing it, since the form never echoes the real password back.
+func (s *Server) ServerSMTPSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	current, err := s.Users.GetSMTPSettings()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+
+	port, _ := strconv.Atoi(r.FormValue("port"))
+	password := r.FormValue("password")
+	if password == "" {
+		password = current.Password
+	}
+
+	settings := mail.Settings{
+		Host:        r.FormValue("host"),
+		Port:        port,
+		Encryption:  r.FormValue("encryption"),
+		Username:    r.FormValue("username"),
+		Password:    password,
+		FromName:    r.FormValue("from_name"),
+		FromAddress: r.FormValue("from_addr"),
+	}
+
+	if err := s.Users.SaveSMTPSettings(settings); err != nil {
+		s.renderAdminServerError(w, r, "failed to save SMTP settings: "+err.Error(), "")
+		return
+	}
+
+	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
+}
+
+// ServerSMTPTest sends a test email to an admin-supplied address using the
+// currently saved SMTP settings.
+func (s *Server) ServerSMTPTest(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	to := r.FormValue("test_email")
+
+	settings, err := s.Users.GetSMTPSettings()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	if !settings.Enabled() {
+		s.renderAdminServerError(w, r, "SMTP is not configured yet. Save settings first.", "")
+		return
+	}
+
+	body := fmt.Sprintf("This is a test email from %s, confirming your SMTP settings work.", s.SiteName)
+	if err := mail.Send(settings, to, "Test email from "+s.SiteName, body); err != nil {
+		s.renderAdminServerError(w, r, "test email failed: "+err.Error(), "")
+		return
+	}
+
+	s.renderAdminServerError(w, r, "", "Test email sent to "+to+".")
 }
 
 // ServerRescan triggers a synchronous full library rescan, then returns to the server info page.
@@ -643,7 +872,8 @@ func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
 }
 
 // AccountBookmark shows the current bookmark-token status and a button to
-// create/regenerate one.
+// create/regenerate one. 403s if the account's bookmark-link permission has
+// been revoked by an admin.
 func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {
 	base, _, err := s.baseData(r)
 	if err != nil {
@@ -651,6 +881,10 @@ func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
+	if !s.Users.CanUseBookmark(username) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	data := map[string]any{
 		"Title":    "Bookmark Link",
@@ -667,6 +901,10 @@ func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {
 // ready for the browser's own "bookmark this page" action.
 func (s *Server) AccountBookmarkRegenerate(w http.ResponseWriter, r *http.Request) {
 	username, _ := auth.UsernameFromContext(r.Context())
+	if !s.Users.CanUseBookmark(username) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	token, err := s.Users.GenerateBookmarkToken(username)
 	if err != nil {
 		http.Error(w, "failed to generate bookmark link", http.StatusInternalServerError)
@@ -675,10 +913,228 @@ func (s *Server) AccountBookmarkRegenerate(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, bookmarkURL(r, token), http.StatusSeeOther)
 }
 
-func bookmarkURL(r *http.Request, token string) string {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
+// AccountPassword shows the self-service change-password form for a
+// logged-in user.
+func (s *Server) AccountPassword(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
 	}
-	return scheme + "://" + r.Host + "/?token=" + token
+	username, _ := auth.UsernameFromContext(r.Context())
+	data := map[string]any{"Title": "Change Password", "DigestSubscribed": s.Users.IsDigestSubscribed(username)}
+	mergeInto(data, base)
+	render(w, "account_password.html", data)
+}
+
+// AccountPasswordSubmit changes the logged-in user's password after
+// verifying their current one.
+func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	current := r.FormValue("current_password")
+	newPassword := r.FormValue("new_password")
+
+	renderErr := func(msg string) {
+		base, _, err := s.baseData(r)
+		if err != nil {
+			http.Error(w, "failed to load page", http.StatusInternalServerError)
+			return
+		}
+		data := map[string]any{"Title": "Change Password", "Error": msg, "DigestSubscribed": s.Users.IsDigestSubscribed(username)}
+		mergeInto(data, base)
+		render(w, "account_password.html", data)
+	}
+
+	if !s.Auth.CheckPassword(username, current) {
+		renderErr("Current password is incorrect.")
+		return
+	}
+
+	list, err := s.Users.List()
+	if err != nil {
+		http.Error(w, "failed to load account", http.StatusInternalServerError)
+		return
+	}
+	var id int64
+	for _, u := range list {
+		if u.Username == username {
+			id = u.ID
+		}
+	}
+	if err := s.Users.ResetPassword(id, newPassword); err != nil {
+		renderErr(err.Error())
+		return
+	}
+
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Change Password", "Status": "Password updated.", "DigestSubscribed": s.Users.IsDigestSubscribed(username)}
+	mergeInto(data, base)
+	render(w, "account_password.html", data)
+}
+
+// AccountDigestToggle flips the logged-in user's opt-in to the weekly
+// new-book digest email.
+func (s *Server) AccountDigestToggle(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	if err := s.Users.SetDigestSubscribed(username, r.FormValue("subscribed") == "on"); err != nil {
+		http.Error(w, "failed to update preference", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/account/password", http.StatusSeeOther)
+}
+
+// ForgotPasswordPage shows the "request a reset link" form.
+func (s *Server) ForgotPasswordPage(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Forgot Password"}
+	mergeInto(data, base)
+	render(w, "forgot_password.html", data)
+}
+
+// ForgotPasswordSubmit emails a reset link if the address is on file, but
+// always shows the same generic confirmation either way so the response
+// can't be used to enumerate registered email addresses.
+func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	email := r.FormValue("email")
+
+	token, _, found, err := s.Users.RequestPasswordReset(email)
+	if err != nil {
+		http.Error(w, "failed to process request", http.StatusInternalServerError)
+		return
+	}
+	if found {
+		settings, err := s.Users.GetSMTPSettings()
+		if err != nil {
+			log.Printf("forgot password: load smtp settings: %v", err)
+		} else if settings.Enabled() {
+			link := siteOrigin(r) + "/reset-password?token=" + token
+			body := fmt.Sprintf("Someone requested a password reset for your %s account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", s.SiteName, link)
+			if err := mail.Send(settings, email, "Reset your "+s.SiteName+" password", body); err != nil {
+				log.Printf("forgot password: send email: %v", err)
+			}
+		} else {
+			log.Printf("forgot password: SMTP not configured, cannot email reset link to %s", email)
+		}
+	}
+
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{
+		"Title":  "Forgot Password",
+		"Status": "If that address is on file, a reset link has been sent.",
+	}
+	mergeInto(data, base)
+	render(w, "forgot_password.html", data)
+}
+
+// ResetPasswordPage shows the "set a new password" form for a token from a
+// forgot-password email.
+func (s *Server) ResetPasswordPage(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	token := r.URL.Query().Get("token")
+	data := map[string]any{"Title": "Reset Password", "Token": token}
+	if _, ok := s.Users.VerifyResetToken(token); !ok {
+		data["Error"] = "This reset link is invalid or has expired."
+		data["Invalid"] = true
+	}
+	mergeInto(data, base)
+	render(w, "reset_password.html", data)
+}
+
+// ResetPasswordSubmit completes a password reset from a forgot-password
+// email link.
+func (s *Server) ResetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	token := r.FormValue("token")
+	password := r.FormValue("password")
+
+	if err := s.Users.CompletePasswordReset(token, password); err != nil {
+		base, _, berr := s.baseData(r)
+		if berr != nil {
+			http.Error(w, "failed to load page", http.StatusInternalServerError)
+			return
+		}
+		data := map[string]any{"Title": "Reset Password", "Token": token, "Error": err.Error()}
+		mergeInto(data, base)
+		render(w, "reset_password.html", data)
+		return
+	}
+
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// InviteAcceptPage shows the "set your password" form for a new-account
+// invite link.
+func (s *Server) InviteAcceptPage(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	token := r.URL.Query().Get("token")
+	data := map[string]any{"Title": "Accept Invite", "Token": token}
+	if _, ok := s.Users.VerifyInviteToken(token); !ok {
+		data["Error"] = "This invite link is invalid or has expired."
+		data["Invalid"] = true
+	}
+	mergeInto(data, base)
+	render(w, "invite_accept.html", data)
+}
+
+// InviteAcceptSubmit sets the invited account's password, activating it.
+func (s *Server) InviteAcceptSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	token := r.FormValue("token")
+	password := r.FormValue("password")
+
+	if err := s.Users.AcceptInvite(token, password); err != nil {
+		base, _, berr := s.baseData(r)
+		if berr != nil {
+			http.Error(w, "failed to load page", http.StatusInternalServerError)
+			return
+		}
+		data := map[string]any{"Title": "Accept Invite", "Token": token, "Error": err.Error()}
+		mergeInto(data, base)
+		render(w, "invite_accept.html", data)
+		return
+	}
+
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func bookmarkURL(r *http.Request, token string) string {
+	return siteOrigin(r) + "/?token=" + token
 }

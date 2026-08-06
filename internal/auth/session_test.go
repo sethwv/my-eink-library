@@ -17,7 +17,7 @@ func testStore(t *testing.T) *users.Store {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	if err := s.Create("reader", "s3cret", false); err != nil {
+	if err := s.Create("reader", "s3cret", users.RoleMember, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -157,10 +157,10 @@ func TestRequireAuth_AllowsAuthenticated(t *testing.T) {
 	}
 }
 
-func TestRequireAdmin_ForbidsNonAdmin(t *testing.T) {
+func TestRequireManageUsers_ForbidsNonManager(t *testing.T) {
 	store := testStore(t) // "reader" created as non-admin
 	a := New("test-signing-secret", time.Hour, store)
-	handler := a.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := a.RequireManageUsers(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -255,13 +255,13 @@ func TestRequireFull_AllowsFullSession(t *testing.T) {
 	}
 }
 
-func TestRequireAdmin_RedirectsRestrictedSessionToLoginInsteadOf403(t *testing.T) {
+func TestRequireManageServer_RedirectsRestrictedSessionToLoginInsteadOf403(t *testing.T) {
 	store := testStore(t)
-	if err := store.Create("admin", "s3cret", true); err != nil {
+	if err := store.Create("admin", "s3cret", users.RoleAdmin, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	a := New("test-signing-secret", time.Hour, store)
-	handler := a.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := a.RequireManageServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -297,13 +297,13 @@ func TestRequireAuth_RejectsInvalidBookmarkToken(t *testing.T) {
 	}
 }
 
-func TestRequireAdmin_AllowsAdmin(t *testing.T) {
+func TestRequireManageUsers_AllowsAdmin(t *testing.T) {
 	store := testStore(t)
-	if err := store.Create("admin", "s3cret", true); err != nil {
+	if err := store.Create("admin", "s3cret", users.RoleAdmin, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	a := New("test-signing-secret", time.Hour, store)
-	handler := a.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := a.RequireManageUsers(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

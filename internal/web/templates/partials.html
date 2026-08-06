@@ -49,10 +49,15 @@
       {{if .Restricted}}
       <li><a class="shelf-toggle" href="/login">Log in</a></li>
       {{else}}
+      <li><a class="shelf-toggle" href="/account/password">Change password</a></li>
+      {{if .CanBookmark}}
       <li><a class="shelf-toggle" href="/account/bookmark">Bookmark link</a></li>
       {{end}}
-      {{if .IsAdmin}}
+      {{end}}
+      {{if .CanManageUsers}}
       <li><a class="shelf-toggle" href="/admin/users">Manage users</a></li>
+      {{end}}
+      {{if .CanManageServer}}
       <li><a class="shelf-toggle" href="/admin/server">Manage server</a></li>
       {{end}}
       <li><form method="POST" action="/logout"><button type="submit" class="shelf-toggle">Log out</button></form></li>
