@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -154,6 +155,24 @@ func TestParseFile_NoCover(t *testing.T) {
 	}
 	if m.CoverData != nil {
 		t.Errorf("expected no cover data, got %d bytes", len(m.CoverData))
+	}
+}
+
+// TestParseFile_XMLVersion1_1 covers EPUBs from tools that emit "<?xml
+// version="1.1"?>" for otherwise-1.0-compatible OPF/container documents.
+// Go's encoding/xml rejects any declared version other than 1.0 outright,
+// so without normalizeXMLVersion this would fail with "xml: unsupported
+// version \"1.1\"" instead of parsing normally.
+func TestParseFile_XMLVersion1_1(t *testing.T) {
+	opf := strings.Replace(opfEPUB3, `<?xml version="1.0" encoding="UTF-8"?>`, `<?xml version="1.1" encoding="UTF-8"?>`, 1)
+	path := buildEpub(t, opf, true)
+
+	m, err := ParseFile(path)
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+	if m.Title != "The Great Test" {
+		t.Errorf("Title = %q, want %q", m.Title, "The Great Test")
 	}
 }
 

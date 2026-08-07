@@ -8,9 +8,23 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+// xmlVersionPattern matches an XML declaration's version attribute, so a
+// declared "1.1" can be downgraded to "1.0" before parsing. Go's
+// encoding/xml hard-rejects any version other than 1.0 in the XML
+// declaration, but the handful of EPUB-producing tools that emit "1.1"
+// don't actually use any 1.1-only feature in the OPF/container documents
+// they generate — they're just mislabeled 1.0 XML, so relabeling is safe
+// and avoids failing to index an otherwise well-formed book.
+var xmlVersionPattern = regexp.MustCompile(`^(\s*<\?xml[^>]*\bversion\s*=\s*["'])1\.1(["'])`)
+
+func normalizeXMLVersion(data []byte) []byte {
+	return xmlVersionPattern.ReplaceAll(data, []byte("${1}1.0${2}"))
+}
 
 const dcNS = "http://purl.org/dc/elements/1.1/"
 
@@ -90,7 +104,7 @@ func findOPFPath(zr *zip.Reader) (string, error) {
 	}
 
 	var c containerXML
-	if err := xml.Unmarshal(data, &c); err != nil {
+	if err := xml.Unmarshal(normalizeXMLVersion(data), &c); err != nil {
 		return "", fmt.Errorf("parse container.xml: %w", err)
 	}
 	if len(c.Rootfiles.Rootfile) == 0 || c.Rootfiles.Rootfile[0].FullPath == "" {
@@ -112,7 +126,7 @@ func parseOPF(zr *zip.Reader, opfPath string) (*opfPackage, error) {
 	}
 
 	var pkg opfPackage
-	if err := xml.Unmarshal(data, &pkg); err != nil {
+	if err := xml.Unmarshal(normalizeXMLVersion(data), &pkg); err != nil {
 		return nil, fmt.Errorf("parse opf xml: %w", err)
 	}
 	return &pkg, nil
