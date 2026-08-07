@@ -242,7 +242,7 @@ label { display: block; margin: 0.6em 0; }
 
 .card-body { padding: 0.6em 0.75em 0.8em; }
 /* Allow one line of wrapping (two lines total) before truncating, instead
-   of clipping to a single line — max-height + overflow:hidden is used
+   of clipping to a single line. max-height + overflow:hidden is used
    rather than -webkit-line-clamp, which isn't confirmed to work on the
    target e-reader engine (see CLAUDE.md's browser-constraints notes). */
 .card-title {
@@ -397,11 +397,18 @@ label { display: block; margin: 0.6em 0; }
   color: #111;
 }
 .btn-download:hover { background: #f7f7f7; }
+/* Sized via HTML width/height attributes on the <svg> itself, not em-based
+   CSS: nested inside .btn-download's own font-size adjustment within a
+   modal's table layout, em sizing here rendered oversized on-device (Kobo
+   hardware test) even though the visually-identical .nav-icon/.shelf-check
+   (each only one level of relative sizing deep) render fine. Explicit pixel
+   attributes sidestep whatever compounding/timing issue causes that. */
 .btn-icon {
   display: inline-block;
-  vertical-align: middle;
-  width: 1.1em;
-  height: 1.1em;
+  /* vertical-align:middle aligns to the parent's baseline plus half the
+     x-height, which sits visibly above the visual center of the adjacent
+     text at this icon size. Nudge down to compensate. */
+  vertical-align: -0.2em;
   margin-right: 0.35em;
 }
 /* Compact secondary action (Check Hardcover), not a full-width primary

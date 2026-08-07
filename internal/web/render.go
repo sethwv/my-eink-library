@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"html"
 	"html/template"
@@ -75,23 +76,47 @@ func formatPublished(raw string) string {
 // for each call so that each page's "content" block doesn't collide with any
 // other page's. partials.html holds shared blocks (e.g. "topbar") reused
 // across authenticated pages.
+//
+// Executes into a buffer rather than writing to w directly: html/template
+// can fail partway through ExecuteTemplate (e.g. a runtime error in a later
+// block) after already emitting some output, and writing anything to w
+// without an explicit WriteHeader implicitly sends a 200, so the subsequent
+// http.Error(w, ..., 500) then hits "superfluous response.WriteHeader call"
+// and can't actually change the status the client already received.
+// Buffering means a mid-render failure still gets a clean 500 with no
+// partial HTML sent.
 func render(w http.ResponseWriter, page string, data any) {
 	tmpl, err := template.New("root").Funcs(templateFuncs).ParseFS(templatesFS, "templates/layout.html", "templates/partials.html", "templates/"+page)
 	if err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
 	}
+
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "layout", data); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// Some older browser engines cache GET responses aggressively, including
 	// distinct ?q=/?sort= query variations — force revalidation so paging,
 	// searching, and navigating "home" always reflect the current state.
 	w.Header().Set("Cache-Control", "no-cache")
-	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
-		http.Error(w, "render error", http.StatusInternalServerError)
-	}
+	buf.WriteTo(w)
 }
 
 // StaticHandler serves the embedded static assets (CSS) under /static/.
+// Same no-cache reasoning as render(): old browser engines can cache GET
+// responses aggressively, and http.FileServer's default Last-Modified/ETag
+// validators aren't reliable cache-busters here since go:embed doesn't
+// preserve meaningful file mtimes across builds. Without this, a deployed
+// CSS/JS change can silently keep serving a stale cached copy on a device
+// that already loaded the app once.
 func StaticHandler() http.Handler {
-	return http.FileServer(http.FS(staticFS))
+	fileServer := http.FileServer(http.FS(staticFS))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		fileServer.ServeHTTP(w, r)
+	})
 }
