@@ -614,7 +614,11 @@ func (s *Server) sendInviteEmail(r *http.Request, to, token string) error {
 	if !settings.Enabled() {
 		return fmt.Errorf("SMTP is not configured")
 	}
-	link := s.siteOrigin(r) + "/invite/accept?token=" + token
+	origin, err := s.emailOrigin()
+	if err != nil {
+		return err
+	}
+	link := origin + "/invite/accept?token=" + token
 	body := fmt.Sprintf(
 		"You've been invited to %s.\n\nSet your password to finish creating your account:\n%s\n\nThis link expires in 7 days.",
 		s.SiteName, link,
@@ -622,13 +626,24 @@ func (s *Server) sendInviteEmail(r *http.Request, to, token string) error {
 	return mail.Send(settings, to, "You're invited to "+s.SiteName, body)
 }
 
-// siteOrigin returns the base URL to use when building a link that leaves
-// the server (emailed to a user). Prefers the admin-configured PublicURL;
-// r.Host is client-controlled and unsafe to trust for anything sent
-// externally (a spoofed Host header on an unauthenticated request like
-// /forgot-password would otherwise let an attacker put their own domain
-// into a victim's password-reset email). Falling back to r.Host is only for
-// deployments that haven't set PUBLIC_URL yet, e.g. local development.
+// emailOrigin returns the base URL to use when building a link that leaves
+// the server via email (password reset, invite). Unlike siteOrigin, this
+// never falls back to the request's Host header: Host is client-controlled,
+// and a spoofed Host on an unauthenticated request like /forgot-password
+// would otherwise let an attacker put their own domain into a victim's
+// password-reset email. Refuses to send rather than guess.
+func (s *Server) emailOrigin() (string, error) {
+	if s.PublicURL == "" {
+		return "", fmt.Errorf("PUBLIC_URL is not configured, refusing to send an email with a login link")
+	}
+	return s.PublicURL, nil
+}
+
+// siteOrigin returns the base URL to use for a link handed straight back to
+// the same browser that requested it (e.g. a bookmark-link redirect) rather
+// than emailed elsewhere. Falling back to the request's Host header is safe
+// here since the result only ever reaches the request's own client, never a
+// third party's inbox; still prefers the admin-configured PublicURL when set.
 func (s *Server) siteOrigin(r *http.Request) string {
 	if s.PublicURL != "" {
 		return s.PublicURL
@@ -1037,14 +1052,16 @@ func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		settings, err := s.Users.GetSMTPSettings()
 		if err != nil {
 			log.Printf("forgot password: load smtp settings: %v", err)
-		} else if settings.Enabled() {
-			link := s.siteOrigin(r) + "/reset-password?token=" + token
+		} else if !settings.Enabled() {
+			log.Printf("forgot password: SMTP not configured, cannot email reset link to %s", email)
+		} else if origin, err := s.emailOrigin(); err != nil {
+			log.Printf("forgot password: %v", err)
+		} else {
+			link := origin + "/reset-password?token=" + token
 			body := fmt.Sprintf("Someone requested a password reset for your %s account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", s.SiteName, link)
 			if err := mail.Send(settings, email, "Reset your "+s.SiteName+" password", body); err != nil {
 				log.Printf("forgot password: send email: %v", err)
 			}
-		} else {
-			log.Printf("forgot password: SMTP not configured, cannot email reset link to %s", email)
 		}
 	}
 
