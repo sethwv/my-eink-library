@@ -72,8 +72,8 @@
         <td class="modal-actions-cell">
           <a class="btn-download" href="/books/{{.ID}}/download">Download EPUB</a>
           <a class="btn-download" href="/books/{{.ID}}/download.kepub">Download KEPUB</a>
-          {{if .Author}}<a class="btn-download" href="/authors?name={{urlquery .Author}}">Go to {{.Author}}</a>{{end}}
-          {{if .Series}}<a class="btn-download" href="/series?name={{urlquery .Series}}">Go to {{.Series}}</a>{{end}}
+          {{if .Author}}<a class="btn-download" href="/authors?name={{urlquery .Author}}"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg>{{.Author}}</a>{{end}}
+          {{if .Series}}<a class="btn-download" href="/series?name={{urlquery .Series}}"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>{{.Series}}</a>{{end}}
         </td>
       </tr>
     </table>

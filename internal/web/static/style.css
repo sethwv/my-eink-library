@@ -241,12 +241,16 @@ label { display: block; margin: 0.6em 0; }
 }
 
 .card-body { padding: 0.6em 0.75em 0.8em; }
+/* Allow one line of wrapping (two lines total) before truncating, instead
+   of clipping to a single line — max-height + overflow:hidden is used
+   rather than -webkit-line-clamp, which isn't confirmed to work on the
+   target e-reader engine (see CLAUDE.md's browser-constraints notes). */
 .card-title {
   font-weight: 600;
   font-size: 0.95em;
+  line-height: 1.3;
+  max-height: 2.6em;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .card-author, .card-series, .card-date {
   margin-top: 0.3em;
@@ -393,6 +397,13 @@ label { display: block; margin: 0.6em 0; }
   color: #111;
 }
 .btn-download:hover { background: #f7f7f7; }
+.btn-icon {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.35em;
+}
 /* Compact secondary action (Check Hardcover), not a full-width primary
    button like the download/nav links above. */
 .btn-hardcover {
