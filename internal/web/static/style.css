@@ -240,7 +240,12 @@ label { display: block; margin: 0.6em 0; }
   background: #f7f7f7;
 }
 
-.card-body { padding: 0.6em 0.75em 0.8em; }
+/* min-height reserves worst-case space (2-line title + author + series +
+   date) so every card is the same total height regardless of which of
+   those a given book actually has, without JS measuring the tallest card:
+   .cover-wrap is already a fixed aspect ratio at a fixed card width, so
+   this is the only part of a card whose height varies with content. */
+.card-body { padding: 0.6em 0.75em 0.8em; min-height: 8.2em; }
 /* Allow one line of wrapping (two lines total) before truncating, instead
    of clipping to a single line. max-height + overflow:hidden is used
    rather than -webkit-line-clamp, which isn't confirmed to work on the
@@ -411,7 +416,7 @@ label { display: block; margin: 0.6em 0; }
   /* vertical-align:middle aligns to the parent's baseline plus half the
      x-height, which sits visibly above the visual center of the adjacent
      text at this icon size. Nudge down to compensate. */
-  vertical-align: -0.15em;
+  vertical-align: -0.125em;
   margin-right: 0.35em;
 }
 /* Compact secondary action (Check Hardcover), not a full-width primary
