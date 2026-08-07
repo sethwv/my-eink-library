@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,14 @@ type Config struct {
 	PageSize       int
 	SessionTTL     time.Duration
 	HardcoverToken string
+	// PublicURL is the trusted base URL (e.g. "https://library.example.com")
+	// used to build links emailed to users (password reset, invites). Left
+	// empty, those links fall back to the request's Host header, which is
+	// client-controlled and not safe to trust for anything sent externally
+	// (a spoofed Host on a /forgot-password request would otherwise put an
+	// attacker-chosen domain into the victim's reset email). Set this in
+	// any deployment that sends email.
+	PublicURL string
 }
 
 func Load() (*Config, error) {
@@ -32,6 +41,7 @@ func Load() (*Config, error) {
 		Port:           getenv("PORT", "8080"),
 		SiteName:       getenv("SITE_NAME", "eink-library"),
 		HardcoverToken: os.Getenv("HARDCOVER_API_TOKEN"),
+		PublicURL:      strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
 	}
 
 	var err error
