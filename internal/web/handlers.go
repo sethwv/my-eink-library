@@ -29,6 +29,7 @@ type Server struct {
 	DataDir     string
 	PageSize    int
 	SiteName    string
+	PublicURL   string // trusted base URL for emailed links; see config.Config.PublicURL
 	StartedAt   time.Time
 }
 
@@ -613,7 +614,7 @@ func (s *Server) sendInviteEmail(r *http.Request, to, token string) error {
 	if !settings.Enabled() {
 		return fmt.Errorf("SMTP is not configured")
 	}
-	link := siteOrigin(r) + "/invite/accept?token=" + token
+	link := s.siteOrigin(r) + "/invite/accept?token=" + token
 	body := fmt.Sprintf(
 		"You've been invited to %s.\n\nSet your password to finish creating your account:\n%s\n\nThis link expires in 7 days.",
 		s.SiteName, link,
@@ -621,7 +622,17 @@ func (s *Server) sendInviteEmail(r *http.Request, to, token string) error {
 	return mail.Send(settings, to, "You're invited to "+s.SiteName, body)
 }
 
-func siteOrigin(r *http.Request) string {
+// siteOrigin returns the base URL to use when building a link that leaves
+// the server (emailed to a user). Prefers the admin-configured PublicURL;
+// r.Host is client-controlled and unsafe to trust for anything sent
+// externally (a spoofed Host header on an unauthenticated request like
+// /forgot-password would otherwise let an attacker put their own domain
+// into a victim's password-reset email). Falling back to r.Host is only for
+// deployments that haven't set PUBLIC_URL yet, e.g. local development.
+func (s *Server) siteOrigin(r *http.Request) string {
+	if s.PublicURL != "" {
+		return s.PublicURL
+	}
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
@@ -910,7 +921,7 @@ func (s *Server) AccountBookmarkRegenerate(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "failed to generate bookmark link", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, bookmarkURL(r, token), http.StatusSeeOther)
+	http.Redirect(w, r, s.bookmarkURL(r, token), http.StatusSeeOther)
 }
 
 // AccountPassword shows the self-service change-password form for a
@@ -1027,7 +1038,7 @@ func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("forgot password: load smtp settings: %v", err)
 		} else if settings.Enabled() {
-			link := siteOrigin(r) + "/reset-password?token=" + token
+			link := s.siteOrigin(r) + "/reset-password?token=" + token
 			body := fmt.Sprintf("Someone requested a password reset for your %s account.\n\nReset your password:\n%s\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.", s.SiteName, link)
 			if err := mail.Send(settings, email, "Reset your "+s.SiteName+" password", body); err != nil {
 				log.Printf("forgot password: send email: %v", err)
@@ -1135,6 +1146,6 @@ func (s *Server) InviteAcceptSubmit(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
-func bookmarkURL(r *http.Request, token string) string {
-	return siteOrigin(r) + "/?token=" + token
+func (s *Server) bookmarkURL(r *http.Request, token string) string {
+	return s.siteOrigin(r) + "/?token=" + token
 }

@@ -98,10 +98,14 @@ func main() {
 		DataDir:     cfg.DataDir,
 		PageSize:    cfg.PageSize,
 		SiteName:    cfg.SiteName,
+		PublicURL:   cfg.PublicURL,
 		StartedAt:   time.Now(),
 	}
 	if hc.Enabled() {
 		go srv.RunEnrichmentQueue(ctx)
+	}
+	if cfg.PublicURL == "" {
+		log.Printf("warning: PUBLIC_URL is not set; password-reset and invite emails will build their links from the request's Host header, which is not safe to trust in production")
 	}
 	if smtpSettings, err := userStore.GetSMTPSettings(); err != nil {
 		log.Printf("load smtp settings: %v", err)
