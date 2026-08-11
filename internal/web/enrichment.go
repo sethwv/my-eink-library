@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/swvn/eink-library/internal/chaptarr"
 	"github.com/swvn/eink-library/internal/hardcover"
 	"github.com/swvn/eink-library/internal/index"
 )
@@ -25,19 +26,23 @@ const idlePollInterval = 30 * time.Second
 // RunEnrichmentQueue processes one book at a time against Hardcover,
 // resuming from wherever it left off (progress is tracked in the books
 // table, not in memory) so a server restart doesn't reprocess already-
-// `done`/`no_match`/`error` books. A no-op if no Hardcover token was
-// configured. The client's own rate limiter spaces out the actual HTTP
-// calls, so this loop doesn't need its own throttling beyond an idle
-// backoff when there's nothing to do.
+// `done`/`no_match`/`error` books. Idles (rather than returning) while
+// Hardcover is disabled, so enabling it from the admin Integrations page
+// after startup — no token configured, or the toggle switched off — makes
+// this loop start processing without a server restart. The client's own
+// rate limiter spaces out the actual HTTP calls, so this loop doesn't need
+// its own throttling beyond an idle backoff when there's nothing to do.
 func (s *Server) RunEnrichmentQueue(ctx context.Context) {
-	if !s.Hardcover.Enabled() {
-		return
-	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
+		}
+
+		if !s.Hardcover.Enabled() {
+			sleepOrDone(ctx, idlePollInterval)
+			continue
 		}
 
 		candidates, err := s.DB.BooksNeedingEnrichment(1)
@@ -60,7 +65,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			}
 			continue
 		}
-		best, ok := hardcover.BestConfidentMatch(matches, c.Author)
+		best, ok := hardcover.BestConfidentMatch(matches, c.Title, c.Author)
 		if !ok {
 			if err := s.DB.SetEnrichmentStatus(c.ID, "no_match"); err != nil {
 				log.Printf("enrichment queue: mark no_match failed for book %d: %v", c.ID, err)
@@ -91,7 +96,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			ISBN:          firstISBN(best.ISBNs),
 			Rating:        best.Rating,
 		}
-		if err := s.DB.ApplyEnrichment(c.ID, fields); err != nil {
+		if err := s.DB.ApplyEnrichment(c.ID, fields, index.SourceHardcover); err != nil {
 			log.Printf("enrichment queue: apply enrichment failed for book %d: %v", c.ID, err)
 			s.DB.SetEnrichmentStatus(c.ID, "error")
 			continue
@@ -110,6 +115,87 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 
 		if err := s.DB.SetEnrichmentStatus(c.ID, "done"); err != nil {
 			log.Printf("enrichment queue: mark done failed for book %d: %v", c.ID, err)
+		}
+	}
+}
+
+// chaptarrBatchSize is how many enrichment candidates RunChaptarrQueue pulls
+// per pass — larger than RunEnrichmentQueue's one-at-a-time since matching
+// is a single ListBooks fetch checked against every candidate locally, not
+// one API call per book.
+const chaptarrBatchSize = 200
+
+// RunChaptarrQueue is Chaptarr's equivalent of RunEnrichmentQueue: matches
+// still-pending books against Chaptarr's tracked library by file path (see
+// chaptarr.MatchByPath) and, on a match, applies Chaptarr's metadata with
+// source=SourceChaptarr. Chaptarr's precedence over Hardcover falls out of
+// both queues sharing the same needsEnrichmentWhere status=” gate — once
+// this pass marks a book "done", RunEnrichmentQueue's own candidate query
+// skips it, so a book Chaptarr claims is never subsequently touched by
+// Hardcover. A book Chaptarr has no path match for is left with status=”
+// (not "no_match" — that status is reserved for "checked and confirmed no
+// match", which this pass can't assert given only a local path heuristic)
+// so it falls through to the Hardcover pass, or a future rescan/Chaptarr
+// pass, unchanged.
+func (s *Server) RunChaptarrQueue(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if !s.Chaptarr.Enabled() {
+			sleepOrDone(ctx, idlePollInterval)
+			continue
+		}
+
+		candidates, err := s.DB.BooksNeedingEnrichment(chaptarrBatchSize)
+		if err != nil {
+			log.Printf("chaptarr queue: list candidates: %v", err)
+			sleepOrDone(ctx, idlePollInterval)
+			continue
+		}
+		if len(candidates) == 0 {
+			sleepOrDone(ctx, idlePollInterval)
+			continue
+		}
+
+		chBooks, err := s.Chaptarr.ListBooks(ctx)
+		if err != nil {
+			log.Printf("chaptarr queue: list books: %v", err)
+			sleepOrDone(ctx, idlePollInterval)
+			continue
+		}
+
+		matchedAny := false
+		for _, c := range candidates {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			match, ok := chaptarr.MatchByPath(chBooks, c.FilePath)
+			if !ok {
+				continue
+			}
+			matchedAny = true
+
+			fields := index.HardcoverFields{
+				Title:       match.Title,
+				Series:      match.Series,
+				SeriesIndex: match.SeriesIndex,
+				Genres:      match.Genres,
+				Rating:      match.Rating,
+			}
+			if err := s.DB.ApplyEnrichment(c.ID, fields, index.SourceChaptarr); err != nil {
+				log.Printf("chaptarr queue: apply enrichment failed for book %d: %v", c.ID, err)
+			}
+		}
+
+		if !matchedAny {
+			sleepOrDone(ctx, idlePollInterval)
 		}
 	}
 }
@@ -227,10 +313,12 @@ func (e *httpStatusError) Error() string {
 	return "unexpected status " + strconv.Itoa(e.code)
 }
 
-// hcCandidate is one Hardcover search hit shown in the Edit Metadata page's
-// picker, plus whether it's the currently-selected one (its fields are
-// being used as the edit form's defaults).
-type hcCandidate struct {
+// matchCandidate is one search/match hit (Hardcover or Chaptarr) shown in
+// the Edit Metadata page's picker, plus whether it's the currently-selected
+// one (its fields are being used as the edit form's defaults). Source-
+// agnostic: Hardcover's manual/auto search and Chaptarr's path match both
+// render through the same template card.
+type matchCandidate struct {
 	ID          string
 	Title       string
 	Authors     string
@@ -245,9 +333,10 @@ type hcCandidate struct {
 // pre-filled with its current merged (book_enrichment-over-books) values,
 // and — driven entirely by query params so no JS is required — can run a
 // Hardcover search (either an automatic "Check Hardcover" search using the
-// book's own title/author, or a manual free-text search) and let the admin
-// pick one of up to 5 candidates to use as new defaults before saving.
-// Nothing from a search is written to the database until Save is submitted.
+// book's own title/author, or a manual free-text search) or a Chaptarr
+// path match, letting the admin pick one of the resulting candidates to use
+// as new defaults before saving. Nothing from a search is written to the
+// database until Save is submitted.
 func (s *Server) BookEditMetadata(w http.ResponseWriter, r *http.Request) {
 	base, _, err := s.baseData(r)
 	if err != nil {
@@ -268,82 +357,147 @@ func (s *Server) BookEditMetadata(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	source, err := s.DB.GetEnrichmentSource(id)
+	if err != nil {
+		log.Printf("edit-metadata: load source for book %d: %v", id, err)
+	}
 
-	mode := r.URL.Query().Get("mode") // "", "check", or "manual"
+	mode := r.URL.Query().Get("mode") // "", "check", "manual", or "chaptarr"
 	manualQuery := r.URL.Query().Get("q")
 	selectedID := r.URL.Query().Get("selected")
 
 	data := map[string]any{
-		"Title":         "Edit Metadata",
-		"BookID":        id,
-		"CurrentTitle":  book.Title,
-		"Enabled":       s.Hardcover.Enabled(),
-		"Mode":          mode,
-		"ManualQuery":   manualQuery,
-		"FormTitle":     book.Title,
-		"FormSeries":    book.Series,
-		"FormPublished": book.PublishedAt,
-		"FormDesc":      book.Description,
-		"FormGenres":    strings.Join(book.Genres, ", "),
-		"FormPublisher": book.Publisher,
-		"FormPages":     formatIntOrBlank(book.Pages),
-		"FormISBN":      book.ISBN,
-		"FormRating":    formatFloatOrBlank(book.Rating),
-		"CoverURL":      "/covers/" + strconv.FormatInt(id, 10),
+		"Title":           "Edit Metadata",
+		"BookID":          id,
+		"CurrentTitle":    book.Title,
+		"Source":          source,
+		"Enabled":         s.Hardcover.Enabled(),
+		"ChaptarrEnabled": s.Chaptarr.Enabled(),
+		"Mode":            mode,
+		"ManualQuery":     manualQuery,
+		"FormTitle":       book.Title,
+		"FormSeries":      book.Series,
+		"FormPublished":   book.PublishedAt,
+		"FormDesc":        book.Description,
+		"FormGenres":      strings.Join(book.Genres, ", "),
+		"FormPublisher":   book.Publisher,
+		"FormPages":       formatIntOrBlank(book.Pages),
+		"FormISBN":        book.ISBN,
+		"FormRating":      formatFloatOrBlank(book.Rating),
+		"CoverURL":        "/covers/" + strconv.FormatInt(id, 10),
 	}
 	if book.SeriesIndex != 0 {
 		data["FormSeriesIndex"] = strconv.FormatFloat(book.SeriesIndex, 'f', -1, 64)
 	}
 
-	if mode != "" && s.Hardcover.Enabled() {
-		var matches []hardcover.Match
-		var searchErr error
-		if mode == "check" {
-			matches, searchErr = s.Hardcover.Search(r.Context(), book.Title, book.Author, book.Identifier)
-		} else {
-			matches, searchErr = s.Hardcover.Search(r.Context(), manualQuery, "", "")
-		}
-		if searchErr != nil {
-			log.Printf("edit-metadata search failed for book %d: %v", id, searchErr)
-			data["SearchError"] = "Hardcover search failed."
-		}
-
-		candidates := make([]hcCandidate, 0, len(matches))
-		var selected *hardcover.Match
-		for i := range matches {
-			m := &matches[i]
-			c := hcCandidate{
-				ID:          m.ID,
-				Title:       m.Title,
-				Authors:     strings.Join(m.Authors, ", "),
-				Series:      m.Series,
-				ReleaseDate: m.ReleaseDate,
-				Snippet:     snippet(m.Description, 160),
-			}
-			if m.SeriesIndex != 0 {
-				c.SeriesIndex = strconv.FormatFloat(m.SeriesIndex, 'f', -1, 64)
-			}
-			if selectedID != "" && m.ID == selectedID {
-				c.Selected = true
-				selected = m
-			}
-			candidates = append(candidates, c)
-		}
-		data["Candidates"] = candidates
-
-		if selected != nil {
-			var detail hardcover.Detail
-			if d, err := s.Hardcover.Detail(r.Context(), selected.ID); err != nil {
-				log.Printf("edit-metadata detail lookup failed for book %d: %v", id, err)
-			} else {
-				detail = d
-			}
-			applySelectedDefaults(data, selected, detail)
-		}
+	switch {
+	case mode == "chaptarr" && s.Chaptarr.Enabled():
+		s.runChaptarrSearch(r.Context(), data, id, book.FilePath, selectedID)
+	case mode != "" && s.Hardcover.Enabled():
+		s.runHardcoverSearch(r.Context(), data, id, book, mode, manualQuery, selectedID)
 	}
 
 	mergeInto(data, base)
 	render(w, "book_edit_metadata.html", data)
+}
+
+// runHardcoverSearch runs mode's Hardcover search ("check" uses the book's
+// own title/author/identifier, anything else is a manual free-text query),
+// builds the candidate picker list, and — if selectedID names one of the
+// results — overlays its fields onto the edit form's defaults.
+func (s *Server) runHardcoverSearch(ctx context.Context, data map[string]any, id int64, book *index.Book, mode, manualQuery, selectedID string) {
+	var matches []hardcover.Match
+	var searchErr error
+	if mode == "check" {
+		matches, searchErr = s.Hardcover.Search(ctx, book.Title, book.Author, book.Identifier)
+	} else {
+		matches, searchErr = s.Hardcover.Search(ctx, manualQuery, "", "")
+	}
+	if searchErr != nil {
+		log.Printf("edit-metadata search failed for book %d: %v", id, searchErr)
+		data["SearchError"] = "Hardcover search failed."
+	}
+
+	candidates := make([]matchCandidate, 0, len(matches))
+	var selected *hardcover.Match
+	for i := range matches {
+		m := &matches[i]
+		c := matchCandidate{
+			ID:          m.ID,
+			Title:       m.Title,
+			Authors:     strings.Join(m.Authors, ", "),
+			Series:      m.Series,
+			ReleaseDate: m.ReleaseDate,
+			Snippet:     snippet(m.Description, 160),
+		}
+		if m.SeriesIndex != 0 {
+			c.SeriesIndex = strconv.FormatFloat(m.SeriesIndex, 'f', -1, 64)
+		}
+		if selectedID != "" && m.ID == selectedID {
+			c.Selected = true
+			selected = m
+		}
+		candidates = append(candidates, c)
+	}
+	data["Candidates"] = candidates
+
+	if selected != nil {
+		var detail hardcover.Detail
+		if d, err := s.Hardcover.Detail(ctx, selected.ID); err != nil {
+			log.Printf("edit-metadata detail lookup failed for book %d: %v", id, err)
+		} else {
+			detail = d
+		}
+		applySelectedDefaults(data, selected, detail)
+	}
+}
+
+// runChaptarrSearch matches filePath against every book Chaptarr is
+// tracking with an on-disk file (see chaptarr.MatchByPath) and, since path
+// matching yields at most one plausible candidate (unlike Hardcover's
+// ranked text search), shows it as a single-item picker — the admin still
+// has to click "Use this match" before it's loaded into the form, same as
+// Hardcover's flow.
+func (s *Server) runChaptarrSearch(ctx context.Context, data map[string]any, id int64, filePath, selectedID string) {
+	books, err := s.Chaptarr.ListBooks(ctx)
+	if err != nil {
+		log.Printf("edit-metadata chaptarr list failed for book %d: %v", id, err)
+		data["SearchError"] = "Chaptarr lookup failed."
+		return
+	}
+	match, ok := chaptarr.MatchByPath(books, filePath)
+	if !ok {
+		data["Candidates"] = []matchCandidate{}
+		return
+	}
+
+	candidateID := strconv.Itoa(match.ID)
+	c := matchCandidate{
+		ID:      candidateID,
+		Title:   match.Title,
+		Authors: strings.Join(match.Authors, ", "),
+		Series:  match.Series,
+	}
+	if match.SeriesIndex != 0 {
+		c.SeriesIndex = strconv.FormatFloat(match.SeriesIndex, 'f', -1, 64)
+	}
+	if selectedID != "" && candidateID == selectedID {
+		c.Selected = true
+		data["FormTitle"] = match.Title
+		if match.Series != "" {
+			data["FormSeries"] = match.Series
+			if match.SeriesIndex != 0 {
+				data["FormSeriesIndex"] = strconv.FormatFloat(match.SeriesIndex, 'f', -1, 64)
+			}
+		}
+		if len(match.Genres) > 0 {
+			data["FormGenres"] = strings.Join(match.Genres, ", ")
+		}
+		if match.Rating != 0 {
+			data["FormRating"] = strconv.FormatFloat(match.Rating, 'f', -1, 64)
+		}
+	}
+	data["Candidates"] = []matchCandidate{c}
 }
 
 // applySelectedDefaults overwrites the edit form's default values with the

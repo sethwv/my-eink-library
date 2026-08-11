@@ -2,73 +2,87 @@
 {{template "topbar" .}}
 
 <h1>Edit Metadata</h1>
-<p class="muted">{{.CurrentTitle}}</p>
+<p class="muted">{{.CurrentTitle}}{{if .Source}}<span class="source-badge">{{if eq .Source "chaptarr"}}Currently: Chaptarr{{else if eq .Source "hardcover"}}Currently: Hardcover{{else if eq .Source "manual"}}Currently: Manual edit{{else}}{{.Source}}{{end}}</span>{{else}}<span class="source-badge">Not yet enriched</span>{{end}}</p>
 
-<img src="{{.CoverURL}}" alt="" style="max-width:120px;height:auto;display:block;margin-bottom:1em;">
+<table class="edit-metadata-layout">
+<tr>
+<td class="edit-cover-cell">
+  <div class="edit-cover-wrap">
+    <img src="{{.CoverURL}}" alt="">
+  </div>
+</td>
+<td class="edit-actions-cell">
+  {{if not .Enabled}}
+  <p class="muted">Hardcover enrichment isn't configured &mdash; you can still edit fields by hand below, or enable it from <a href="/admin/server/integrations">Manage Integrations</a>.</p>
+  {{else}}
+  <a class="btn-hardcover" href="/books/{{.BookID}}/edit-metadata?mode=check">Check Hardcover</a>
+  <p class="muted" style="margin-top:0.3em;">Searches using this book's current title/author.</p>
+  {{end}}
 
-{{if not .Enabled}}
-<p class="muted">Hardcover enrichment isn't configured (no API token set) &mdash; you can still edit fields by hand below.</p>
-{{else}}
-<div class="table-wrap">
-<table>
-<tr><td>
-  <a href="/books/{{.BookID}}/edit-metadata?mode=check">Check Hardcover</a>
-  (searches using this book's current title/author)
-</td></tr>
+  {{if .ChaptarrEnabled}}
+  <a class="btn-hardcover" href="/books/{{.BookID}}/edit-metadata?mode=chaptarr">Check Chaptarr</a>
+  <p class="muted" style="margin-top:0.3em;">Matches this book's file path against Chaptarr's tracked library.</p>
+  {{end}}
+
+  {{if .Enabled}}
+  <form method="GET" action="/books/{{.BookID}}/edit-metadata" style="margin-top:1em;">
+    <input type="hidden" name="mode" value="manual">
+    <label for="q">Search Hardcover manually</label>
+    <input type="text" id="q" name="q" value="{{.ManualQuery}}" placeholder="title, author, ISBN...">
+    <button type="submit">Search</button>
+  </form>
+  {{end}}
+</td>
+</tr>
 </table>
-</div>
-
-<form method="GET" action="/books/{{.BookID}}/edit-metadata" style="margin-top:1em;">
-  <input type="hidden" name="mode" value="manual">
-  <label for="q">Search Hardcover manually</label>
-  <input type="text" id="q" name="q" value="{{.ManualQuery}}" placeholder="title, author, ISBN...">
-  <button type="submit">Search</button>
-</form>
 
 {{if .SearchError}}<p class="error">{{.SearchError}}</p>{{end}}
 
 {{if .Candidates}}
-<div class="table-wrap">
-<table>
-<tr><th></th><th>Title</th><th>Author(s)</th><th>Series</th><th>Released</th><th>Description</th></tr>
 {{range .Candidates}}
-<tr{{if .Selected}} class="is-on"{{end}}>
-  <td><a href="/books/{{$.BookID}}/edit-metadata?mode={{$.Mode}}&q={{$.ManualQuery}}&selected={{.ID}}">Use this match</a></td>
-  <td>{{.Title}}</td>
-  <td>{{.Authors}}</td>
-  <td>{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</td>
-  <td>{{.ReleaseDate}}</td>
-  <td>{{.Snippet}}</td>
-</tr>
-{{end}}
-</table>
+<div class="match-card{{if .Selected}} is-on{{end}}">
+  <div class="match-card-title">{{.Title}}</div>
+  <div class="match-card-meta">
+    {{if .Authors}}{{.Authors}}{{end}}
+    {{if .Series}} &middot; {{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}{{end}}
+    {{if .ReleaseDate}} &middot; {{.ReleaseDate}}{{end}}
+  </div>
+  {{if .Snippet}}<div class="match-card-snippet">{{.Snippet}}</div>{{end}}
+  <a class="btn-hardcover" href="/books/{{$.BookID}}/edit-metadata?mode={{$.Mode}}&q={{$.ManualQuery}}&selected={{.ID}}">{{if .Selected}}Selected &mdash; using these defaults{{else}}Use this match{{end}}</a>
 </div>
+{{end}}
 {{else if .Mode}}
 <p class="muted">No results.</p>
-{{end}}
 {{end}}
 
 <form method="POST" action="/books/{{.BookID}}/edit-metadata" style="margin-top:1em;">
 <div class="table-wrap">
 <table>
+<tr><th colspan="2" class="field-group-heading">Title &amp; series</th></tr>
 <tr><th>Title</th><td><input type="text" name="title" value="{{.FormTitle}}"></td></tr>
 <tr><th>Series</th><td><input type="text" name="series" value="{{.FormSeries}}"></td></tr>
 <tr><th>Series #</th><td><input type="text" name="series_index" value="{{.FormSeriesIndex}}"></td></tr>
 <tr><th>Released</th><td><input type="text" name="published_date" value="{{.FormPublished}}" placeholder="YYYY-MM-DD"></td></tr>
+
+<tr><th colspan="2" class="field-group-heading">Publication details</th></tr>
 <tr><th>Publisher</th><td><input type="text" name="publisher" value="{{.FormPublisher}}"></td></tr>
 <tr><th>Pages</th><td><input type="text" name="pages" value="{{.FormPages}}"></td></tr>
 <tr><th>ISBN</th><td><input type="text" name="isbn" value="{{.FormISBN}}"></td></tr>
 <tr><th>Rating</th><td><input type="text" name="rating" value="{{.FormRating}}"></td></tr>
 <tr><th>Genres</th><td><input type="text" name="genres" value="{{.FormGenres}}" placeholder="comma-separated"></td></tr>
-<tr><th>Description</th><td><textarea name="description" rows="5">{{.FormDesc}}</textarea></td></tr>
+
 {{if .SelectedCoverURL}}
+<tr><th colspan="2" class="field-group-heading">Cover</th></tr>
 <tr><th>Cover</th><td>
   <img src="{{.SelectedCoverURL}}" alt="" style="max-width:80px;height:auto;display:block;margin-bottom:0.5em;">
-  <label><input type="radio" name="cover_action" value="keep" checked> Keep current cover</label><br>
+  <label><input type="radio" name="cover_action" value="keep" checked> Keep current cover</label>
   <label><input type="radio" name="cover_action" value="use_hardcover_cover"> Use this Hardcover cover</label>
   <input type="hidden" name="hardcover_cover_url" value="{{.SelectedCoverURL}}">
 </td></tr>
 {{end}}
+
+<tr><th colspan="2" class="field-group-heading">Description</th></tr>
+<tr><th>Description</th><td><textarea name="description" rows="5">{{.FormDesc}}</textarea></td></tr>
 </table>
 </div>
 <p class="muted">Blank fields are left unchanged &mdash; nothing here is cleared by leaving it blank.</p>

@@ -532,3 +532,51 @@ func TestSMTPSettings_SaveAndGet(t *testing.T) {
 		t.Errorf("GetSMTPSettings().Host = %q, want smtp2.example.com", got.Host)
 	}
 }
+
+func TestIntegrationSettings_SaveAndGet(t *testing.T) {
+	s := openTestStore(t)
+
+	empty, err := s.GetIntegrationSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty != (IntegrationSettings{}) {
+		t.Errorf("GetIntegrationSettings() with nothing saved = %+v, want the zero value", empty)
+	}
+
+	m := IntegrationSettings{
+		HardcoverEnabled: true,
+		HardcoverToken:   "hc-token",
+		ChaptarrEnabled:  true,
+		ChaptarrURL:      "http://chaptarr.local:8978",
+		ChaptarrAPIKey:   "ch-key",
+	}
+	if err := s.SaveIntegrationSettings(m); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetIntegrationSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != m {
+		t.Errorf("GetIntegrationSettings() = %+v, want %+v", got, m)
+	}
+
+	// Saving again should upsert, not duplicate, and disabling should
+	// persist (not just adding fields).
+	m.HardcoverEnabled = false
+	if err := s.SaveIntegrationSettings(m); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetIntegrationSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HardcoverEnabled {
+		t.Error("expected HardcoverEnabled to be persisted as false after re-saving")
+	}
+	if got.ChaptarrAPIKey != "ch-key" {
+		t.Errorf("ChaptarrAPIKey = %q, want it left unchanged by the re-save", got.ChaptarrAPIKey)
+	}
+}

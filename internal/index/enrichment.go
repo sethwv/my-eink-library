@@ -6,19 +6,36 @@ import (
 	"strings"
 )
 
-// EnrichmentCandidate is the minimal data needed to search Hardcover for a
-// book and decide whether to fill in blanks.
+// EnrichmentCandidate is the minimal data needed to search Hardcover (or
+// match against Chaptarr, by FilePath) for a book and decide whether to
+// fill in blanks.
 type EnrichmentCandidate struct {
 	ID         int64
 	Title      string
 	Author     string
 	Identifier string
+	FilePath   string
 }
 
-// HardcoverFields is everything a Hardcover match can contribute to a book,
-// passed to ApplyEnrichment. Blank/zero fields mean "Hardcover didn't have
-// this", not "clear the existing value" — see ApplyEnrichment for how each
-// field is merged.
+// Enrichment source values stored in book_enrichment.source, surfaced on
+// the Edit Metadata page so an admin can see which integration (if any)
+// currently supplies a book's fields. SourceChaptarr takes precedence over
+// SourceHardcover in the background queue (see internal/web's
+// RunEnrichmentQueue/RunChaptarrQueue) — a book Chaptarr already claimed is
+// never touched by the Hardcover pass, since both gate on the same
+// needsEnrichmentWhere status=” check.
+const (
+	SourceHardcover = "hardcover"
+	SourceChaptarr  = "chaptarr"
+	SourceManual    = "manual"
+)
+
+// HardcoverFields is everything a Hardcover or Chaptarr match can
+// contribute to a book, passed to ApplyEnrichment. Blank/zero fields mean
+// "the source didn't have this", not "clear the existing value" — see
+// ApplyEnrichment for how each field is merged. Named for Hardcover (the
+// original and richer of the two sources) but reused for Chaptarr too,
+// since both integrations contribute to the same merged field set.
 type HardcoverFields struct {
 	Title         string
 	Series        string
@@ -58,7 +75,7 @@ const needsEnrichmentWhere = `COALESCE(be.status, '') = ''
 // of reprocessing the whole library.
 func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 	rows, err := d.sql.Query(`
-		SELECT b.id, b.title, b.author, COALESCE(b.identifier, '') FROM books b
+		SELECT b.id, b.title, b.author, COALESCE(b.identifier, ''), b.file_path FROM books b
 		LEFT JOIN book_enrichment be ON be.book_id = b.id
 		WHERE `+needsEnrichmentWhere+`
 		ORDER BY b.id
@@ -71,7 +88,7 @@ func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 	var out []EnrichmentCandidate
 	for rows.Next() {
 		var c EnrichmentCandidate
-		if err := rows.Scan(&c.ID, &c.Title, &c.Author, &c.Identifier); err != nil {
+		if err := rows.Scan(&c.ID, &c.Title, &c.Author, &c.Identifier, &c.FilePath); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -153,10 +170,26 @@ func (d *DB) currentEnrichmentMerged(bookID int64) (mergedFields, error) {
 	return m, nil
 }
 
-func (d *DB) upsertEnrichment(bookID int64, f mergedFields, status string) error {
+// GetEnrichmentSource returns the book_enrichment.source value for bookID
+// ("hardcover"/"chaptarr"/"manual"/"" for not-yet-enriched), for display on
+// the Edit Metadata page. Returns "" with no error if the book has no
+// book_enrichment row yet.
+func (d *DB) GetEnrichmentSource(bookID int64) (string, error) {
+	var source sql.NullString
+	err := d.sql.QueryRow(`SELECT source FROM book_enrichment WHERE book_id = ?`, bookID).Scan(&source)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return source.String, nil
+}
+
+func (d *DB) upsertEnrichment(bookID int64, f mergedFields, status, source string) error {
 	_, err := d.sql.Exec(`
-		INSERT INTO book_enrichment (book_id, title, series, series_index, published_date, description, genres, publisher, pages, isbn, rating, status, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
+		INSERT INTO book_enrichment (book_id, title, series, series_index, published_date, description, genres, publisher, pages, isbn, rating, status, source, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
 		ON CONFLICT(book_id) DO UPDATE SET
 			title = excluded.title,
 			series = excluded.series,
@@ -169,10 +202,11 @@ func (d *DB) upsertEnrichment(bookID int64, f mergedFields, status string) error
 			isbn = excluded.isbn,
 			rating = excluded.rating,
 			status = excluded.status,
+			source = excluded.source,
 			updated_at = excluded.updated_at`,
 		bookID, nullIfEmpty(f.title), nullIfEmpty(f.series), f.seriesIndex, nullIfEmpty(f.publishedDate),
 		nullIfEmpty(f.description), nullIfEmpty(f.genres), nullIfEmpty(f.publisher),
-		nullIfZeroInt(f.pages), nullIfEmpty(f.isbn), nullIfZeroFloat(f.rating), status)
+		nullIfZeroInt(f.pages), nullIfEmpty(f.isbn), nullIfZeroFloat(f.rating), status, source)
 	return err
 }
 
@@ -215,8 +249,9 @@ func descriptionIsPlaceholder(cur, title string) bool {
 //   - Publisher/pages/isbn/rating: always take Hardcover's value when it has
 //     one — EPUB OPF metadata for these is typically worse or absent.
 //
-// Also marks the book "done".
-func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields) error {
+// Also marks the book "done" with the given source (SourceHardcover or
+// SourceChaptarr — whichever integration produced hc).
+func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields, source string) error {
 	cur, err := d.currentEnrichmentMerged(bookID)
 	if err != nil {
 		return err
@@ -251,7 +286,7 @@ func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields) error {
 		final.rating = hc.Rating
 	}
 
-	return d.upsertEnrichment(bookID, final, "done")
+	return d.upsertEnrichment(bookID, final, "done", source)
 }
 
 // MetadataFields is every field the Edit Metadata page can write to
@@ -313,7 +348,7 @@ func (d *DB) SaveMetadata(bookID int64, f MetadataFields) error {
 		final.rating = f.Rating
 	}
 
-	return d.upsertEnrichment(bookID, final, "done")
+	return d.upsertEnrichment(bookID, final, "done", SourceManual)
 }
 
 // SetCover updates a book's cover image path directly on the books table

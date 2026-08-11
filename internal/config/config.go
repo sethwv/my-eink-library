@@ -10,16 +10,22 @@ import (
 )
 
 type Config struct {
-	LibraryPath    string
-	DataDir        string
-	LibraryUser    string
-	LibraryPass    string
-	SessionSecret  string
-	Port           string
-	SiteName       string
-	CoverWidth     int
-	PageSize       int
-	SessionTTL     time.Duration
+	LibraryPath   string
+	DataDir       string
+	LibraryUser   string
+	LibraryPass   string
+	SessionSecret string
+	Port          string
+	SiteName      string
+	CoverWidth    int
+	PageSize      int
+	SessionTTL    time.Duration
+	// HardcoverToken is a one-time bootstrap value only: on first boot, if
+	// no integration_settings row exists yet, it seeds the DB-backed
+	// Hardcover token (see users.IntegrationSettings and the admin
+	// Integrations page) so existing deployments don't lose their token on
+	// upgrade. After that first seed, the DB is the live source of truth —
+	// this field is never read again.
 	HardcoverToken string
 	// PublicURL is the trusted base URL (e.g. "https://library.example.com")
 	// used to build links emailed to users (password reset, invites). Left

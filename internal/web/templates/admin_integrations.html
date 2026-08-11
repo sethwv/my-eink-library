@@ -1,0 +1,66 @@
+{{define "content"}}
+{{template "topbar" .}}
+
+<h1>Integrations</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
+
+<h1>Hardcover</h1>
+{{if .HardcoverActive}}
+<p class="muted">Enabled and configured &mdash; auto-fills book metadata from hardcover.app in the background.</p>
+{{else if .HardcoverConfigured}}
+<p class="muted">Configured but disabled &mdash; check "Enable" below to turn it on.</p>
+{{else}}
+<p class="muted">Not configured yet. Get an API token from <a href="https://hardcover.app/settings" target="_blank" rel="noopener">hardcover.app/settings</a>.</p>
+{{end}}
+
+<div class="table-wrap">
+<form method="POST" action="/admin/server/integrations/hardcover">
+<table>
+<tr><th>Enable</th><td><label><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable Hardcover enrichment</label></td></tr>
+<tr><th>API Token</th><td><input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></td></tr>
+<tr><td colspan="2"><button type="submit">Save Hardcover settings</button></td></tr>
+</table>
+</form>
+</div>
+
+{{if .HardcoverConfigured}}
+<div class="table-wrap" style="margin-top:1em;">
+<table>
+<tr><th>Status</th><th>Books</th></tr>
+<tr><td>Pending</td><td>{{.EnrichmentPending}}</td></tr>
+<tr><td>Done</td><td>{{.EnrichmentDone}}</td></tr>
+<tr><td>No match found</td><td>{{.EnrichmentNoMatch}}</td></tr>
+<tr><td>Errored</td><td>{{.EnrichmentErrored}}</td></tr>
+</table>
+</div>
+
+<form method="POST" action="/admin/server/enrichment-reset" style="margin-top:1em;">
+  <button type="submit">Clear all enrichment data &amp; requeue</button>
+  <p class="muted">Clears every book's Hardcover/Chaptarr-derived series/date and status, without touching EPUB-scanned data. The background queues pick all books back up automatically.</p>
+</form>
+{{end}}
+
+<h1>Chaptarr</h1>
+{{if .ChaptarrActive}}
+<p class="muted">Enabled and configured &mdash; matches books to a Chaptarr library by file path and fills in metadata Chaptarr already has. Takes precedence over Hardcover when both are enabled and a book matches.</p>
+{{else if .ChaptarrConfigured}}
+<p class="muted">Configured but disabled &mdash; check "Enable" below to turn it on.</p>
+{{else}}
+<p class="muted">Not configured yet. Point this at a self-hosted <a href="https://github.com/Chaptarr/chaptarr" target="_blank" rel="noopener">Chaptarr</a> instance's API.</p>
+{{end}}
+<p class="muted">Matching is by relative file path, not exact path &mdash; Chaptarr's own library root doesn't need to match this app's. If a book isn't matching, check that the trailing folder/filename structure Chaptarr reports for it looks the same as this library's.</p>
+
+<div class="table-wrap">
+<form method="POST" action="/admin/server/integrations/chaptarr">
+<table>
+<tr><th>Enable</th><td><label><input type="checkbox" name="chaptarr_enabled" {{if .ChaptarrEnabled}}checked{{end}}> Enable Chaptarr matching</label></td></tr>
+<tr><th>Base URL</th><td><input type="text" name="chaptarr_url" value="{{.ChaptarrURL}}" placeholder="http://chaptarr.local:8978"></td></tr>
+<tr><th>API Key</th><td><input type="password" name="chaptarr_api_key" placeholder="{{if .ChaptarrConfigured}}(unchanged){{else}}paste your Chaptarr API key{{end}}"></td></tr>
+<tr><td colspan="2"><button type="submit">Save Chaptarr settings</button></td></tr>
+</table>
+</form>
+</div>
+
+<p><a href="/admin/server">&laquo; Back to Manage Server</a></p>
+{{end}}

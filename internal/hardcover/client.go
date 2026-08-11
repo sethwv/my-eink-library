@@ -21,12 +21,16 @@ var endpoint = "https://api.hardcover.app/v1/graphql"
 // Client is safe for concurrent use — every call goes through a shared rate
 // limiter (Hardcover's own limit is 60 requests/min) regardless of which
 // goroutine (the background enrichment queue, or a manual per-book check)
-// is asking, so nothing needs its own separate throttling logic.
+// is asking, so nothing needs its own separate throttling logic. token/
+// enabled are mutable (see SetConfig) so the admin Integrations page can
+// flip Hardcover on/off or rotate its token without a server restart; the
+// same mutex that guards the rate limiter's lastCallTime also guards these.
 type Client struct {
-	token string
-	http  *http.Client
+	http *http.Client
 
 	mu           sync.Mutex
+	token        string
+	enabled      bool
 	lastCallTime time.Time
 }
 
@@ -35,19 +39,37 @@ type Client struct {
 const minInterval = 1100 * time.Millisecond
 
 // New creates a Client using the given API bearer token (from
-// https://hardcover.app/settings, per Hardcover's own docs).
-func New(token string) *Client {
+// https://hardcover.app/settings, per Hardcover's own docs) and enabled
+// state, as loaded from users.IntegrationSettings at startup. Use SetConfig
+// to update either at runtime.
+func New(enabled bool, token string) *Client {
 	return &Client{
-		token: token,
-		http:  &http.Client{Timeout: 30 * time.Second},
+		token:   token,
+		enabled: enabled,
+		http:    &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-// Enabled reports whether a token was configured at all — callers should
-// skip enrichment entirely (not error) when this is false, since Hardcover
-// integration is optional.
+// SetConfig updates the client's enabled state and token in place — called
+// after the admin Integrations page saves a change, so the running
+// background queue and any in-flight manual checks pick it up immediately.
+func (c *Client) SetConfig(enabled bool, token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.enabled = enabled
+	c.token = token
+}
+
+// Enabled reports whether Hardcover is both turned on and has a token
+// configured — callers should skip enrichment entirely (not error) when
+// this is false, since Hardcover integration is optional.
 func (c *Client) Enabled() bool {
-	return c != nil && c.token != ""
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.enabled && c.token != ""
 }
 
 type graphqlRequest struct {
@@ -72,7 +94,7 @@ func (c *Client) do(ctx context.Context, query string, variables any, out any) e
 		return fmt.Errorf("hardcover: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Authorization", "Bearer "+c.currentToken())
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -111,4 +133,10 @@ func (c *Client) throttle() {
 		time.Sleep(wait)
 	}
 	c.lastCallTime = time.Now()
+}
+
+func (c *Client) currentToken() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.token
 }

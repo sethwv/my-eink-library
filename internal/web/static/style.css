@@ -467,3 +467,83 @@ th, td { text-align: left; padding: 0.6em 0.7em; border-bottom: 1px solid #ddd; 
 tr:last-child td { border-bottom: none; }
 th { background: #f7f7f7; }
 .admin-users form { margin: 0.3em 0; }
+
+/* Edit Metadata page: cover-left/actions-right via the same table primitive
+   as .modal-layout above, a card-per-candidate match picker (reusing
+   .card's shape rather than a raw <table> of text rows), and a small pill
+   badge showing which integration (if any) currently supplies a book's
+   fields. */
+.edit-metadata-layout { width: 100%; border-collapse: collapse; margin: 1em 0; }
+.edit-metadata-layout td { padding: 0; border: none; vertical-align: top; }
+.edit-metadata-layout td.edit-cover-cell { width: 33%; padding-right: 1.5em; text-align: center; }
+.edit-metadata-layout td.edit-actions-cell { width: 67%; }
+.edit-cover-wrap {
+  position: relative;
+  width: 60%;
+  margin: 0 auto;
+  padding-top: 90%; /* 60% width * 1.5 (2:3 cover ratio) */
+  height: 0;
+  overflow: hidden;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+  background: #f7f7f7;
+}
+.edit-cover-wrap img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 0.2em 0.7em;
+  margin-left: 0.5em;
+  font-size: 0.75em;
+  border: 1px solid #888;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+  color: #444;
+  vertical-align: middle;
+}
+
+.match-card {
+  border: 1px solid #ddd;
+  -webkit-border-radius: 8px;
+  border-radius: 8px;
+  background: #fff;
+  -webkit-box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  padding: 0.8em 1em;
+  margin-bottom: 0.75em;
+}
+.match-card.is-on {
+  border-color: #111;
+  background: #f7f7f7;
+}
+.match-card-title { font-weight: 600; }
+.match-card-meta {
+  margin-top: 0.2em;
+  font-size: 0.85em;
+  color: #444;
+}
+.match-card-snippet {
+  margin-top: 0.5em;
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+.match-card .btn-hardcover { margin-top: 0.6em; }
+
+/* Section-heading rows inside the manual edit form's field table — plain
+   <th colspan="2"> rows, not <h2>, since margin has no effect on table
+   cells (padding does) and this keeps the whole form one table instead of
+   several, avoiding extra spacing/border quirks between adjacent tables. */
+.table-wrap th.field-group-heading {
+  background: #fff;
+  font-weight: 600;
+  padding-top: 1.2em;
+}
+.table-wrap tr:first-child th.field-group-heading { padding-top: 0.6em; }
