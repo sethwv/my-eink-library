@@ -83,6 +83,47 @@ func TestClient_Enabled(t *testing.T) {
 	}
 }
 
+func TestDetail_ParsesPublisherAndImage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":{"books_by_pk":{"image":{"url":"https://covers.example/mistborn.jpg"},"default_physical_edition":{"publisher":{"name":"Tor Books"}}}}}`))
+	}))
+	defer srv.Close()
+
+	c := New("test-token")
+	c.http = srv.Client()
+	overrideEndpointForTest(t, srv.URL)
+
+	d, err := c.Detail(context.Background(), "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Publisher != "Tor Books" {
+		t.Errorf("Publisher = %q, want %q", d.Publisher, "Tor Books")
+	}
+	if d.Image != "https://covers.example/mistborn.jpg" {
+		t.Errorf("Image = %q, want %q", d.Image, "https://covers.example/mistborn.jpg")
+	}
+}
+
+func TestDetail_MissingBook(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":{"books_by_pk":null}}`))
+	}))
+	defer srv.Close()
+
+	c := New("test-token")
+	c.http = srv.Client()
+	overrideEndpointForTest(t, srv.URL)
+
+	d, err := c.Detail(context.Background(), "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Publisher != "" || d.Image != "" {
+		t.Errorf("Detail = %+v, want zero value for a missing book", d)
+	}
+}
+
 func TestClient_ThrottlesRequests(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"data":{"search":{"ids":[],"results":{"hits":[]}}}}`))
