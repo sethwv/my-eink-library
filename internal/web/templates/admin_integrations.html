@@ -5,6 +5,25 @@
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 {{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
 
+{{if or .HardcoverConfigured .ChaptarrConfigured}}
+<h1>Enrichment queue</h1>
+<p class="muted">One background queue serves both integrations &mdash; for each pending book, Chaptarr is checked first (if enabled) and always wins when it has a match; Hardcover only runs as a fallback for books Chaptarr didn't claim.</p>
+<div class="table-wrap">
+<table>
+<tr><th>Status</th><th>Books</th></tr>
+<tr><td>Pending</td><td>{{.EnrichmentPending}}</td></tr>
+<tr><td>Done</td><td>{{.EnrichmentDone}}</td></tr>
+<tr><td>No match found</td><td>{{.EnrichmentNoMatch}}</td></tr>
+<tr><td>Errored</td><td>{{.EnrichmentErrored}}</td></tr>
+</table>
+</div>
+
+<form method="POST" action="/admin/server/enrichment-reset" style="margin-top:1em;">
+  <button type="submit">Clear all enrichment data &amp; requeue</button>
+  <p class="muted">Clears every book's Hardcover/Chaptarr-derived series/date and status, without touching EPUB-scanned data. The background queue picks all books back up automatically.</p>
+</form>
+{{end}}
+
 <h1>Hardcover</h1>
 {{if .HardcoverActive}}
 <p class="muted">Enabled and configured &mdash; auto-fills book metadata from hardcover.app in the background.</p>
@@ -23,23 +42,6 @@
 </table>
 </form>
 </div>
-
-{{if .HardcoverConfigured}}
-<div class="table-wrap" style="margin-top:1em;">
-<table>
-<tr><th>Status</th><th>Books</th></tr>
-<tr><td>Pending</td><td>{{.EnrichmentPending}}</td></tr>
-<tr><td>Done</td><td>{{.EnrichmentDone}}</td></tr>
-<tr><td>No match found</td><td>{{.EnrichmentNoMatch}}</td></tr>
-<tr><td>Errored</td><td>{{.EnrichmentErrored}}</td></tr>
-</table>
-</div>
-
-<form method="POST" action="/admin/server/enrichment-reset" style="margin-top:1em;">
-  <button type="submit">Clear all enrichment data &amp; requeue</button>
-  <p class="muted">Clears every book's Hardcover/Chaptarr-derived series/date and status, without touching EPUB-scanned data. The background queues pick all books back up automatically.</p>
-</form>
-{{end}}
 
 <h1>Chaptarr</h1>
 {{if .ChaptarrActive}}

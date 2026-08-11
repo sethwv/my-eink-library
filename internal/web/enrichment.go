@@ -23,15 +23,35 @@ import (
 // library is rescanned.
 const idlePollInterval = 30 * time.Second
 
-// RunEnrichmentQueue processes one book at a time against Hardcover,
-// resuming from wherever it left off (progress is tracked in the books
-// table, not in memory) so a server restart doesn't reprocess already-
-// `done`/`no_match`/`error` books. Idles (rather than returning) while
-// Hardcover is disabled, so enabling it from the admin Integrations page
-// after startup — no token configured, or the toggle switched off — makes
-// this loop start processing without a server restart. The client's own
-// rate limiter spaces out the actual HTTP calls, so this loop doesn't need
-// its own throttling beyond an idle backoff when there's nothing to do.
+// enrichmentBatchSize is how many enrichment candidates RunEnrichmentQueue
+// pulls per pass. Larger than one-at-a-time since Chaptarr matching reuses
+// a single ListBooks fetch checked against every candidate locally (not one
+// API call per book) — Hardcover's own per-book Search/Detail calls are
+// still individually rate-limited by hardcover.Client's own throttle
+// regardless of how many candidates are queued up here.
+const enrichmentBatchSize = 200
+
+// RunEnrichmentQueue is the single background loop for both metadata
+// integrations, resuming from wherever it left off (progress is tracked in
+// the books table, not in memory) so a server restart doesn't reprocess
+// already-`done`/`no_match`/`error` books. Idles (rather than returning)
+// while both integrations are disabled, so enabling either from the admin
+// Integrations page after startup makes this loop start processing without
+// a server restart.
+//
+// Both integrations are tried per book, in the same goroutine, in a fixed
+// order: Chaptarr first (via processChaptarrMatch), then — only if
+// Chaptarr didn't claim the book (disabled, or no path match) — Hardcover's
+// own fuzzy search (via processHardcoverMatch). This used to be two
+// separate goroutines each independently polling BooksNeedingEnrichment,
+// which meant "Chaptarr takes precedence" was only true if its pass
+// happened to reach a book before Hardcover's did — a race, not a
+// guarantee (confirmed live: a book Chaptarr could match sometimes ended up
+// enriched by Hardcover's fuzzy search instead, purely because that
+// goroutine's poll happened to win). Doing both in one deterministic
+// per-book step removes the race entirely: for any given book, Chaptarr is
+// always checked and always wins if it has a match, in every single pass,
+// not just often.
 func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 	for {
 		select {
@@ -40,12 +60,12 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 		default:
 		}
 
-		if !s.Hardcover.Enabled() {
+		if !s.Hardcover.Enabled() && !s.Chaptarr.Enabled() {
 			sleepOrDone(ctx, idlePollInterval)
 			continue
 		}
 
-		candidates, err := s.DB.BooksNeedingEnrichment(1)
+		candidates, err := s.DB.BooksNeedingEnrichment(enrichmentBatchSize)
 		if err != nil {
 			log.Printf("enrichment queue: list candidates: %v", err)
 			sleepOrDone(ctx, idlePollInterval)
@@ -56,119 +76,18 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			continue
 		}
 
-		c := candidates[0]
-		matches, err := s.Hardcover.Search(ctx, c.Title, c.Author, c.Identifier)
-		if err != nil {
-			log.Printf("enrichment queue: search failed for book %d: %v", c.ID, err)
-			if err := s.DB.SetEnrichmentStatus(c.ID, "error"); err != nil {
-				log.Printf("enrichment queue: mark error failed for book %d: %v", c.ID, err)
-			}
-			continue
-		}
-		best, ok := hardcover.BestConfidentMatch(matches, c.Title, c.Author)
-		if !ok {
-			if err := s.DB.SetEnrichmentStatus(c.ID, "no_match"); err != nil {
-				log.Printf("enrichment queue: mark no_match failed for book %d: %v", c.ID, err)
-			}
-			continue
-		}
-
-		// Publisher and cover image aren't in the search document (see
-		// hardcover.Match), so they need one more request — best-effort: a
-		// failure here shouldn't stop the rest of the match (series/date/
-		// title/etc.) from applying.
-		var detail hardcover.Detail
-		if d, err := s.Hardcover.Detail(ctx, best.ID); err != nil {
-			log.Printf("enrichment queue: detail lookup failed for book %d: %v", c.ID, err)
-		} else {
-			detail = d
-		}
-
-		fields := index.HardcoverFields{
-			Title:         best.Title,
-			Series:        best.Series,
-			SeriesIndex:   best.SeriesIndex,
-			PublishedDate: best.ReleaseDate,
-			Description:   best.Description,
-			Genres:        best.Genres,
-			Publisher:     detail.Publisher,
-			Pages:         best.Pages,
-			ISBN:          firstISBN(best.ISBNs),
-			Rating:        best.Rating,
-		}
-		if err := s.DB.ApplyEnrichment(c.ID, fields, index.SourceHardcover); err != nil {
-			log.Printf("enrichment queue: apply enrichment failed for book %d: %v", c.ID, err)
-			s.DB.SetEnrichmentStatus(c.ID, "error")
-			continue
-		}
-
-		// Only ever auto-apply a cover when the book doesn't have one —
-		// never silently replace an existing cover. Manual override (any
-		// time) lives in the Edit Metadata page.
-		if detail.Image != "" {
-			if book, err := s.DB.Get(c.ID); err == nil && book != nil && !book.HasCover {
-				if err := s.applyCoverFromURL(ctx, c.ID, detail.Image); err != nil {
-					log.Printf("enrichment queue: cover fetch failed for book %d: %v", c.ID, err)
-				}
+		var chBooks []chaptarr.Book
+		if s.Chaptarr.Enabled() {
+			var err error
+			chBooks, err = s.Chaptarr.ListBooks(ctx)
+			if err != nil {
+				log.Printf("enrichment queue: chaptarr list books: %v", err)
+				// Don't abort the whole pass — Hardcover can still process
+				// every candidate below even though Chaptarr's list failed.
 			}
 		}
 
-		if err := s.DB.SetEnrichmentStatus(c.ID, "done"); err != nil {
-			log.Printf("enrichment queue: mark done failed for book %d: %v", c.ID, err)
-		}
-	}
-}
-
-// chaptarrBatchSize is how many enrichment candidates RunChaptarrQueue pulls
-// per pass — larger than RunEnrichmentQueue's one-at-a-time since matching
-// is a single ListBooks fetch checked against every candidate locally, not
-// one API call per book.
-const chaptarrBatchSize = 200
-
-// RunChaptarrQueue is Chaptarr's equivalent of RunEnrichmentQueue: matches
-// still-pending books against Chaptarr's tracked library by file path (see
-// chaptarr.MatchByPath) and, on a match, applies Chaptarr's metadata with
-// source=SourceChaptarr. Chaptarr's precedence over Hardcover falls out of
-// both queues sharing the same needsEnrichmentWhere status=” gate — once
-// this pass marks a book "done", RunEnrichmentQueue's own candidate query
-// skips it, so a book Chaptarr claims is never subsequently touched by
-// Hardcover. A book Chaptarr has no path match for is left with status=”
-// (not "no_match" — that status is reserved for "checked and confirmed no
-// match", which this pass can't assert given only a local path heuristic)
-// so it falls through to the Hardcover pass, or a future rescan/Chaptarr
-// pass, unchanged.
-func (s *Server) RunChaptarrQueue(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		if !s.Chaptarr.Enabled() {
-			sleepOrDone(ctx, idlePollInterval)
-			continue
-		}
-
-		candidates, err := s.DB.BooksNeedingEnrichment(chaptarrBatchSize)
-		if err != nil {
-			log.Printf("chaptarr queue: list candidates: %v", err)
-			sleepOrDone(ctx, idlePollInterval)
-			continue
-		}
-		if len(candidates) == 0 {
-			sleepOrDone(ctx, idlePollInterval)
-			continue
-		}
-
-		chBooks, err := s.Chaptarr.ListBooks(ctx)
-		if err != nil {
-			log.Printf("chaptarr queue: list books: %v", err)
-			sleepOrDone(ctx, idlePollInterval)
-			continue
-		}
-
-		matchedAny := false
+		processedAny := false
 		for _, c := range candidates {
 			select {
 			case <-ctx.Done():
@@ -176,28 +95,189 @@ func (s *Server) RunChaptarrQueue(ctx context.Context) {
 			default:
 			}
 
-			match, ok := chaptarr.MatchByPath(chBooks, c.FilePath)
-			if !ok {
+			if s.processChaptarrMatch(ctx, c, chBooks) {
+				processedAny = true
 				continue
 			}
-			matchedAny = true
-
-			fields := index.HardcoverFields{
-				Title:       match.Title,
-				Series:      match.Series,
-				SeriesIndex: match.SeriesIndex,
-				Genres:      match.Genres,
-				Rating:      match.Rating,
-			}
-			if err := s.DB.ApplyEnrichment(c.ID, fields, index.SourceChaptarr); err != nil {
-				log.Printf("chaptarr queue: apply enrichment failed for book %d: %v", c.ID, err)
+			if s.processHardcoverMatch(ctx, c) {
+				processedAny = true
 			}
 		}
 
-		if !matchedAny {
+		if !processedAny {
 			sleepOrDone(ctx, idlePollInterval)
 		}
 	}
+}
+
+// processChaptarrMatch tries to match c against chBooks (Chaptarr's tracked
+// library, already fetched once for this whole pass) and, on a match,
+// applies it — daisy-chaining a Hardcover.GetByID lookup for the fields
+// Chaptarr never has (description, publisher, ISBN, page count) when
+// Hardcover is also enabled and the match has a HardcoverID (Chaptarr
+// sourced it from Hardcover — see chaptarr.Book), and filling in the cover
+// image the same way, only when the book doesn't already have one. See
+// mergeChaptarrFields for the merge itself. Chaptarr still gets
+// precedence-credit (source stays SourceChaptarr) since it's the one that
+// found the match; the daisy-chained Hardcover data is a same-book
+// supplement, not a competing match.
+//
+// Returns true if Chaptarr claimed this book (even if applying/cover-fetch
+// hit a partial error) — the caller must not also run Hardcover's fuzzy
+// search for it in that case. Returns false (Chaptarr disabled, no path
+// match, or the list fetch failed) to signal the Hardcover fallback should
+// run instead. A book Chaptarr has no path match for is left with
+// status=” here (not "no_match" — that status means "checked and
+// confirmed no match", which a local path heuristic alone can't assert) so
+// it's free to fall through to processHardcoverMatch in this same pass.
+func (s *Server) processChaptarrMatch(ctx context.Context, c index.EnrichmentCandidate, chBooks []chaptarr.Book) bool {
+	if !s.Chaptarr.Enabled() || chBooks == nil {
+		return false
+	}
+	match, ok := chaptarr.MatchByPath(chBooks, c.FilePath)
+	if !ok {
+		return false
+	}
+
+	var hc hardcover.Match
+	var hcDetail hardcover.Detail
+	if s.Hardcover.Enabled() && match.HardcoverID != "" {
+		if m, d, err := s.Hardcover.GetByID(ctx, match.HardcoverID); err != nil {
+			log.Printf("enrichment queue: hardcover daisy-chain lookup failed for book %d: %v", c.ID, err)
+		} else {
+			hc, hcDetail = m, d
+		}
+	}
+
+	fields := mergeChaptarrFields(match, hc, hcDetail)
+	if err := s.DB.ApplyEnrichment(c.ID, fields, index.SourceChaptarr); err != nil {
+		log.Printf("enrichment queue: chaptarr apply enrichment failed for book %d: %v", c.ID, err)
+		return true
+	}
+
+	// Only ever auto-apply a cover when the book doesn't have one — never
+	// silently replace an existing cover. Manual override (any time) lives
+	// in the Edit Metadata page.
+	if hcDetail.Image != "" {
+		if book, err := s.DB.Get(c.ID); err == nil && book != nil && !book.HasCover {
+			if err := s.applyCoverFromURL(ctx, c.ID, hcDetail.Image); err != nil {
+				log.Printf("enrichment queue: chaptarr cover fetch failed for book %d: %v", c.ID, err)
+			}
+		}
+	}
+	return true
+}
+
+// processHardcoverMatch runs Hardcover's fuzzy title/author search for c
+// and applies a confident match — the fallback path for whatever Chaptarr
+// didn't claim (or when Chaptarr is disabled entirely). Returns true if
+// Hardcover was enabled and attempted this candidate, regardless of outcome
+// (matched, no_match, or error), so the caller's "did any real work happen
+// this pass" bookkeeping is accurate; false only when Hardcover is disabled
+// and nothing was attempted at all.
+func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCandidate) bool {
+	if !s.Hardcover.Enabled() {
+		return false
+	}
+
+	matches, err := s.Hardcover.Search(ctx, c.Title, c.Author, c.Identifier)
+	if err != nil {
+		log.Printf("enrichment queue: search failed for book %d: %v", c.ID, err)
+		if err := s.DB.SetEnrichmentStatus(c.ID, "error"); err != nil {
+			log.Printf("enrichment queue: mark error failed for book %d: %v", c.ID, err)
+		}
+		return true
+	}
+	best, ok := hardcover.BestConfidentMatch(matches, c.Title, c.Author)
+	if !ok {
+		if err := s.DB.SetEnrichmentStatus(c.ID, "no_match"); err != nil {
+			log.Printf("enrichment queue: mark no_match failed for book %d: %v", c.ID, err)
+		}
+		return true
+	}
+
+	// Publisher and cover image aren't in the search document (see
+	// hardcover.Match), so they need one more request — best-effort: a
+	// failure here shouldn't stop the rest of the match (series/date/
+	// title/etc.) from applying.
+	var detail hardcover.Detail
+	if d, err := s.Hardcover.Detail(ctx, best.ID); err != nil {
+		log.Printf("enrichment queue: detail lookup failed for book %d: %v", c.ID, err)
+	} else {
+		detail = d
+	}
+
+	fields := index.HardcoverFields{
+		Title:         best.Title,
+		Series:        best.Series,
+		SeriesIndex:   best.SeriesIndex,
+		PublishedDate: best.ReleaseDate,
+		Description:   best.Description,
+		Genres:        best.Genres,
+		Publisher:     detail.Publisher,
+		Pages:         best.Pages,
+		ISBN:          firstISBN(best.ISBNs),
+		Rating:        best.Rating,
+	}
+	if err := s.DB.ApplyEnrichment(c.ID, fields, index.SourceHardcover); err != nil {
+		log.Printf("enrichment queue: apply enrichment failed for book %d: %v", c.ID, err)
+		s.DB.SetEnrichmentStatus(c.ID, "error")
+		return true
+	}
+
+	// Only ever auto-apply a cover when the book doesn't have one — never
+	// silently replace an existing cover. Manual override (any time) lives
+	// in the Edit Metadata page.
+	if detail.Image != "" {
+		if book, err := s.DB.Get(c.ID); err == nil && book != nil && !book.HasCover {
+			if err := s.applyCoverFromURL(ctx, c.ID, detail.Image); err != nil {
+				log.Printf("enrichment queue: cover fetch failed for book %d: %v", c.ID, err)
+			}
+		}
+	}
+
+	if err := s.DB.SetEnrichmentStatus(c.ID, "done"); err != nil {
+		log.Printf("enrichment queue: mark done failed for book %d: %v", c.ID, err)
+	}
+	return true
+}
+
+// mergeChaptarrFields combines a Chaptarr path match's own (thinner) fields
+// with an optional daisy-chained Hardcover lookup's (richer) fields into
+// one HardcoverFields for ApplyEnrichment. Chaptarr's value wins wherever
+// it has one (it's the higher-precedence source and the one that actually
+// matched this book) — Hardcover only fills in what Chaptarr left blank.
+// hc/hcDetail may be zero values (Hardcover disabled, no HardcoverID, or
+// the lookup failed) — every Hardcover-sourced field then stays blank,
+// same as if this were a Chaptarr-only match.
+func mergeChaptarrFields(match chaptarr.Book, hc hardcover.Match, hcDetail hardcover.Detail) index.HardcoverFields {
+	f := index.HardcoverFields{
+		Title:       match.Title,
+		Series:      match.Series,
+		SeriesIndex: match.SeriesIndex,
+		Genres:      match.Genres,
+		Rating:      match.Rating,
+	}
+	if f.Title == "" {
+		f.Title = hc.Title
+	}
+	if f.Series == "" {
+		f.Series, f.SeriesIndex = hc.Series, hc.SeriesIndex
+	}
+	if len(f.Genres) == 0 {
+		f.Genres = hc.Genres
+	}
+	if f.Rating == 0 {
+		f.Rating = hc.Rating
+	}
+	// Chaptarr never has these — always Hardcover's, when a daisy-chained
+	// lookup succeeded.
+	f.PublishedDate = hc.ReleaseDate
+	f.Description = hc.Description
+	f.Publisher = hcDetail.Publisher
+	f.Pages = hc.Pages
+	f.ISBN = firstISBN(hc.ISBNs)
+	return f
 }
 
 // firstISBN prefers an ISBN-13 (13 digits) when present, otherwise the first
@@ -483,21 +563,60 @@ func (s *Server) runChaptarrSearch(ctx context.Context, data map[string]any, id 
 	}
 	if selectedID != "" && candidateID == selectedID {
 		c.Selected = true
-		data["FormTitle"] = match.Title
-		if match.Series != "" {
-			data["FormSeries"] = match.Series
-			if match.SeriesIndex != 0 {
-				data["FormSeriesIndex"] = strconv.FormatFloat(match.SeriesIndex, 'f', -1, 64)
+
+		var hc hardcover.Match
+		var hcDetail hardcover.Detail
+		if s.Hardcover.Enabled() && match.HardcoverID != "" {
+			if m, d, err := s.Hardcover.GetByID(ctx, match.HardcoverID); err != nil {
+				log.Printf("edit-metadata chaptarr daisy-chain lookup failed for book %d: %v", id, err)
+			} else {
+				hc, hcDetail = m, d
 			}
 		}
-		if len(match.Genres) > 0 {
-			data["FormGenres"] = strings.Join(match.Genres, ", ")
-		}
-		if match.Rating != 0 {
-			data["FormRating"] = strconv.FormatFloat(match.Rating, 'f', -1, 64)
-		}
+		applyMergedFieldsAsDefaults(data, mergeChaptarrFields(match, hc, hcDetail), hcDetail.Image)
 	}
 	data["Candidates"] = []matchCandidate{c}
+}
+
+// applyMergedFieldsAsDefaults overwrites the edit form's default values
+// from f wherever a field is actually set — same "blank means leave alone"
+// convention ApplyEnrichment/SaveMetadata use, so a book's existing value
+// for a field neither Chaptarr nor a daisy-chained Hardcover lookup had
+// isn't blanked out in the form.
+func applyMergedFieldsAsDefaults(data map[string]any, f index.HardcoverFields, coverURL string) {
+	if f.Title != "" {
+		data["FormTitle"] = f.Title
+	}
+	if f.Series != "" {
+		data["FormSeries"] = f.Series
+		if f.SeriesIndex != 0 {
+			data["FormSeriesIndex"] = strconv.FormatFloat(f.SeriesIndex, 'f', -1, 64)
+		}
+	}
+	if f.PublishedDate != "" {
+		data["FormPublished"] = f.PublishedDate
+	}
+	if f.Description != "" {
+		data["FormDesc"] = f.Description
+	}
+	if len(f.Genres) > 0 {
+		data["FormGenres"] = strings.Join(f.Genres, ", ")
+	}
+	if f.Publisher != "" {
+		data["FormPublisher"] = f.Publisher
+	}
+	if f.Pages != 0 {
+		data["FormPages"] = strconv.Itoa(f.Pages)
+	}
+	if f.ISBN != "" {
+		data["FormISBN"] = f.ISBN
+	}
+	if f.Rating != 0 {
+		data["FormRating"] = strconv.FormatFloat(f.Rating, 'f', -1, 64)
+	}
+	if coverURL != "" {
+		data["SelectedCoverURL"] = coverURL
+	}
 }
 
 // applySelectedDefaults overwrites the edit form's default values with the

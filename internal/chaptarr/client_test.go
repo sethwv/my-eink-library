@@ -54,7 +54,7 @@ func newStubChaptarrServer(t *testing.T) *httptest.Server {
 	})
 	mux.HandleFunc("/api/v1/book", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`[
-			{"id": 1, "title": "Mistborn", "authorId": 1, "seriesTitle": "The Mistborn Saga #1", "genres": ["Fantasy"], "ratings": {"value": 4.5}, "hasFiles": true},
+			{"id": 1, "title": "Mistborn", "authorId": 1, "seriesTitle": "The Mistborn Saga #1", "genres": ["Fantasy"], "ratings": {"value": 4.5}, "hasFiles": true, "hardcoverBookId": "hc:123456"},
 			{"id": 2, "title": "No File Yet", "authorId": 1, "seriesTitle": "The Mistborn Saga #2", "genres": ["Fantasy"], "hasFiles": false}
 		]`))
 	})
@@ -96,6 +96,24 @@ func TestListBooks_ParsesSeriesTitleAuthorAndPaths(t *testing.T) {
 	}
 	if len(b.Paths) != 1 || b.Paths[0] != "/library/Brandon Sanderson/Mistborn/Mistborn.epub" {
 		t.Errorf("Paths = %v, unexpected", b.Paths)
+	}
+	if b.HardcoverID != "123456" {
+		t.Errorf("HardcoverID = %q, want %q from hardcoverBookId \"hc:123456\"", b.HardcoverID, "123456")
+	}
+}
+
+func TestParseHardcoverID(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"hc:1686204", "1686204"},
+		{"HC:1686204", "1686204"},
+		{"gr:123334051-ebook", ""},
+		{"", ""},
+		{"hc:", ""},
+	}
+	for _, tt := range tests {
+		if got := parseHardcoverID(tt.in); got != tt.want {
+			t.Errorf("parseHardcoverID(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }
 

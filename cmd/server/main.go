@@ -121,12 +121,13 @@ func main() {
 		PublicURL:   cfg.PublicURL,
 		StartedAt:   time.Now(),
 	}
-	// Both queues idle (rather than exit) while their integration is
-	// disabled, so enabling either from the admin Integrations page later
-	// starts processing without a restart — see RunEnrichmentQueue/
-	// RunChaptarrQueue's doc comments.
+	// Single background loop for both integrations (idles, rather than
+	// exiting, while both are disabled) — see RunEnrichmentQueue's doc
+	// comment for why Chaptarr and Hardcover are tried in one deterministic
+	// per-book step in the same goroutine rather than two independently
+	// polling ones, which enabling either from the admin Integrations page
+	// later still works without a restart.
 	go srv.RunEnrichmentQueue(ctx)
-	go srv.RunChaptarrQueue(ctx)
 	if cfg.PublicURL == "" {
 		log.Printf("warning: PUBLIC_URL is not set; password-reset and invite emails will build their links from the request's Host header, which is not safe to trust in production")
 	}

@@ -992,9 +992,9 @@ func (s *Server) ServerIntegrationsHardcoverSave(w http.ResponseWriter, r *http.
 
 // ServerIntegrationsChaptarrSave saves the Chaptarr enable toggle, base
 // URL, and API key, then applies the change to the running client
-// immediately (see chaptarr.Client.SetConfig) so RunChaptarrQueue picks it
-// up on its next loop iteration without a restart. An empty submitted key
-// means "keep the existing key" — the form never echoes the real key back.
+// immediately (see chaptarr.Client.SetConfig) so RunEnrichmentQueue picks
+// it up on its next loop iteration without a restart. An empty submitted
+// key means "keep the existing key" — the form never echoes the real key back.
 func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
