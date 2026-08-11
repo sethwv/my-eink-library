@@ -24,9 +24,11 @@ var staticFS embed.FS
 // garbage) — these never error, they just fall back to showing whatever they
 // were given rather than blanking out or panicking a template render.
 var templateFuncs = template.FuncMap{
-	"formatUnix":      formatUnix,
-	"formatPublished": formatPublished,
-	"plainText":       plainText,
+	"formatUnix":          formatUnix,
+	"formatPublished":     formatPublished,
+	"formatYear":          formatYear,
+	"formatPublishedYear": formatPublishedYear,
+	"plainText":           plainText,
 }
 
 var htmlTagPattern = regexp.MustCompile(`<[^>]*>`)
@@ -45,28 +47,60 @@ func plainText(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// formatUnix renders a Unix-seconds timestamp as "Jan 2006", or "" if unset.
+// formatUnix renders a Unix-seconds timestamp as "MM/DD/YYYY", or "" if unset.
 func formatUnix(sec int64) string {
 	if sec == 0 {
 		return ""
 	}
-	return time.Unix(sec, 0).UTC().Format("Jan 2006")
+	return time.Unix(sec, 0).UTC().Format("01/02/2006")
 }
 
-// formatPublished renders an EPUB's raw <dc:date> string as "Jan 2006" when
-// it parses as a recognizable date, "2006" when it's just a bare year, or
-// the original string as a last resort (better to show something unparsed
-// than to hide a date the file actually had).
+// formatYear renders a Unix-seconds timestamp as "YYYY", or "" if unset.
+// Used on the card, where both the added and published dates need to fit
+// alongside title/author/series without pushing the card taller.
+func formatYear(sec int64) string {
+	if sec == 0 {
+		return ""
+	}
+	return time.Unix(sec, 0).UTC().Format("2006")
+}
+
+// formatPublished renders an EPUB's raw <dc:date> string as "MM/DD/YYYY" when
+// it parses as a full date, "MM/YYYY" when only year+month is present,
+// "YYYY" when it's just a bare year, or the original string as a last
+// resort (better to show something unparsed than to hide a date the file
+// actually had).
 func formatPublished(raw string) string {
 	if raw == "" {
 		return ""
 	}
 	for _, layout := range []string{time.RFC3339, "2006-01-02", "2006-01", "2006"} {
 		if t, err := time.Parse(layout, raw); err == nil {
-			if layout == "2006" {
+			switch layout {
+			case "2006":
 				return t.Format("2006")
+			case "2006-01":
+				return t.Format("01/2006")
+			default:
+				return t.Format("01/02/2006")
 			}
-			return t.Format("Jan 2006")
+		}
+	}
+	return raw
+}
+
+// formatPublishedYear renders just the "YYYY" portion of an EPUB's raw
+// <dc:date> string, or the original string as a last resort when it doesn't
+// parse as any recognized layout — same fallback behavior as
+// formatPublished, for the same reason (better to show something unparsed
+// than to hide a date the file actually had).
+func formatPublishedYear(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02", "2006-01", "2006"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t.Format("2006")
 		}
 	}
 	return raw
