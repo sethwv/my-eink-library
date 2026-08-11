@@ -163,6 +163,128 @@ func (c *Client) Detail(ctx context.Context, id string) (Detail, error) {
 	return d, nil
 }
 
+// getByIDQuery fetches everything an exact-ID lookup can contribute — used
+// when a caller already has a confident Hardcover book ID from elsewhere
+// (e.g. Chaptarr's own hardcoverBookId field) rather than needing Search's
+// fuzzy title/author matching. Field shapes below were verified against a
+// real Hardcover account: books_by_pk has no flat "genres" field (that only
+// exists on the Typesense search document Search/Match consume) — genres
+// here come from cached_tags's "Genre" category, and ISBNs come from
+// default_physical_edition rather than a top-level isbns list.
+const getByIDQuery = `query BookByID($id: Int!) {
+  books_by_pk(id: $id) {
+    title
+    description
+    pages
+    rating
+    release_date
+    cached_tags
+    image {
+      url
+    }
+    default_physical_edition {
+      isbn_10
+      isbn_13
+      publisher {
+        name
+      }
+    }
+    book_series {
+      position
+      series {
+        name
+      }
+    }
+  }
+}`
+
+type getByIDResponse struct {
+	BooksByPK *struct {
+		Title       string  `json:"title"`
+		Description string  `json:"description"`
+		Pages       int     `json:"pages"`
+		Rating      float64 `json:"rating"`
+		ReleaseDate string  `json:"release_date"`
+		CachedTags  struct {
+			Genre []struct {
+				Tag string `json:"tag"`
+			} `json:"Genre"`
+		} `json:"cached_tags"`
+		Image *struct {
+			URL string `json:"url"`
+		} `json:"image"`
+		DefaultPhysicalEdition *struct {
+			ISBN10    string `json:"isbn_10"`
+			ISBN13    string `json:"isbn_13"`
+			Publisher *struct {
+				Name string `json:"name"`
+			} `json:"publisher"`
+		} `json:"default_physical_edition"`
+		BookSeries []struct {
+			Position float64 `json:"position"`
+			Series   struct {
+				Name string `json:"name"`
+			} `json:"series"`
+		} `json:"book_series"`
+	} `json:"books_by_pk"`
+}
+
+// GetByID fetches the full record for a known Hardcover book ID directly —
+// no fuzzy matching involved, for callers (like the Chaptarr daisy-chain
+// enrichment path) that already have a confident ID from elsewhere. Returns
+// a zero Match/Detail, no error, if the ID doesn't exist.
+func (c *Client) GetByID(ctx context.Context, id string) (Match, Detail, error) {
+	bookID, err := strconv.Atoi(id)
+	if err != nil {
+		return Match{}, Detail{}, fmt.Errorf("hardcover: invalid book id %q: %w", id, err)
+	}
+
+	var resp getByIDResponse
+	if err := c.do(ctx, getByIDQuery, map[string]any{"id": bookID}, &resp); err != nil {
+		return Match{}, Detail{}, err
+	}
+	if resp.BooksByPK == nil {
+		return Match{}, Detail{}, nil
+	}
+	b := resp.BooksByPK
+
+	m := Match{
+		ID:          id,
+		Title:       b.Title,
+		ReleaseDate: b.ReleaseDate,
+		Description: b.Description,
+		Pages:       b.Pages,
+		Rating:      b.Rating,
+	}
+	for _, g := range b.CachedTags.Genre {
+		if g.Tag != "" {
+			m.Genres = append(m.Genres, g.Tag)
+		}
+	}
+	if len(b.BookSeries) > 0 {
+		m.Series = b.BookSeries[0].Series.Name
+		m.SeriesIndex = b.BookSeries[0].Position
+	}
+
+	var d Detail
+	if ed := b.DefaultPhysicalEdition; ed != nil {
+		if ed.ISBN13 != "" {
+			m.ISBNs = append(m.ISBNs, ed.ISBN13)
+		}
+		if ed.ISBN10 != "" {
+			m.ISBNs = append(m.ISBNs, ed.ISBN10)
+		}
+		if ed.Publisher != nil {
+			d.Publisher = ed.Publisher.Name
+		}
+	}
+	if b.Image != nil {
+		d.Image = b.Image.URL
+	}
+
+	return m, d, nil
+}
+
 // looksLikeISBNOrASIN is a loose shape check (digits/X for ISBN-10, all
 // digits for ISBN-13, 10-char alphanumeric for ASIN) — good enough to avoid
 // folding an unrelated identifier (e.g. a Calibre UUID) into the search text.
@@ -337,23 +459,25 @@ func splitNameTokens(name string) []string {
 
 // BestConfidentMatch scans the search results (up to Search's per_page) for
 // the best plausible match for (knownTitle, knownAuthor). A candidate is
-// rejected outright (never returned, no fallback) if its author doesn't
-// plausibly match knownAuthor, if it looks like a spin-off product
-// (calendar, quote collection, study guide, etc. — same author, wrong
-// product), or if its title shares too few words with knownTitle to
-// plausibly be the same book — see titleImplausible's doc comment for why
-// the spin-off keyword check has to exist alongside the title-overlap
-// check rather than either alone catching cases like a Game of Thrones
-// quote-a-day calendar. Among the remaining candidates, the first one that
-// doesn't look like a box set/omnibus/bundle is preferred, since Hardcover's
-// own text-match ranking already handles title similarity ordering but has
-// no notion of "this is a bundle, not the single book we're after"; if
-// every remaining candidate looks like a bundle, the first one is still
-// returned (better than nothing — unlike the spin-off/title checks, being a
-// bundle doesn't mean it's the wrong book). If knownAuthor is blank, the
-// top result is accepted without any check. Returns ok=false if there's no
-// result or no candidate survives filtering, meaning auto-fill should leave
-// the book alone rather than risk attaching the wrong book's data.
+// rejected outright if its author doesn't plausibly match knownAuthor, if
+// it looks like a spin-off product (calendar, quote collection, study
+// guide, etc. — same author, wrong product), if its title shares too few
+// words with knownTitle to plausibly be the same book (see
+// titleImplausible's doc comment for why the spin-off keyword check has to
+// exist alongside the title-overlap check rather than either alone
+// catching cases like a Game of Thrones quote-a-day calendar), or if it
+// looks like a box set/omnibus/bundle (e.g. a 5-book "Song of Ice and Fire
+// Audiobook Bundle" matching on title-overlap alone despite being nothing
+// like the single book being enriched) — unlike the other checks, a bundle
+// isn't necessarily "the wrong book", but auto-fill overwriting a book's
+// title with an omnibus's name is exactly the kind of wrong, unsupervised
+// write this function exists to prevent, so there is deliberately no
+// "better than nothing" bundle fallback here: if every author-plausible,
+// title-plausible candidate is a bundle, that's treated the same as no
+// candidate at all. If knownAuthor is blank, the top result is accepted
+// without any check. Returns ok=false if there's no result or no candidate
+// survives filtering, meaning auto-fill should leave the book alone rather
+// than risk attaching the wrong book's data.
 func BestConfidentMatch(matches []Match, knownTitle, knownAuthor string) (Match, bool) {
 	if len(matches) == 0 {
 		return Match{}, false
@@ -362,7 +486,6 @@ func BestConfidentMatch(matches []Match, knownTitle, knownAuthor string) (Match,
 		return matches[0], true
 	}
 
-	var firstPlausible *Match
 	for i := range matches {
 		m := &matches[i]
 		if !authorPlausiblyMatches(m.Authors, knownAuthor) {
@@ -374,15 +497,10 @@ func BestConfidentMatch(matches []Match, knownTitle, knownAuthor string) (Match,
 		if titleImplausible(m.Title, knownTitle) {
 			continue
 		}
-		if firstPlausible == nil {
-			firstPlausible = m
+		if looksLikeBundle(m.Title) {
+			continue
 		}
-		if !looksLikeBundle(m.Title) {
-			return *m, true
-		}
-	}
-	if firstPlausible != nil {
-		return *firstPlausible, true
+		return *m, true
 	}
 	return Match{}, false
 }

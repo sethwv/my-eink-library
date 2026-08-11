@@ -85,6 +85,10 @@ type Book struct {
 	SeriesIndex float64
 	Genres      []string
 	Rating      float64 // Chaptarr's ratings.value, e.g. sourced from Hardcover/Goodreads
+	// HardcoverID is the numeric Hardcover book ID (suitable for
+	// hardcover.Client.GetByID), parsed from hardcoverBookId — empty if
+	// Chaptarr sourced this book from somewhere other than Hardcover.
+	HardcoverID string
 	// Paths are every on-disk file path Chaptarr reports for this book
 	// (one per format/edition it's tracking).
 	Paths []string
@@ -98,13 +102,14 @@ type Book struct {
 // jacket copy) — Book has no Description field as a result; Genres is the
 // richer signal this integration actually contributes.
 type bookDocument struct {
-	ID          int      `json:"id"`
-	Title       string   `json:"title"`
-	AuthorID    int      `json:"authorId"`
-	SeriesTitle string   `json:"seriesTitle"` // e.g. "Mistborn #1" — see parseSeriesTitle
-	Genres      []string `json:"genres"`
-	HasFiles    bool     `json:"hasFiles"`
-	Ratings     struct {
+	ID              int      `json:"id"`
+	Title           string   `json:"title"`
+	AuthorID        int      `json:"authorId"`
+	SeriesTitle     string   `json:"seriesTitle"` // e.g. "Mistborn #1" — see parseSeriesTitle
+	Genres          []string `json:"genres"`
+	HasFiles        bool     `json:"hasFiles"`
+	HardcoverBookID string   `json:"hardcoverBookId"` // e.g. "hc:1686204" when Chaptarr sourced this book from Hardcover; see parseHardcoverID
+	Ratings         struct {
 		Value float64 `json:"value"`
 	} `json:"ratings"`
 }
@@ -128,6 +133,19 @@ type bookFileDocument struct {
 // (confirmed format, including fractional indices like "#6.5" for
 // novellas/interludes) back into name and index.
 var seriesTitleRE = regexp.MustCompile(`^(.*)\s+#([0-9]+(?:\.[0-9]+)?)$`)
+
+// parseHardcoverID strips Chaptarr's "hc:" source prefix from
+// hardcoverBookId, returning "" if the book wasn't sourced from Hardcover
+// (Chaptarr also sources books from Goodreads-only, e.g. "gr:123334051-ebook",
+// which isn't a Hardcover-queryable ID) or the field is blank.
+func parseHardcoverID(hardcoverBookID string) string {
+	const prefix = "hc:"
+	s := strings.TrimSpace(hardcoverBookID)
+	if len(s) <= len(prefix) || !strings.EqualFold(s[:len(prefix)], prefix) {
+		return ""
+	}
+	return s[len(prefix):]
+}
 
 func parseSeriesTitle(s string) (name string, index float64) {
 	m := seriesTitleRE.FindStringSubmatch(strings.TrimSpace(s))
@@ -228,6 +246,7 @@ func (c *Client) ListBooks(ctx context.Context) ([]Book, error) {
 			SeriesIndex: seriesIndex,
 			Genres:      d.Genres,
 			Rating:      d.Ratings.Value,
+			HardcoverID: parseHardcoverID(d.HardcoverBookID),
 			Paths:       paths,
 		}
 		if name := authorNames[d.AuthorID]; name != "" {

@@ -158,12 +158,7 @@ func buildMetadata(pkg *opfPackage) Metadata {
 		m.Title = strings.TrimSpace(pkg.Metadata.Title[0])
 	}
 	if len(pkg.Metadata.Creator) > 0 {
-		authors := make([]string, 0, len(pkg.Metadata.Creator))
-		for _, c := range pkg.Metadata.Creator {
-			if c = strings.TrimSpace(c); c != "" {
-				authors = append(authors, c)
-			}
-		}
+		authors := cleanAuthorNames(pkg.Metadata.Creator)
 		m.Author = strings.Join(authors, " & ")
 		if len(authors) > 0 {
 			m.SortAuthor = sortAuthorName(authors[0])
@@ -216,6 +211,75 @@ func sortTitleFor(title string) string {
 		}
 	}
 	return lower
+}
+
+// authorSplitRE splits a single dc:creator string on the separators a
+// multi-author byline might use — "&", "/", ";", or the word "and" (word-
+// boundary so it doesn't match inside a name like "Anderson"). A plain
+// comma is deliberately excluded: it's reserved for the "Last, First"
+// single-name shape normalizeAuthorName handles, not a multi-author list
+// separator (EPUB metadata puts each author in its own dc:creator element
+// far more often than it comma-separates several into one).
+var authorSplitRE = regexp.MustCompile(`(?i)\s*(?:&|;|/|\band\b)\s*`)
+
+func splitAuthorNames(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var names []string
+	for _, p := range authorSplitRE.Split(raw, -1) {
+		if p = strings.TrimSpace(p); p != "" {
+			names = append(names, p)
+		}
+	}
+	return names
+}
+
+// normalizeAuthorName converts a single already-split name from "Last,
+// First" to "First Last" for a consistent display form, and collapses
+// internal whitespace. A name with no comma (already "First Last", or a
+// single mononym) passes through unchanged apart from whitespace collapse.
+func normalizeAuthorName(name string) string {
+	name = strings.Join(strings.Fields(name), " ")
+	if strings.Count(name, ",") == 1 {
+		parts := strings.SplitN(name, ",", 2)
+		last, first := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		if last != "" && first != "" {
+			return first + " " + last
+		}
+	}
+	return name
+}
+
+// cleanAuthorNames turns raw dc:creator values (each element may itself
+// embed multiple names — see splitAuthorNames) into a de-duplicated,
+// normalized, order-preserving list for display. Dedup is an exact
+// case-insensitive match on the normalized name, not fuzzy — two spellings
+// of the same person that aren't otherwise identical (e.g. a full legal
+// name vs. a pen name, "Geneva Lee Albin" vs "Geneva Lee") won't be merged,
+// since a fuzzier heuristic risks wrongly conflating distinct co-authors
+// who happen to share a surname (e.g. real sibling authors "P.C. Cast" and
+// "Kristin Cast"). That class of duplicate needs an external identity
+// source (Hardcover/Chaptarr author matching), not local EPUB parsing.
+func cleanAuthorNames(creators []string) []string {
+	seen := make(map[string]bool, len(creators))
+	names := make([]string, 0, len(creators))
+	for _, c := range creators {
+		for _, part := range splitAuthorNames(c) {
+			name := normalizeAuthorName(part)
+			if name == "" {
+				continue
+			}
+			key := strings.ToLower(name)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // sortAuthorName converts "First Last" to "Last, First"; leaves "Last, First" as-is.

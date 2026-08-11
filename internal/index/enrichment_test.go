@@ -39,6 +39,58 @@ func TestBooksNeedingEnrichment_OnlyMissingFieldsUnprocessed(t *testing.T) {
 	}
 }
 
+// TestBooksNeedingEnrichment_ChaptarrClaimIsNeverRevisitedByHardcover locks
+// in the mechanism RunChaptarrQueue/RunEnrichmentQueue (internal/web) both
+// rely on for "Chaptarr takes precedence when both integrations are
+// enabled": a book ApplyEnrichment marks done via SourceChaptarr is a
+// book_enrichment row with status="done", which BooksNeedingEnrichment's
+// needsEnrichmentWhere gate (status = ”) excludes — so Hardcover's own
+// independent queue, which pulls its candidates from the same
+// BooksNeedingEnrichment, can never re-process a book Chaptarr already
+// claimed, without either queue needing to know the other exists.
+func TestBooksNeedingEnrichment_ChaptarrClaimIsNeverRevisitedByHardcover(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Claimed By Chaptarr", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+
+	candidates, err := db.BooksNeedingEnrichment(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 {
+		t.Fatalf("got %d candidates before any enrichment, want 1", len(candidates))
+	}
+
+	if err := db.ApplyEnrichment(id, HardcoverFields{Title: "Claimed By Chaptarr"}, SourceChaptarr); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err = db.BooksNeedingEnrichment(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 0 {
+		t.Errorf("got %d candidates after a Chaptarr claim, want 0 (Hardcover's queue must never revisit a book Chaptarr already claimed)", len(candidates))
+	}
+
+	source, err := db.GetEnrichmentSource(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != SourceChaptarr {
+		t.Errorf("GetEnrichmentSource = %q, want %q", source, SourceChaptarr)
+	}
+}
+
 func TestGetEnrichmentStats(t *testing.T) {
 	libDir := t.TempDir()
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Book One", "Amy Zed")
