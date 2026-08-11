@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestClient_Enabled(t *testing.T) {
@@ -99,6 +101,122 @@ func TestListBooks_ParsesSeriesTitleAuthorAndPaths(t *testing.T) {
 	}
 	if b.HardcoverID != "123456" {
 		t.Errorf("HardcoverID = %q, want %q from hardcoverBookId \"hc:123456\"", b.HardcoverID, "123456")
+	}
+}
+
+// countingChaptarrServer wraps newStubChaptarrServer's response shapes but
+// also counts /api/v1/book requests, as a proxy for "how many full crawls
+// actually happened" — used to verify ListBooksCached avoids a crawl on a
+// cache hit and RefreshBooks always performs one.
+func countingChaptarrServer(t *testing.T) (srv *httptest.Server, bookRequests *int32) {
+	t.Helper()
+	var count int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/author", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[{"id": 1, "authorName": "Brandon Sanderson"}]`))
+	})
+	mux.HandleFunc("/api/v1/book", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&count, 1)
+		w.Write([]byte(`[{"id": 1, "title": "Mistborn", "authorId": 1, "hasFiles": true}]`))
+	})
+	mux.HandleFunc("/api/v1/bookfile", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[{"bookId": 1, "path": "/library/Mistborn.epub"}]`))
+	})
+	srv = httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, &count
+}
+
+func TestListBooksCached_ServesFromCacheWithinTTL(t *testing.T) {
+	srv, bookRequests := countingChaptarrServer(t)
+	c := New(true, srv.URL, "test-key")
+
+	if _, fromCache, err := c.ListBooksCached(context.Background(), time.Hour); err != nil {
+		t.Fatal(err)
+	} else if fromCache {
+		t.Error("expected the first call to be a fresh crawl, not a cache hit")
+	}
+	if got := atomic.LoadInt32(bookRequests); got != 1 {
+		t.Fatalf("got %d /api/v1/book requests after first call, want 1", got)
+	}
+
+	books, fromCache, err := c.ListBooksCached(context.Background(), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fromCache {
+		t.Error("expected the second call within TTL to be served from cache")
+	}
+	if len(books) != 1 || books[0].Title != "Mistborn" {
+		t.Errorf("books = %+v, want the cached Mistborn entry", books)
+	}
+	if got := atomic.LoadInt32(bookRequests); got != 1 {
+		t.Errorf("got %d /api/v1/book requests after a cache hit, want still 1 (no second crawl)", got)
+	}
+}
+
+func TestListBooksCached_RecrawlsPastTTL(t *testing.T) {
+	srv, bookRequests := countingChaptarrServer(t)
+	c := New(true, srv.URL, "test-key")
+
+	if _, _, err := c.ListBooksCached(context.Background(), time.Nanosecond); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+
+	_, fromCache, err := c.ListBooksCached(context.Background(), time.Nanosecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromCache {
+		t.Error("expected a call past a near-zero TTL to re-crawl, not serve stale cache")
+	}
+	if got := atomic.LoadInt32(bookRequests); got != 2 {
+		t.Errorf("got %d /api/v1/book requests, want 2 (TTL expired between calls)", got)
+	}
+}
+
+func TestRefreshBooks_AlwaysBypassesCache(t *testing.T) {
+	srv, bookRequests := countingChaptarrServer(t)
+	c := New(true, srv.URL, "test-key")
+
+	if _, _, err := c.ListBooksCached(context.Background(), time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RefreshBooks(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := atomic.LoadInt32(bookRequests); got != 2 {
+		t.Errorf("got %d /api/v1/book requests, want 2 (RefreshBooks must always crawl, even with a warm cache)", got)
+	}
+
+	// The warm-from-refresh cache should now serve the next cached call.
+	if _, fromCache, err := c.ListBooksCached(context.Background(), time.Hour); err != nil {
+		t.Fatal(err)
+	} else if !fromCache {
+		t.Error("expected RefreshBooks to have updated the cache for the next ListBooksCached call")
+	}
+	if got := atomic.LoadInt32(bookRequests); got != 2 {
+		t.Errorf("got %d /api/v1/book requests after the cache-hit call, want still 2", got)
+	}
+}
+
+func TestSetConfig_InvalidatesCache(t *testing.T) {
+	srv, bookRequests := countingChaptarrServer(t)
+	c := New(true, srv.URL, "test-key")
+
+	if _, _, err := c.ListBooksCached(context.Background(), time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	c.SetConfig(true, srv.URL, "a-different-key")
+
+	if _, fromCache, err := c.ListBooksCached(context.Background(), time.Hour); err != nil {
+		t.Fatal(err)
+	} else if fromCache {
+		t.Error("expected SetConfig to invalidate the cache, forcing a fresh crawl")
+	}
+	if got := atomic.LoadInt32(bookRequests); got != 2 {
+		t.Errorf("got %d /api/v1/book requests, want 2 (SetConfig must drop the old cache)", got)
 	}
 }
 

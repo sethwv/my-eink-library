@@ -52,6 +52,17 @@ const enrichmentBatchSize = 200
 // per-book step removes the race entirely: for any given book, Chaptarr is
 // always checked and always wins if it has a match, in every single pass,
 // not just often.
+//
+// Chaptarr's catalog is fetched via ListBooksCached (chaptarr.DefaultCacheTTL,
+// currently 12h) rather than a fresh crawl every pass — a full crawl is
+// several dozen to several hundred HTTP requests on a real library (see
+// chaptarr.Client's doc comment), and most passes don't need current-to-
+// the-second data. A candidate that doesn't match a *cached* list is held
+// back from the Hardcover fallback and retried once against a forced
+// RefreshBooks after the main loop, rather than conceded to Hardcover
+// immediately — a stale-cache false negative falling through to Hardcover
+// would otherwise silently break the precedence guarantee above for a book
+// added to Chaptarr since the last crawl.
 func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 	for {
 		select {
@@ -77,9 +88,10 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 		}
 
 		var chBooks []chaptarr.Book
+		fromCache := false
 		if s.Chaptarr.Enabled() {
 			var err error
-			chBooks, err = s.Chaptarr.ListBooks(ctx)
+			chBooks, fromCache, err = s.Chaptarr.ListBooksCached(ctx, chaptarr.DefaultCacheTTL)
 			if err != nil {
 				log.Printf("enrichment queue: chaptarr list books: %v", err)
 				// Don't abort the whole pass — Hardcover can still process
@@ -87,6 +99,17 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			}
 		}
 
+		// Candidates that don't match the (possibly cached) Chaptarr list
+		// are held back from the Hardcover fallback rather than conceded to
+		// it immediately, if that list came from cache — a stale cache
+		// saying "no match" doesn't mean Chaptarr genuinely has no match,
+		// just that it didn't as of the last crawl (e.g. the book was added
+		// to Chaptarr since). Falling through to Hardcover on a false
+		// negative would violate Chaptarr's precedence, since a book
+		// Hardcover marks done/no_match drops out of BooksNeedingEnrichment
+		// for good. See the second loop below for the one bounded re-crawl
+		// that resolves this before anything is actually conceded.
+		var deferred []index.EnrichmentCandidate
 		processedAny := false
 		for _, c := range candidates {
 			select {
@@ -99,8 +122,29 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 				processedAny = true
 				continue
 			}
+			if fromCache && s.Chaptarr.Enabled() {
+				deferred = append(deferred, c)
+				continue
+			}
 			if s.processHardcoverMatch(ctx, c) {
 				processedAny = true
+			}
+		}
+
+		if len(deferred) > 0 {
+			freshBooks, err := s.Chaptarr.RefreshBooks(ctx)
+			if err != nil {
+				log.Printf("enrichment queue: chaptarr refresh for deferred candidates: %v", err)
+				freshBooks = nil
+			}
+			for _, c := range deferred {
+				if freshBooks != nil && s.processChaptarrMatch(ctx, c, freshBooks) {
+					processedAny = true
+					continue
+				}
+				if s.processHardcoverMatch(ctx, c) {
+					processedAny = true
+				}
 			}
 		}
 
@@ -537,9 +581,13 @@ func (s *Server) runHardcoverSearch(ctx context.Context, data map[string]any, id
 // matching yields at most one plausible candidate (unlike Hardcover's
 // ranked text search), shows it as a single-item picker — the admin still
 // has to click "Use this match" before it's loaded into the form, same as
-// Hardcover's flow.
+// Hardcover's flow. Uses RefreshBooks (bypassing the background queue's
+// cache — see chaptarr.Client) rather than the cached ListBooksCached,
+// since a manual admin-initiated check should never risk showing stale
+// results; this also warms the shared cache for the background queue's
+// benefit.
 func (s *Server) runChaptarrSearch(ctx context.Context, data map[string]any, id int64, filePath, selectedID string) {
-	books, err := s.Chaptarr.ListBooks(ctx)
+	books, err := s.Chaptarr.RefreshBooks(ctx)
 	if err != nil {
 		log.Printf("edit-metadata chaptarr list failed for book %d: %v", id, err)
 		data["SearchError"] = "Chaptarr lookup failed."

@@ -19,17 +19,33 @@ import (
 	"time"
 )
 
+// DefaultCacheTTL is how long a crawled catalog snapshot (see
+// ListBooksCached) is trusted before a background enrichment pass re-fetches
+// it — a full crawl is one /api/v1/author call, one /api/v1/book call, and
+// one /api/v1/bookfile call per distinct author with files (confirmed live
+// against a real instance: 482 authors, ~484 total requests), so this
+// trades a bounded amount of staleness for avoiding that cost on every
+// pass. See internal/web's RunEnrichmentQueue for the "ad-hoc for missing"
+// deferred-retry that keeps this from silently violating Chaptarr's
+// precedence over Hardcover for a book added to Chaptarr since the last
+// crawl.
+const DefaultCacheTTL = 12 * time.Hour
+
 // Client is safe for concurrent use. baseURL/apiKey/enabled are mutable
 // (see SetConfig) so the admin Integrations page can turn Chaptarr on/off
 // or change its connection details without a server restart, the same
-// shape as internal/hardcover.Client.
+// shape as internal/hardcover.Client. cachedBooks/cachedAt back
+// ListBooksCached — in-memory only (not persisted), so a server restart
+// costs one full re-crawl, same as if the cache had just expired.
 type Client struct {
 	http *http.Client
 
-	mu      sync.Mutex
-	baseURL string
-	apiKey  string
-	enabled bool
+	mu          sync.Mutex
+	baseURL     string
+	apiKey      string
+	enabled     bool
+	cachedBooks []Book
+	cachedAt    time.Time
 }
 
 // New creates a Client using the given base URL (e.g.
@@ -46,13 +62,17 @@ func New(enabled bool, baseURL, apiKey string) *Client {
 }
 
 // SetConfig updates the client's enabled state, base URL, and API key in
-// place — called after the admin Integrations page saves a change.
+// place — called after the admin Integrations page saves a change. Also
+// drops any cached catalog snapshot: it was crawled under the old
+// baseURL/apiKey, so serving it after a config change risks returning
+// data from the wrong (or no longer valid) Chaptarr instance.
 func (c *Client) SetConfig(enabled bool, baseURL, apiKey string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.enabled = enabled
 	c.baseURL = strings.TrimRight(baseURL, "/")
 	c.apiKey = apiKey
+	c.cachedBooks = nil
 }
 
 // Enabled reports whether Chaptarr is turned on and has both a base URL and
@@ -254,5 +274,39 @@ func (c *Client) ListBooks(ctx context.Context) ([]Book, error) {
 		}
 		books = append(books, b)
 	}
+	return books, nil
+}
+
+// ListBooksCached returns the cached catalog snapshot if it's younger than
+// ttl, or calls RefreshBooks (a full crawl via ListBooks) and caches the
+// result otherwise. The returned bool reports whether the cache was used
+// (true) or a fresh crawl just happened (false) — callers that need to
+// know whether a "no match" for a specific book might just be stale data,
+// rather than a real absence, should check this and fall back to
+// RefreshBooks for that case (see RunEnrichmentQueue's deferred-retry).
+func (c *Client) ListBooksCached(ctx context.Context, ttl time.Duration) ([]Book, bool, error) {
+	c.mu.Lock()
+	if c.cachedBooks != nil && time.Since(c.cachedAt) < ttl {
+		cached := c.cachedBooks
+		c.mu.Unlock()
+		return cached, true, nil
+	}
+	c.mu.Unlock()
+
+	books, err := c.RefreshBooks(ctx)
+	return books, false, err
+}
+
+// RefreshBooks force-crawls Chaptarr's catalog via ListBooks, bypassing any
+// cached snapshot, and updates the cache for future ListBooksCached calls.
+func (c *Client) RefreshBooks(ctx context.Context) ([]Book, error) {
+	books, err := c.ListBooks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	c.cachedBooks = books
+	c.cachedAt = time.Now()
+	c.mu.Unlock()
 	return books, nil
 }
