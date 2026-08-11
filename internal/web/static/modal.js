@@ -107,3 +107,32 @@ function toggleShelf(bookId, shelfId, btn, isViewing) {
   xhr.send();
   return false;
 }
+
+// Direct-link support: a book card's cover-link href always includes
+// ?book=<id> (see library.html/render.go's withQueryParam), so sharing or
+// bookmarking that URL reopens the same modal. window.onload (not
+// addEventListener/DOMContentLoaded — the plainest, oldest-engine-safe
+// hook) checks for that param on page load and opens the matching modal.
+// No URLSearchParams (not assumed present on this engine, same reasoning
+// as avoiding fetch() elsewhere in this file): parsed by hand instead.
+function getQueryParam(name) {
+  var search = window.location.search;
+  if (!search || search.charAt(0) !== "?") {
+    return null;
+  }
+  var pairs = search.substring(1).split("&");
+  for (var i = 0; i < pairs.length; i++) {
+    var kv = pairs[i].split("=");
+    if (decodeURIComponent(kv[0]) === name) {
+      return kv.length > 1 ? decodeURIComponent(kv[1].replace(/\+/g, " ")) : "";
+    }
+  }
+  return null;
+}
+
+window.onload = function () {
+  var bookId = getQueryParam("book");
+  if (bookId) {
+    openModal("book-" + bookId);
+  }
+};

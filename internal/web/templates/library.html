@@ -46,7 +46,7 @@
 {{$book := .}}
 <div class="card" id="card-{{.ID}}">
   <div class="cover-wrap">
-    <a class="cover-link" href="#" onclick="return openModal('book-{{.ID}}');"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
+    <a class="cover-link" href="{{withQueryParam $.CurrentURL "book" .ID}}" onclick="return openModal('book-{{.ID}}');"><img class="cover" src="/covers/{{.ID}}" alt="{{.Title}} cover" loading="lazy"></a>
   </div>
   <div class="card-body">
     <div class="card-title">{{.Title}}</div>
@@ -94,7 +94,9 @@
     {{end}}
     </ul>
     {{if .Description}}<p class="modal-description">{{plainText .Description}}</p>{{end}}
-    {{if $.IsAdmin}}<a class="btn-hardcover" href="/books/{{.ID}}/edit-metadata">Edit Metadata</a>{{end}}
+    {{if $.IsAdmin}}<a class="btn-hardcover" href="/books/{{.ID}}/edit-metadata">Edit Metadata</a>
+    <p class="modal-path muted">{{.FilePath}}</p>
+    {{end}}
   </div>
 </div>
 {{end}}

@@ -3,9 +3,11 @@ package web
 import (
 	"bytes"
 	"embed"
+	"fmt"
 	"html"
 	"html/template"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -32,6 +34,7 @@ var templateFuncs = template.FuncMap{
 	"formatPublishedYear": formatPublishedYear,
 	"plainText":           plainText,
 	"authorNames":         authorNames,
+	"withQueryParam":      withQueryParam,
 }
 
 // authorNames splits a book's stored author byline into individual,
@@ -43,6 +46,26 @@ var templateFuncs = template.FuncMap{
 // existed — not dependent on that book having been reimported since.
 func authorNames(author string) []string {
 	return epub.CleanAuthorNames([]string{author})
+}
+
+// withQueryParam returns rawURL (typically baseData's CurrentURL, a
+// path+query string from r.URL.RequestURI()) with key=value added or
+// replaced in its query string — used to build a direct/shareable link to
+// the current list view with a specific book's modal pre-opened (see
+// library.html's cover-link href and modal.js's onload handler, which
+// reads this same param back out), without every list-page template having
+// to hand-reconstruct its own query string. Falls back to rawURL unchanged
+// if it doesn't parse (shouldn't happen for anything derived from an
+// actual request, but a template helper must never panic mid-render).
+func withQueryParam(rawURL, key string, value any) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	q := u.Query()
+	q.Set(key, fmt.Sprint(value))
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 var htmlTagPattern = regexp.MustCompile(`<[^>]*>`)

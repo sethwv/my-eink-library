@@ -401,6 +401,13 @@ label { display: block; margin: 0.6em 0; }
   color: #444;
   text-align: left;
 }
+/* Admin-only file path, shown at the bottom of the book modal — long
+   library paths need to wrap rather than overflow the modal box. */
+.modal-path {
+  margin: 1em 0 0;
+  font-size: 0.8em;
+  word-break: break-all;
+}
 .btn-download {
   display: block;
   width: 100%;
