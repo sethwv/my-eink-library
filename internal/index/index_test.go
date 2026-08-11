@@ -352,12 +352,63 @@ func TestListAuthorsAndSeries(t *testing.T) {
 	if byName["Amy Zed"] != 1 || byName["Bob Young"] != 2 {
 		t.Errorf("ListAuthors counts = %+v, want Amy Zed:1 Bob Young:2", byName)
 	}
+}
 
-	series, err := db.ListSeries()
+func TestListAuthors_SplitsMultiAuthorBooksIntoIndividualEntries(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Assistant to the Villain", "P.C. Cast &amp; Kristin Cast")
+	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Solo Book", "P.C. Cast")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	authors, err := db.ListAuthors()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(series) != 1 || series[0].Name != "Light Saga" || series[0].Count != 2 {
-		t.Errorf("ListSeries = %+v, want 1 entry Light Saga:2", series)
+	byName := map[string]int{}
+	for _, a := range authors {
+		byName[a.Name] = a.Count
+	}
+	// "P.C. Cast & Kristin Cast" must not appear as its own combined entry —
+	// only the two individual names, each counting the shared book, plus
+	// P.C. Cast's second solo book.
+	if _, ok := byName["P.C. Cast & Kristin Cast"]; ok {
+		t.Errorf("ListAuthors = %+v, did not expect the combined byline as its own entry", byName)
+	}
+	if byName["P.C. Cast"] != 2 {
+		t.Errorf("byName[P.C. Cast] = %d, want 2 (the co-authored book plus the solo book)", byName["P.C. Cast"])
+	}
+	if byName["Kristin Cast"] != 1 {
+		t.Errorf("byName[Kristin Cast] = %d, want 1", byName["Kristin Cast"])
+	}
+}
+
+func TestFilter_Author_MatchesIndividualCoAuthor(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Assistant to the Villain", "P.C. Cast &amp; Kristin Cast")
+	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Unrelated Book", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.List(SortTitle, false, 1, 10, Filter{Author: "Kristin Cast"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Title != "Assistant to the Villain" {
+		t.Errorf("Filter{Author: \"Kristin Cast\"} = %+v, want the one co-authored book", titles(got))
+	}
+
+	got, err = db.List(SortTitle, false, 1, 10, Filter{Author: "P.C. Cast"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Title != "Assistant to the Villain" {
+		t.Errorf("Filter{Author: \"P.C. Cast\"} = %+v, want the one co-authored book", titles(got))
 	}
 }

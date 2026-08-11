@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/swvn/eink-library/internal/epub"
 )
 
 //go:embed templates/*.html
@@ -29,6 +31,18 @@ var templateFuncs = template.FuncMap{
 	"formatYear":          formatYear,
 	"formatPublishedYear": formatPublishedYear,
 	"plainText":           plainText,
+	"authorNames":         authorNames,
+}
+
+// authorNames splits a book's stored author byline into individual,
+// normalized names for display — one <a> per author on a card/modal,
+// rather than one link showing the whole raw multi-author string. Always
+// re-normalizes ("Last, First" → "First Last", de-duplicated) at render
+// time via epub.CleanAuthorNames, the same helper EPUB parsing itself uses,
+// so display is consistent even for a book indexed before this normalization
+// existed — not dependent on that book having been reimported since.
+func authorNames(author string) []string {
+	return epub.CleanAuthorNames([]string{author})
 }
 
 var htmlTagPattern = regexp.MustCompile(`<[^>]*>`)

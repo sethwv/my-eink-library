@@ -20,9 +20,9 @@ func TestSplitAuthorNames(t *testing.T) {
 		{"", nil},
 	}
 	for _, tt := range tests {
-		got := splitAuthorNames(tt.in)
+		got := SplitAuthorNames(tt.in)
 		if !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("splitAuthorNames(%q) = %v, want %v", tt.in, got, tt.want)
+			t.Errorf("SplitAuthorNames(%q) = %v, want %v", tt.in, got, tt.want)
 		}
 	}
 }
@@ -36,8 +36,8 @@ func TestNormalizeAuthorName(t *testing.T) {
 		{"Madonna", "Madonna"},
 	}
 	for _, tt := range tests {
-		if got := normalizeAuthorName(tt.in); got != tt.want {
-			t.Errorf("normalizeAuthorName(%q) = %q, want %q", tt.in, got, tt.want)
+		if got := NormalizeAuthorName(tt.in); got != tt.want {
+			t.Errorf("NormalizeAuthorName(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }
@@ -81,9 +81,9 @@ func TestCleanAuthorNames(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := cleanAuthorNames(tt.creators)
+			got := CleanAuthorNames(tt.creators)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("cleanAuthorNames(%v) = %v, want %v", tt.creators, got, tt.want)
+				t.Errorf("CleanAuthorNames(%v) = %v, want %v", tt.creators, got, tt.want)
 			}
 		})
 	}

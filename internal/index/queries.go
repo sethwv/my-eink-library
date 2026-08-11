@@ -3,7 +3,10 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
+
+	"github.com/swvn/eink-library/internal/epub"
 )
 
 // SortKey identifies which column a listing should be ordered by.
@@ -55,7 +58,7 @@ const bookFrom = `books b LEFT JOIN book_enrichment be ON be.book_id = b.id`
 // buildWhereClause.
 type Filter struct {
 	Search     string // LIKE across title/author/series
-	Author     string // exact match
+	Author     string // exact match, or one " & "-delimited component of a multi-author byline — see buildWhereClause
 	Series     string // exact match
 	ShelfID    int64  // books on this shelf (0 = unset)
 	AddedAfter int64  // unix seconds; books with added_at >= this (0 = unset)
@@ -116,8 +119,18 @@ func buildWhereClause(f Filter) (string, []any) {
 		args = append(args, term, term, term)
 	}
 	if f.Author != "" {
-		conds = append(conds, `b.author = ?`)
-		args = append(args, f.Author)
+		// A book's author column can hold multiple people joined by " & "
+		// (see epub.CleanAuthorNames, which guarantees that joiner for
+		// anything scanned after this feature shipped) — match f.Author as
+		// either the whole column or one of its " & "-delimited components,
+		// not just an exact whole-string match, so following a link for one
+		// co-author on a multi-author book finds it. Legacy books indexed
+		// before this feature (a different joiner, or un-normalized name
+		// order) need a "Force full reimport" to pick this up, same as any
+		// other EPUB-parsing fix in this codebase.
+		esc := escapeLike(f.Author)
+		conds = append(conds, `(b.author = ? OR b.author LIKE ? ESCAPE '\' OR b.author LIKE ? ESCAPE '\' OR b.author LIKE ? ESCAPE '\')`)
+		args = append(args, f.Author, esc+" & %", "% & "+esc, "% & "+esc+" & %")
 	}
 	if f.Series != "" {
 		conds = append(conds, fmt.Sprintf(`%s = ?`, effectiveSeries))
@@ -144,19 +157,69 @@ type NameCount struct {
 	Count int
 }
 
-// ListAuthors returns every distinct author with how many books they have,
-// ordered by the same sort_author normalization used for book listings.
+// ListAuthors returns every individual author with how many books they
+// have, ordered by the same last-name-first normalization used for book
+// listings. A book with multiple authors (see epub.CleanAuthorNames, which
+// guarantees they're " & "-joined in the stored author column) contributes
+// to every one of its authors' counts here, rather than the whole
+// multi-person byline showing up as one combined browse-index entry — e.g.
+// "P.C. Cast & Kristin Cast" becomes two separate rows, "P.C. Cast" and
+// "Kristin Cast", each counting that book. Splitting happens in Go, not
+// SQL (SQLite has no portable string-split), by re-running each grouped
+// raw byline through epub.CleanAuthorNames — which also means this always
+// shows normalized ("Last, First" → "First Last") individual names even
+// for a book indexed before this feature shipped, without requiring a
+// reimport (reimporting is still needed for the *stored* column itself,
+// and thus for Filter.Author's component matching, to be consistent).
 func (d *DB) ListAuthors() ([]NameCount, error) {
 	rows, err := d.sql.Query(`
 		SELECT author, COUNT(*) FROM books
 		WHERE author != ''
-		GROUP BY author
-		ORDER BY MIN(sort_author)`)
+		GROUP BY author`)
 	if err != nil {
 		return nil, fmt.Errorf("list authors: %w", err)
 	}
 	defer rows.Close()
-	return scanNameCounts(rows)
+
+	counts := make(map[string]int)     // keyed by lowercase normalized name
+	display := make(map[string]string) // lowercase -> first-seen display casing
+	for rows.Next() {
+		var rawAuthor string
+		var n int
+		if err := rows.Scan(&rawAuthor, &n); err != nil {
+			return nil, err
+		}
+		for _, name := range epub.CleanAuthorNames([]string{rawAuthor}) {
+			key := strings.ToLower(name)
+			counts[key] += n
+			if _, ok := display[key]; !ok {
+				display[key] = name
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]NameCount, 0, len(counts))
+	for key, n := range counts {
+		out = append(out, NameCount{Name: display[key], Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return epub.SortAuthorName(out[i].Name) < epub.SortAuthorName(out[j].Name)
+	})
+	return out, nil
+}
+
+// escapeLike escapes SQLite LIKE metacharacters (%, _, and the escape
+// character itself) in s, for use with `LIKE ? ESCAPE '\'` — needed when a
+// value being matched (an author name) might itself contain a literal % or
+// _ that shouldn't be treated as a wildcard.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
 
 // ListSeries returns every distinct series with how many books it has,
