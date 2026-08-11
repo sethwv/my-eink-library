@@ -1,0 +1,79 @@
+{{define "content"}}
+{{template "topbar" .}}
+
+<h1>Edit Metadata</h1>
+<p class="muted">{{.CurrentTitle}}</p>
+
+<img src="{{.CoverURL}}" alt="" style="max-width:120px;height:auto;display:block;margin-bottom:1em;">
+
+{{if not .Enabled}}
+<p class="muted">Hardcover enrichment isn't configured (no API token set) &mdash; you can still edit fields by hand below.</p>
+{{else}}
+<div class="table-wrap">
+<table>
+<tr><td>
+  <a href="/books/{{.BookID}}/edit-metadata?mode=check">Check Hardcover</a>
+  (searches using this book's current title/author)
+</td></tr>
+</table>
+</div>
+
+<form method="GET" action="/books/{{.BookID}}/edit-metadata" style="margin-top:1em;">
+  <input type="hidden" name="mode" value="manual">
+  <label for="q">Search Hardcover manually</label>
+  <input type="text" id="q" name="q" value="{{.ManualQuery}}" placeholder="title, author, ISBN...">
+  <button type="submit">Search</button>
+</form>
+
+{{if .SearchError}}<p class="error">{{.SearchError}}</p>{{end}}
+
+{{if .Candidates}}
+<div class="table-wrap">
+<table>
+<tr><th></th><th>Title</th><th>Author(s)</th><th>Series</th><th>Released</th><th>Description</th></tr>
+{{range .Candidates}}
+<tr{{if .Selected}} class="is-on"{{end}}>
+  <td><a href="/books/{{$.BookID}}/edit-metadata?mode={{$.Mode}}&q={{$.ManualQuery}}&selected={{.ID}}">Use this match</a></td>
+  <td>{{.Title}}</td>
+  <td>{{.Authors}}</td>
+  <td>{{.Series}}{{if .SeriesIndex}} #{{.SeriesIndex}}{{end}}</td>
+  <td>{{.ReleaseDate}}</td>
+  <td>{{.Snippet}}</td>
+</tr>
+{{end}}
+</table>
+</div>
+{{else if .Mode}}
+<p class="muted">No results.</p>
+{{end}}
+{{end}}
+
+<form method="POST" action="/books/{{.BookID}}/edit-metadata" style="margin-top:1em;">
+<div class="table-wrap">
+<table>
+<tr><th>Title</th><td><input type="text" name="title" value="{{.FormTitle}}"></td></tr>
+<tr><th>Series</th><td><input type="text" name="series" value="{{.FormSeries}}"></td></tr>
+<tr><th>Series #</th><td><input type="text" name="series_index" value="{{.FormSeriesIndex}}"></td></tr>
+<tr><th>Released</th><td><input type="text" name="published_date" value="{{.FormPublished}}" placeholder="YYYY-MM-DD"></td></tr>
+<tr><th>Publisher</th><td><input type="text" name="publisher" value="{{.FormPublisher}}"></td></tr>
+<tr><th>Pages</th><td><input type="text" name="pages" value="{{.FormPages}}"></td></tr>
+<tr><th>ISBN</th><td><input type="text" name="isbn" value="{{.FormISBN}}"></td></tr>
+<tr><th>Rating</th><td><input type="text" name="rating" value="{{.FormRating}}"></td></tr>
+<tr><th>Genres</th><td><input type="text" name="genres" value="{{.FormGenres}}" placeholder="comma-separated"></td></tr>
+<tr><th>Description</th><td><textarea name="description" rows="5">{{.FormDesc}}</textarea></td></tr>
+{{if .SelectedCoverURL}}
+<tr><th>Cover</th><td>
+  <img src="{{.SelectedCoverURL}}" alt="" style="max-width:80px;height:auto;display:block;margin-bottom:0.5em;">
+  <label><input type="radio" name="cover_action" value="keep" checked> Keep current cover</label><br>
+  <label><input type="radio" name="cover_action" value="use_hardcover_cover"> Use this Hardcover cover</label>
+  <input type="hidden" name="hardcover_cover_url" value="{{.SelectedCoverURL}}">
+</td></tr>
+{{end}}
+</table>
+</div>
+<p class="muted">Blank fields are left unchanged &mdash; nothing here is cleared by leaving it blank.</p>
+<button type="submit">Save</button>
+</form>
+
+<p><a href="/">&laquo; Back to library</a></p>
+{{end}}

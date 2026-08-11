@@ -76,7 +76,7 @@ func TestGetEnrichmentStats(t *testing.T) {
 	}
 }
 
-func TestApplyEnrichment_FillsBlanksButAlwaysOverwritesTitle(t *testing.T) {
+func TestApplyEnrichment_OverwritesTitleSeriesAndAlwaysFillableFields(t *testing.T) {
 	libDir := t.TempDir()
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Has Series Already", "Amy Zed", "Existing Saga", 2)
 
@@ -112,8 +112,8 @@ func TestApplyEnrichment_FillsBlanksButAlwaysOverwritesTitle(t *testing.T) {
 	if got.Title != "Hardcover Title" {
 		t.Errorf("Title = %q, want the Hardcover title (title is always overwritten on a confident match)", got.Title)
 	}
-	if got.Series != "Existing Saga" || got.SeriesIndex != 2 {
-		t.Errorf("expected existing series to be left alone, got Series=%q SeriesIndex=%v", got.Series, got.SeriesIndex)
+	if got.Series != "New Series" || got.SeriesIndex != 9 {
+		t.Errorf("expected series to be overwritten since it differs from Hardcover's, got Series=%q SeriesIndex=%v", got.Series, got.SeriesIndex)
 	}
 	if got.PublishedAt != "2021-06-01" {
 		t.Errorf("PublishedAt = %q, want the fill-in value since it was blank", got.PublishedAt)
@@ -122,17 +122,117 @@ func TestApplyEnrichment_FillsBlanksButAlwaysOverwritesTitle(t *testing.T) {
 		t.Errorf("Description = %q, want the fill-in value since it was blank", got.Description)
 	}
 	if got.Publisher != "Some Press" {
-		t.Errorf("Publisher = %q, want the fill-in value since it was blank", got.Publisher)
+		t.Errorf("Publisher = %q, want Hardcover's publisher (always preferred)", got.Publisher)
 	}
 	if got.Pages != 321 || got.ISBN != "9781234567897" || got.Rating != 4.2 {
-		t.Errorf("got Pages=%d ISBN=%q Rating=%v, want the fill-in values", got.Pages, got.ISBN, got.Rating)
+		t.Errorf("got Pages=%d ISBN=%q Rating=%v, want Hardcover's values (always preferred)", got.Pages, got.ISBN, got.Rating)
 	}
 	if len(got.Genres) != 2 || got.Genres[0] != "Fantasy" || got.Genres[1] != "Adventure" {
 		t.Errorf("Genres = %v, want [Fantasy Adventure]", got.Genres)
 	}
 }
 
-func TestOverrideMetadata_OverwritesExisting(t *testing.T) {
+func TestApplyEnrichment_KeepsMatchingSeriesUnchanged(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Same Series Book", "Amy Zed", "Existing Saga", 2)
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+
+	if err := db.ApplyEnrichment(id, HardcoverFields{
+		Title:       "Same Series Book",
+		Series:      "Existing Saga",
+		SeriesIndex: 2,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Series != "Existing Saga" || got.SeriesIndex != 2 {
+		t.Errorf("got Series=%q SeriesIndex=%v, want it left as-is since Hardcover agrees", got.Series, got.SeriesIndex)
+	}
+}
+
+func TestApplyEnrichment_DescriptionKeptWhenSubstantial(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Book With A Real Description", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+
+	longDescription := "This is a substantial, real description of the book that is definitely longer than the placeholder threshold."
+	if err := db.SaveMetadata(id, MetadataFields{Description: longDescription}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.ApplyEnrichment(id, HardcoverFields{
+		Title:       "Book With A Real Description",
+		Description: "Hardcover's alternate description",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Description != longDescription {
+		t.Errorf("Description = %q, want the existing substantial description left alone", got.Description)
+	}
+}
+
+func TestApplyEnrichment_DescriptionReplacedWhenPlaceholder(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Book With A Stub Description", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+
+	if err := db.SaveMetadata(id, MetadataFields{Description: "Too short"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.ApplyEnrichment(id, HardcoverFields{
+		Title:       "Book With A Stub Description",
+		Description: "Hardcover's real, much longer description of the book",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Description != "Hardcover's real, much longer description of the book" {
+		t.Errorf("Description = %q, want the placeholder-length description replaced", got.Description)
+	}
+}
+
+func TestSaveMetadata_OverwritesExisting(t *testing.T) {
 	libDir := t.TempDir()
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Old Title", "Amy Zed", "Old Saga", 1)
 
@@ -146,7 +246,17 @@ func TestOverrideMetadata_OverwritesExisting(t *testing.T) {
 	}
 	id := books[0].ID
 
-	if err := db.OverrideMetadata(id, "New Title", "New Saga", 5, "2022-03-01"); err != nil {
+	if err := db.SaveMetadata(id, MetadataFields{
+		Title:         "New Title",
+		Series:        "New Saga",
+		SeriesIndex:   5,
+		PublishedDate: "2022-03-01",
+		Publisher:     "New Press",
+		Pages:         200,
+		ISBN:          "9781234567897",
+		Rating:        4.5,
+		Genres:        []string{"Sci-Fi"},
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,9 +267,15 @@ func TestOverrideMetadata_OverwritesExisting(t *testing.T) {
 	if got.Title != "New Title" || got.Series != "New Saga" || got.SeriesIndex != 5 || got.PublishedAt != "2022-03-01" {
 		t.Errorf("got %+v, want overridden fields to all be applied", got)
 	}
+	if got.Publisher != "New Press" || got.Pages != 200 || got.ISBN != "9781234567897" || got.Rating != 4.5 {
+		t.Errorf("got %+v, want the extended fields all applied too", got)
+	}
+	if len(got.Genres) != 1 || got.Genres[0] != "Sci-Fi" {
+		t.Errorf("Genres = %v, want [Sci-Fi]", got.Genres)
+	}
 }
 
-func TestOverrideMetadata_BlankFieldsLeftAlone(t *testing.T) {
+func TestSaveMetadata_BlankFieldsLeftAlone(t *testing.T) {
 	libDir := t.TempDir()
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Keep This Title", "Amy Zed", "Keep Saga", 1)
 
@@ -173,8 +289,8 @@ func TestOverrideMetadata_BlankFieldsLeftAlone(t *testing.T) {
 	}
 	id := books[0].ID
 
-	// Empty strings mean "the admin didn't choose to override this field".
-	if err := db.OverrideMetadata(id, "", "", 0, "2022-03-01"); err != nil {
+	// Zero values mean "the admin didn't choose to override this field".
+	if err := db.SaveMetadata(id, MetadataFields{PublishedDate: "2022-03-01"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -187,5 +303,32 @@ func TestOverrideMetadata_BlankFieldsLeftAlone(t *testing.T) {
 	}
 	if got.PublishedAt != "2022-03-01" {
 		t.Errorf("PublishedAt = %q, want the one field that was set", got.PublishedAt)
+	}
+}
+
+func TestSetCover_UpdatesPathAndHasCover(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Coverless Book", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+
+	if err := db.SetCover(id, "42.jpg"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CoverPath != "42.jpg" || !got.HasCover {
+		t.Errorf("got CoverPath=%q HasCover=%v, want CoverPath=42.jpg HasCover=true", got.CoverPath, got.HasCover)
 	}
 }

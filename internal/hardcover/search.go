@@ -101,16 +101,20 @@ func (c *Client) Search(ctx context.Context, title, author, identifier string) (
 	return matches, nil
 }
 
-// Detail is the one field Hardcover only exposes via the full `books`
-// GraphQL type, not the search document (see Match) — publisher name.
-// Fetched with exactly one extra request per confidently matched book (not
-// one request per field), once BestConfidentMatch has resolved an ID.
+// Detail is the fields Hardcover only exposes via the full `books` GraphQL
+// type, not the search document (see Match) — publisher name and cover image
+// URL. Fetched with exactly one extra request per confidently matched book
+// (not one request per field), once BestConfidentMatch has resolved an ID.
 type Detail struct {
 	Publisher string
+	Image     string // cover image URL, empty if the book has none
 }
 
 const detailQuery = `query BookDetail($id: Int!) {
   books_by_pk(id: $id) {
+    image {
+      url
+    }
     default_physical_edition {
       publisher {
         name
@@ -121,6 +125,9 @@ const detailQuery = `query BookDetail($id: Int!) {
 
 type detailResponse struct {
 	BooksByPK *struct {
+		Image *struct {
+			URL string `json:"url"`
+		} `json:"image"`
 		DefaultPhysicalEdition *struct {
 			Publisher *struct {
 				Name string `json:"name"`
@@ -129,8 +136,9 @@ type detailResponse struct {
 	} `json:"books_by_pk"`
 }
 
-// Detail fetches the publisher for a Hardcover book ID (as returned in
-// Match.ID). Returns a zero Detail, no error, if the book has none.
+// Detail fetches the publisher and cover image URL for a Hardcover book ID
+// (as returned in Match.ID). Returns a zero Detail, no error, if the book
+// has neither.
 func (c *Client) Detail(ctx context.Context, id string) (Detail, error) {
 	bookID, err := strconv.Atoi(id)
 	if err != nil {
@@ -148,6 +156,9 @@ func (c *Client) Detail(ctx context.Context, id string) (Detail, error) {
 	var d Detail
 	if ed := resp.BooksByPK.DefaultPhysicalEdition; ed != nil && ed.Publisher != nil {
 		d.Publisher = ed.Publisher.Name
+	}
+	if img := resp.BooksByPK.Image; img != nil {
+		d.Image = img.URL
 	}
 	return d, nil
 }

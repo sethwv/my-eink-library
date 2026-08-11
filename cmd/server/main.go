@@ -154,8 +154,8 @@ func main() {
 	mux.Handle("GET /account/password", authn.RequireAuth(http.HandlerFunc(srv.AccountPassword)))
 	mux.Handle("POST /account/password", authn.RequireAuth(http.HandlerFunc(srv.AccountPasswordSubmit)))
 	mux.Handle("POST /account/digest", authn.RequireAuth(http.HandlerFunc(srv.AccountDigestToggle)))
-	mux.Handle("GET /books/{id}/hardcover-check", authn.RequireManageServer(http.HandlerFunc(srv.BookHardcoverCheck)))
-	mux.Handle("POST /books/{id}/hardcover-apply", authn.RequireManageServer(http.HandlerFunc(srv.BookHardcoverApply)))
+	mux.Handle("GET /books/{id}/edit-metadata", authn.RequireManageServer(http.HandlerFunc(srv.BookEditMetadata)))
+	mux.Handle("POST /books/{id}/edit-metadata", authn.RequireManageServer(http.HandlerFunc(srv.BookEditMetadataSave)))
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.Port,

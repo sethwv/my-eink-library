@@ -32,21 +32,35 @@ type HardcoverFields struct {
 	Rating        float64
 }
 
+// needsEnrichmentWhere gates both BooksNeedingEnrichment and
+// GetEnrichmentStats: a book is still a candidate if it hasn't been checked
+// yet (status = ”) and is missing any field Hardcover can contribute —
+// series, release date, description, genres, publisher, page count, ISBN,
+// rating, or a cover image. Kept as one shared fragment so the candidate
+// query and the stats query can't drift apart.
+const needsEnrichmentWhere = `COALESCE(be.status, '') = ''
+	AND (
+		COALESCE(be.series, b.series) IS NULL OR COALESCE(be.series, b.series) = ''
+		OR COALESCE(be.published_date, b.published_date) IS NULL OR COALESCE(be.published_date, b.published_date) = ''
+		OR COALESCE(be.description, b.description) IS NULL OR COALESCE(be.description, b.description) = ''
+		OR be.genres IS NULL OR be.genres = ''
+		OR COALESCE(be.publisher, b.publisher) IS NULL OR COALESCE(be.publisher, b.publisher) = ''
+		OR be.pages IS NULL OR be.pages = 0
+		OR be.isbn IS NULL OR be.isbn = ''
+		OR be.rating IS NULL OR be.rating = 0
+		OR b.has_cover = 0
+	)`
+
 // BooksNeedingEnrichment returns up to limit books that haven't been checked
-// against Hardcover yet (enrichment status = ”) and are missing series or
-// release-date metadata — the only fields auto-fill ever touches. Already
+// against Hardcover yet (enrichment status = ”) and are missing at least one
+// field auto-fill can contribute (see needsEnrichmentWhere). Already
 // `done`/`no_match`/`error` books are skipped so a restart resumes instead
-// of reprocessing the whole library. Both the status and the series/date
-// blankness checks look at the merged (book_enrichment-over-books) value.
+// of reprocessing the whole library.
 func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 	rows, err := d.sql.Query(`
 		SELECT b.id, b.title, b.author, COALESCE(b.identifier, '') FROM books b
 		LEFT JOIN book_enrichment be ON be.book_id = b.id
-		WHERE COALESCE(be.status, '') = ''
-		AND (
-			COALESCE(be.series, b.series) IS NULL OR COALESCE(be.series, b.series) = ''
-			OR COALESCE(be.published_date, b.published_date) IS NULL OR COALESCE(be.published_date, b.published_date) = ''
-		)
+		WHERE `+needsEnrichmentWhere+`
 		ORDER BY b.id
 		LIMIT ?`, limit)
 	if err != nil {
@@ -78,7 +92,7 @@ func (d *DB) SetEnrichmentStatus(bookID int64, status string) error {
 
 // EnrichmentStats summarizes enrichment progress for the admin page.
 type EnrichmentStats struct {
-	Pending int // status = '' and still missing series/date
+	Pending int // still a candidate per needsEnrichmentWhere
 	Done    int
 	NoMatch int
 	Errored int
@@ -88,10 +102,7 @@ func (d *DB) GetEnrichmentStats() (EnrichmentStats, error) {
 	var s EnrichmentStats
 	err := d.sql.QueryRow(`
 		SELECT
-			COUNT(*) FILTER (WHERE COALESCE(be.status, '') = '' AND (
-				COALESCE(be.series, b.series) IS NULL OR COALESCE(be.series, b.series) = ''
-				OR COALESCE(be.published_date, b.published_date) IS NULL OR COALESCE(be.published_date, b.published_date) = ''
-			)),
+			COUNT(*) FILTER (WHERE `+needsEnrichmentWhere+`),
 			COUNT(*) FILTER (WHERE be.status = 'done'),
 			COUNT(*) FILTER (WHERE be.status = 'no_match'),
 			COUNT(*) FILTER (WHERE be.status = 'error')
@@ -101,7 +112,7 @@ func (d *DB) GetEnrichmentStats() (EnrichmentStats, error) {
 }
 
 // mergedFields is the book's current merged (book_enrichment-over-books)
-// values for every field ApplyEnrichment/OverrideMetadata can touch — the
+// values for every field ApplyEnrichment/SaveMetadata can touch — the
 // same values a listing read would see.
 type mergedFields struct {
 	title         string
@@ -165,13 +176,46 @@ func (d *DB) upsertEnrichment(bookID int64, f mergedFields, status string) error
 	return err
 }
 
+// placeholderDescriptionMaxLen is the length below which an existing
+// description is considered too thin to be worth keeping over Hardcover's
+// (most EPUB "descriptions" that short are a blurb fragment, not real
+// jacket copy).
+const placeholderDescriptionMaxLen = 40
+
+// descriptionIsPlaceholder reports whether cur is worth replacing with
+// Hardcover's description even though it isn't blank — either it's short
+// enough to be a stub, or it's just the book's own title repeated back.
+func descriptionIsPlaceholder(cur, title string) bool {
+	cur = strings.TrimSpace(cur)
+	if cur == "" {
+		return true
+	}
+	if len(cur) < placeholderDescriptionMaxLen {
+		return true
+	}
+	if strings.EqualFold(cur, strings.TrimSpace(title)) {
+		return true
+	}
+	return false
+}
+
 // ApplyEnrichment is the background queue's auto-fill path for a confident
-// Hardcover match. Title is always overwritten with Hardcover's title (per
-// product decision — Hardcover's title is trusted over whatever the EPUB's
-// OPF metadata says); every other field is filled in only where the book's
-// current merged value is blank, matching the existing series/date
-// auto-fill behavior so nothing already present (from the EPUB or a prior
-// enrichment) gets clobbered. Also marks the book "done".
+// Hardcover match. Fields differ in how eagerly they trust Hardcover over
+// what's already there:
+//   - Title: always overwritten (Hardcover's title is trusted over the
+//     EPUB's OPF metadata).
+//   - Series/series index: overwritten if currently blank, or if Hardcover's
+//     series differs from the current value — a confident match means
+//     Hardcover's series/index is trusted over a stale or wrong EPUB value.
+//   - Description: overwritten if blank or "placeholder-like" (short, or
+//     just the title repeated), otherwise a substantial existing
+//     description is left alone.
+//   - Genres: always replaced with Hardcover's list when Hardcover returned
+//     any (EPUB genre tags are rarely as good).
+//   - Publisher/pages/isbn/rating: always take Hardcover's value when it has
+//     one — EPUB OPF metadata for these is typically worse or absent.
+//
+// Also marks the book "done".
 func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields) error {
 	cur, err := d.currentEnrichmentMerged(bookID)
 	if err != nil {
@@ -182,59 +226,103 @@ func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields) error {
 	if hc.Title != "" {
 		final.title = hc.Title
 	}
-	if cur.series == "" {
+	if hc.Series != "" && (cur.series == "" || !strings.EqualFold(cur.series, hc.Series)) {
 		final.series, final.seriesIndex = hc.Series, hc.SeriesIndex
 	}
 	if cur.publishedDate == "" {
 		final.publishedDate = hc.PublishedDate
 	}
-	if cur.description == "" {
+	if hc.Description != "" && descriptionIsPlaceholder(cur.description, final.title) {
 		final.description = hc.Description
 	}
-	if cur.genres == "" && len(hc.Genres) > 0 {
+	if len(hc.Genres) > 0 {
 		final.genres = joinCSV(hc.Genres)
 	}
-	if cur.publisher == "" {
+	if hc.Publisher != "" {
 		final.publisher = hc.Publisher
 	}
-	if cur.pages == 0 {
+	if hc.Pages != 0 {
 		final.pages = int64(hc.Pages)
 	}
-	if cur.isbn == "" {
+	if hc.ISBN != "" {
 		final.isbn = hc.ISBN
 	}
-	if cur.rating == 0 {
+	if hc.Rating != 0 {
 		final.rating = hc.Rating
 	}
 
 	return d.upsertEnrichment(bookID, final, "done")
 }
 
-// OverrideMetadata unconditionally sets title/series/series_index/
-// published_date in book_enrichment — the manual, confirmed-by-a-human
-// override path (Check Hardcover / Apply admin flow). Blank strings passed
-// in mean "leave this field alone" (the confirm form only submits fields the
-// admin chose to accept), not "clear it". Title is written into
-// book_enrichment (not directly to books) so it survives a later rescan, the
-// same as ApplyEnrichment's automatic path.
-func (d *DB) OverrideMetadata(bookID int64, title, series string, seriesIndex float64, publishedDate string) error {
+// MetadataFields is every field the Edit Metadata page can write to
+// book_enrichment. A blank string, zero float, or zero int means "leave this
+// field alone" — the same convention ApplyEnrichment/SaveMetadata used
+// before it — not "clear it".
+type MetadataFields struct {
+	Title         string
+	Series        string
+	SeriesIndex   float64
+	PublishedDate string
+	Description   string
+	Genres        []string
+	Publisher     string
+	Pages         int
+	ISBN          string
+	Rating        float64
+}
+
+// SaveMetadata unconditionally sets whichever non-blank/non-zero fields are
+// present in f into book_enrichment — the manual, human-edited path (the
+// Edit Metadata page), so unlike ApplyEnrichment there's no "only if
+// currently blank/placeholder" guard: an admin typing a value into the form
+// always wins. Title/series/etc. are written into book_enrichment (not
+// directly to books) so they survive a later rescan, the same as
+// ApplyEnrichment's automatic path. Also marks the book "done".
+func (d *DB) SaveMetadata(bookID int64, f MetadataFields) error {
 	cur, err := d.currentEnrichmentMerged(bookID)
 	if err != nil {
 		return err
 	}
 
 	final := cur
-	if title != "" {
-		final.title = title
+	if f.Title != "" {
+		final.title = f.Title
 	}
-	if series != "" {
-		final.series, final.seriesIndex = series, seriesIndex
+	if f.Series != "" {
+		final.series, final.seriesIndex = f.Series, f.SeriesIndex
 	}
-	if publishedDate != "" {
-		final.publishedDate = publishedDate
+	if f.PublishedDate != "" {
+		final.publishedDate = f.PublishedDate
+	}
+	if f.Description != "" {
+		final.description = f.Description
+	}
+	if len(f.Genres) > 0 {
+		final.genres = joinCSV(f.Genres)
+	}
+	if f.Publisher != "" {
+		final.publisher = f.Publisher
+	}
+	if f.Pages != 0 {
+		final.pages = int64(f.Pages)
+	}
+	if f.ISBN != "" {
+		final.isbn = f.ISBN
+	}
+	if f.Rating != 0 {
+		final.rating = f.Rating
 	}
 
 	return d.upsertEnrichment(bookID, final, "done")
+}
+
+// SetCover updates a book's cover image path directly on the books table
+// (covers aren't part of book_enrichment — see internal/index/scan.go's
+// scan-time cover write, which this mirrors), marking has_cover so the
+// existing Cover handler serves it.
+func (d *DB) SetCover(bookID int64, coverPath string) error {
+	_, err := d.sql.Exec(`UPDATE books SET cover_path = ?, has_cover = 1 WHERE id = ?`, coverPath, bookID)
+	return err
 }
 
 // ResetEnrichment clears all Hardcover-derived data for every book, without
