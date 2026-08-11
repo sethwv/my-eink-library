@@ -4,7 +4,7 @@ import "testing"
 
 func TestBestConfidentMatch_AcceptsMatchingAuthor(t *testing.T) {
 	matches := []Match{{Title: "Mistborn", Authors: []string{"Brandon Sanderson"}}}
-	got, ok := BestConfidentMatch(matches, "Brandon Sanderson")
+	got, ok := BestConfidentMatch(matches, "Mistborn", "Brandon Sanderson")
 	if !ok {
 		t.Fatal("expected a confident match")
 	}
@@ -15,27 +15,27 @@ func TestBestConfidentMatch_AcceptsMatchingAuthor(t *testing.T) {
 
 func TestBestConfidentMatch_AcceptsCaseInsensitiveSubstring(t *testing.T) {
 	matches := []Match{{Title: "Mistborn", Authors: []string{"brandon sanderson"}}}
-	if _, ok := BestConfidentMatch(matches, "Brandon Sanderson"); !ok {
+	if _, ok := BestConfidentMatch(matches, "Mistborn", "Brandon Sanderson"); !ok {
 		t.Error("expected case-insensitive author match to be confident")
 	}
 }
 
 func TestBestConfidentMatch_RejectsMismatchedAuthor(t *testing.T) {
 	matches := []Match{{Title: "Mistborn", Authors: []string{"Someone Else"}}}
-	if _, ok := BestConfidentMatch(matches, "Brandon Sanderson"); ok {
+	if _, ok := BestConfidentMatch(matches, "Mistborn", "Brandon Sanderson"); ok {
 		t.Error("expected a mismatched author to not be confident")
 	}
 }
 
 func TestBestConfidentMatch_NoResults(t *testing.T) {
-	if _, ok := BestConfidentMatch(nil, "Brandon Sanderson"); ok {
+	if _, ok := BestConfidentMatch(nil, "Mistborn", "Brandon Sanderson"); ok {
 		t.Error("expected no results to not be confident")
 	}
 }
 
 func TestBestConfidentMatch_AcceptsTopResultWhenAuthorUnknown(t *testing.T) {
 	matches := []Match{{Title: "Mistborn", Authors: []string{"Anyone"}}}
-	if _, ok := BestConfidentMatch(matches, ""); !ok {
+	if _, ok := BestConfidentMatch(matches, "Mistborn", ""); !ok {
 		t.Error("expected top result to be accepted when we don't know the author ourselves")
 	}
 }
@@ -45,7 +45,7 @@ func TestBestConfidentMatch_SkipsBundleInFavorOfStandaloneEdition(t *testing.T) 
 		{Title: "The Mistborn Trilogy Boxed Set", Authors: []string{"Brandon Sanderson"}},
 		{Title: "Mistborn", Authors: []string{"Brandon Sanderson"}},
 	}
-	got, ok := BestConfidentMatch(matches, "Brandon Sanderson")
+	got, ok := BestConfidentMatch(matches, "Mistborn", "Brandon Sanderson")
 	if !ok {
 		t.Fatal("expected a confident match")
 	}
@@ -59,7 +59,7 @@ func TestBestConfidentMatch_FallsBackToBundleIfNothingElseMatches(t *testing.T) 
 		{Title: "Someone Else's Book", Authors: []string{"Someone Else"}},
 		{Title: "The Mistborn Omnibus", Authors: []string{"Brandon Sanderson"}},
 	}
-	got, ok := BestConfidentMatch(matches, "Brandon Sanderson")
+	got, ok := BestConfidentMatch(matches, "Mistborn", "Brandon Sanderson")
 	if !ok {
 		t.Fatal("expected a confident match")
 	}
@@ -70,7 +70,57 @@ func TestBestConfidentMatch_FallsBackToBundleIfNothingElseMatches(t *testing.T) 
 
 func TestBestConfidentMatch_FuzzyAuthorTokenOverlap(t *testing.T) {
 	matches := []Match{{Title: "Mistborn", Authors: []string{"Sanderson, Brandon"}}}
-	if _, ok := BestConfidentMatch(matches, "Brandon Sanderson"); !ok {
+	if _, ok := BestConfidentMatch(matches, "Mistborn", "Brandon Sanderson"); !ok {
 		t.Error("expected token-overlap fallback to match a reordered author name")
+	}
+}
+
+func TestBestConfidentMatch_RejectsSpinoffCalendar(t *testing.T) {
+	matches := []Match{
+		{
+			Title:   "Quotes from George R. R. Martin's A Game of Thrones Book Series 2016 Day-to-Day Calendar",
+			Authors: []string{"George R. R. Martin"},
+		},
+	}
+	if _, ok := BestConfidentMatch(matches, "A Game of Thrones", "George R. R. Martin"); ok {
+		t.Error("expected a same-author tie-in calendar to be rejected, not treated as a confident match")
+	}
+}
+
+func TestBestConfidentMatch_RejectsSpinoffCompanionGuideEvenWithoutBundleOrOtherCandidates(t *testing.T) {
+	matches := []Match{
+		{Title: "The Unofficial Study Guide to A Game of Thrones", Authors: []string{"George R. R. Martin"}},
+	}
+	if _, ok := BestConfidentMatch(matches, "A Game of Thrones", "George R. R. Martin"); ok {
+		t.Error("expected a study guide to be rejected even as the only author-plausible candidate")
+	}
+}
+
+func TestBestConfidentMatch_RejectsUnrelatedTitleFromSameAuthor(t *testing.T) {
+	matches := []Match{
+		{Title: "Fire & Blood", Authors: []string{"George R. R. Martin"}},
+	}
+	if _, ok := BestConfidentMatch(matches, "A Game of Thrones", "George R. R. Martin"); ok {
+		t.Error("expected a different book by the same author to be rejected as a title mismatch")
+	}
+}
+
+func TestBestConfidentMatch_AcceptsCloseSubtitleVariant(t *testing.T) {
+	matches := []Match{
+		{Title: "A Game of Thrones: A Song of Ice and Fire, Book One", Authors: []string{"George R. R. Martin"}},
+	}
+	got, ok := BestConfidentMatch(matches, "A Game of Thrones", "George R. R. Martin")
+	if !ok {
+		t.Fatal("expected an edition with extra subtitle text to still match")
+	}
+	if got.Title != "A Game of Thrones: A Song of Ice and Fire, Book One" {
+		t.Errorf("Title = %q, unexpected candidate returned", got.Title)
+	}
+}
+
+func TestBestConfidentMatch_BlankKnownTitleSkipsTitleCheck(t *testing.T) {
+	matches := []Match{{Title: "Anything At All", Authors: []string{"Brandon Sanderson"}}}
+	if _, ok := BestConfidentMatch(matches, "", "Brandon Sanderson"); !ok {
+		t.Error("expected a blank known title to skip the title-similarity check entirely")
 	}
 }

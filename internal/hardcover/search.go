@@ -207,6 +207,90 @@ func looksLikeBundle(title string) bool {
 	return false
 }
 
+// spinoffKeywords flag titles that are almost certainly a tie-in product
+// riding on the real book's name/characters/author — a calendar, quote
+// collection, study guide, coloring book, etc. — rather than the book
+// itself. These show up in Hardcover's search results because they
+// legitimately share the author and reference the title in their own name
+// (e.g. "Quotes from George R. R. Martin's A Game of Thrones Book Series
+// 2016 Day-to-Day Calendar"), which is exactly the case authorPlausiblyMatches
+// and looksLikeBundle don't catch: same author, not a bundle, just not the
+// book being searched for.
+var spinoffKeywords = []string{
+	"calendar", "day-to-day", "day to day", "quotes from", "companion",
+	"study guide", "coloring book", "colouring book", "sticker book",
+	"journal", "planner", "cookbook", "trivia", "workbook", "guide to",
+}
+
+func looksLikeSpinoff(title string) bool {
+	t := strings.ToLower(title)
+	for _, kw := range spinoffKeywords {
+		if strings.Contains(t, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// titleTokens lowercases and splits title into its non-trivial (>2 char)
+// alphanumeric words, the same tokenization shape splitNameTokens uses for
+// author names — good enough for a coarse overlap check without pulling in
+// a real string-distance library.
+func titleTokens(title string) []string {
+	fields := strings.FieldsFunc(strings.ToLower(title), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+	})
+	tokens := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if len(f) > 2 {
+			tokens = append(tokens, f)
+		}
+	}
+	return tokens
+}
+
+// minTitleOverlapRatio is how much of knownTitle's tokens a candidate must
+// share to be considered plausibly the same book, as a fraction of
+// knownTitle's own (usually shorter) token count — checking against the
+// known title's length rather than the candidate's means a long spin-off
+// title that happens to contain every word of a short real title still gets
+// scored on how much of the real title it covers relative to itself, not
+// diluted by the spin-off's own bulk. Tuned against the Game-of-Thrones
+// calendar case: "quotes from george r r martins a game of thrones book
+// series 2016 day to day calendar" shares 3 of "a game of thrones"'s 3
+// non-trivial tokens... which is exactly why the keyword blocklist above
+// exists as a first-line defense — the token check alone can't catch a
+// title that's a superset of the real one. It's here to catch the opposite
+// case: a candidate that shares the author but has an unrelated or
+// substantially different title.
+const minTitleOverlapRatio = 0.5
+
+// titleImplausible reports whether candidateTitle is too dissimilar from
+// knownTitle to plausibly be the same book. A blank knownTitle (nothing to
+// compare against) never rejects.
+func titleImplausible(candidateTitle, knownTitle string) bool {
+	knownTitle = strings.TrimSpace(knownTitle)
+	if knownTitle == "" {
+		return false
+	}
+	known := titleTokens(knownTitle)
+	if len(known) == 0 {
+		return false
+	}
+	candidateSet := make(map[string]bool)
+	for _, t := range titleTokens(candidateTitle) {
+		candidateSet[t] = true
+	}
+	shared := 0
+	for _, t := range known {
+		if candidateSet[t] {
+			shared++
+		}
+	}
+	ratio := float64(shared) / float64(len(known))
+	return ratio < minTitleOverlapRatio
+}
+
 // authorPlausiblyMatches checks knownAuthor against a candidate's author
 // list: first a case-insensitive substring check in either direction, then
 // (for a fuzzier fallback) a token-overlap check — any whitespace/comma-
@@ -252,17 +336,25 @@ func splitNameTokens(name string) []string {
 }
 
 // BestConfidentMatch scans the search results (up to Search's per_page) for
-// the best plausible match: among candidates whose author plausibly matches
-// knownAuthor, it prefers the first one that doesn't look like a box
-// set/omnibus/bundle, since Hardcover's own text-match ranking already
-// handles title similarity but has no notion of "this is a bundle, not the
-// single book we're after." If every author-plausible candidate looks like
-// a bundle, the first author-plausible one is still returned (better than
-// nothing). If knownAuthor is blank, the top result is accepted without a
-// check. Returns ok=false if there's no result or no candidate's author
-// plausibly matches, meaning auto-fill should leave the book alone rather
-// than risk attaching the wrong book's data.
-func BestConfidentMatch(matches []Match, knownAuthor string) (Match, bool) {
+// the best plausible match for (knownTitle, knownAuthor). A candidate is
+// rejected outright (never returned, no fallback) if its author doesn't
+// plausibly match knownAuthor, if it looks like a spin-off product
+// (calendar, quote collection, study guide, etc. — same author, wrong
+// product), or if its title shares too few words with knownTitle to
+// plausibly be the same book — see titleImplausible's doc comment for why
+// the spin-off keyword check has to exist alongside the title-overlap
+// check rather than either alone catching cases like a Game of Thrones
+// quote-a-day calendar. Among the remaining candidates, the first one that
+// doesn't look like a box set/omnibus/bundle is preferred, since Hardcover's
+// own text-match ranking already handles title similarity ordering but has
+// no notion of "this is a bundle, not the single book we're after"; if
+// every remaining candidate looks like a bundle, the first one is still
+// returned (better than nothing — unlike the spin-off/title checks, being a
+// bundle doesn't mean it's the wrong book). If knownAuthor is blank, the
+// top result is accepted without any check. Returns ok=false if there's no
+// result or no candidate survives filtering, meaning auto-fill should leave
+// the book alone rather than risk attaching the wrong book's data.
+func BestConfidentMatch(matches []Match, knownTitle, knownAuthor string) (Match, bool) {
 	if len(matches) == 0 {
 		return Match{}, false
 	}
@@ -274,6 +366,12 @@ func BestConfidentMatch(matches []Match, knownAuthor string) (Match, bool) {
 	for i := range matches {
 		m := &matches[i]
 		if !authorPlausiblyMatches(m.Authors, knownAuthor) {
+			continue
+		}
+		if looksLikeSpinoff(m.Title) {
+			continue
+		}
+		if titleImplausible(m.Title, knownTitle) {
 			continue
 		}
 		if firstPlausible == nil {

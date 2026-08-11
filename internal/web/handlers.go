@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/swvn/eink-library/internal/auth"
+	"github.com/swvn/eink-library/internal/chaptarr"
 	"github.com/swvn/eink-library/internal/hardcover"
 	"github.com/swvn/eink-library/internal/index"
 	"github.com/swvn/eink-library/internal/kepub"
@@ -25,6 +26,7 @@ type Server struct {
 	Covers      *thumbnail.Store
 	Users       *users.Store
 	Hardcover   *hardcover.Client // nil-safe: Enabled() is false with no token, callers check before use
+	Chaptarr    *chaptarr.Client  // nil-safe: Enabled() is false with no URL/key, callers check before use
 	LibraryPath string
 	DataDir     string
 	PageSize    int
@@ -725,11 +727,6 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 		lastScanDurationMs = v
 	}
 
-	enrichmentStats, err := s.DB.GetEnrichmentStats()
-	if err != nil {
-		return nil, err
-	}
-
 	smtp, err := s.Users.GetSMTPSettings()
 	if err != nil {
 		return nil, err
@@ -748,11 +745,6 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 		"AdminCount":         adminCount,
 		"LastScanAt":         lastScanAt,
 		"LastScanDurationMs": lastScanDurationMs,
-		"HardcoverEnabled":   s.Hardcover.Enabled(),
-		"EnrichmentPending":  enrichmentStats.Pending,
-		"EnrichmentDone":     enrichmentStats.Done,
-		"EnrichmentNoMatch":  enrichmentStats.NoMatch,
-		"EnrichmentErrored":  enrichmentStats.Errored,
 		"SMTPConfigured":     smtp.Enabled(),
 		"SMTPHost":           smtp.Host,
 		"SMTPPort":           smtp.Port,
@@ -760,6 +752,36 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 		"SMTPUsername":       smtp.Username,
 		"SMTPFromName":       smtp.FromName,
 		"SMTPFromAddress":    smtp.FromAddress,
+	}, nil
+}
+
+// serverIntegrationsData builds the template data for the admin
+// Integrations page (Hardcover + Chaptarr): current DB-backed settings,
+// live Enabled() state from the running clients, and Hardcover's
+// enrichment progress stats (moved here from admin_server.html).
+func (s *Server) serverIntegrationsData() (map[string]any, error) {
+	settings, err := s.Users.GetIntegrationSettings()
+	if err != nil {
+		return nil, err
+	}
+	enrichmentStats, err := s.DB.GetEnrichmentStats()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"Title":               "Integrations",
+		"HardcoverEnabled":    settings.HardcoverEnabled,
+		"HardcoverActive":     s.Hardcover.Enabled(),
+		"HardcoverConfigured": settings.HardcoverToken != "",
+		"ChaptarrEnabled":     settings.ChaptarrEnabled,
+		"ChaptarrActive":      s.Chaptarr.Enabled(),
+		"ChaptarrURL":         settings.ChaptarrURL,
+		"ChaptarrConfigured":  settings.ChaptarrAPIKey != "",
+		"EnrichmentPending":   enrichmentStats.Pending,
+		"EnrichmentDone":      enrichmentStats.Done,
+		"EnrichmentNoMatch":   enrichmentStats.NoMatch,
+		"EnrichmentErrored":   enrichmentStats.Errored,
 	}, nil
 }
 
@@ -887,14 +909,119 @@ func (s *Server) ServerReimport(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }
 
-// ServerEnrichmentReset clears all Hardcover-derived enrichment data so the
-// background queue re-processes every book from scratch.
+// ServerEnrichmentReset clears all Hardcover/Chaptarr-derived enrichment
+// data so the background queues re-process every book from scratch.
 func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
 	if err := s.DB.ResetEnrichment(); err != nil {
 		http.Error(w, "enrichment reset failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/server/integrations", http.StatusSeeOther)
+}
+
+// ServerIntegrations shows the admin Integrations page: Hardcover and
+// Chaptarr toggle/credential settings plus Hardcover's enrichment progress.
+func (s *Server) ServerIntegrations(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data, err := s.serverIntegrationsData()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	mergeInto(data, base)
+	render(w, "admin_integrations.html", data)
+}
+
+func (s *Server) renderAdminIntegrationsError(w http.ResponseWriter, r *http.Request, errMsg, statusMsg string) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data, err := s.serverIntegrationsData()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	if errMsg != "" {
+		data["Error"] = errMsg
+	}
+	if statusMsg != "" {
+		data["Status"] = statusMsg
+	}
+	mergeInto(data, base)
+	render(w, "admin_integrations.html", data)
+}
+
+// ServerIntegrationsHardcoverSave saves the Hardcover enable toggle and API
+// token, then applies the change to the running client immediately (see
+// hardcover.Client.SetConfig) so RunEnrichmentQueue picks it up on its next
+// loop iteration without a restart. An empty submitted token means "keep
+// the existing token" — the form never echoes the real token back.
+func (s *Server) ServerIntegrationsHardcoverSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	current, err := s.Users.GetIntegrationSettings()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+
+	token := r.FormValue("hardcover_token")
+	if token == "" {
+		token = current.HardcoverToken
+	}
+	current.HardcoverEnabled = r.FormValue("hardcover_enabled") == "on"
+	current.HardcoverToken = token
+
+	if err := s.Users.SaveIntegrationSettings(current); err != nil {
+		s.renderAdminIntegrationsError(w, r, "failed to save Hardcover settings: "+err.Error(), "")
+		return
+	}
+	s.Hardcover.SetConfig(current.HardcoverEnabled, current.HardcoverToken)
+
+	http.Redirect(w, r, "/admin/server/integrations", http.StatusSeeOther)
+}
+
+// ServerIntegrationsChaptarrSave saves the Chaptarr enable toggle, base
+// URL, and API key, then applies the change to the running client
+// immediately (see chaptarr.Client.SetConfig) so RunChaptarrQueue picks it
+// up on its next loop iteration without a restart. An empty submitted key
+// means "keep the existing key" — the form never echoes the real key back.
+func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	current, err := s.Users.GetIntegrationSettings()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+
+	apiKey := r.FormValue("chaptarr_api_key")
+	if apiKey == "" {
+		apiKey = current.ChaptarrAPIKey
+	}
+	current.ChaptarrEnabled = r.FormValue("chaptarr_enabled") == "on"
+	current.ChaptarrURL = r.FormValue("chaptarr_url")
+	current.ChaptarrAPIKey = apiKey
+
+	if err := s.Users.SaveIntegrationSettings(current); err != nil {
+		s.renderAdminIntegrationsError(w, r, "failed to save Chaptarr settings: "+err.Error(), "")
+		return
+	}
+	s.Chaptarr.SetConfig(current.ChaptarrEnabled, current.ChaptarrURL, current.ChaptarrAPIKey)
+
+	http.Redirect(w, r, "/admin/server/integrations", http.StatusSeeOther)
 }
 
 // AccountBookmark shows the current bookmark-token status and a button to

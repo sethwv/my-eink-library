@@ -101,7 +101,7 @@ func TestApplyEnrichment_OverwritesTitleSeriesAndAlwaysFillableFields(t *testing
 		Pages:         321,
 		ISBN:          "9781234567897",
 		Rating:        4.2,
-	}); err != nil {
+	}, SourceHardcover); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,6 +130,90 @@ func TestApplyEnrichment_OverwritesTitleSeriesAndAlwaysFillableFields(t *testing
 	if len(got.Genres) != 2 || got.Genres[0] != "Fantasy" || got.Genres[1] != "Adventure" {
 		t.Errorf("Genres = %v, want [Fantasy Adventure]", got.Genres)
 	}
+
+	source, err := db.GetEnrichmentSource(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != SourceHardcover {
+		t.Errorf("GetEnrichmentSource = %q, want %q", source, SourceHardcover)
+	}
+}
+
+func TestApplyEnrichment_RecordsChaptarrSource(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Chaptarr Sourced Book", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+
+	if err := db.ApplyEnrichment(id, HardcoverFields{Title: "Chaptarr Sourced Book"}, SourceChaptarr); err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := db.GetEnrichmentSource(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != SourceChaptarr {
+		t.Errorf("GetEnrichmentSource = %q, want %q", source, SourceChaptarr)
+	}
+}
+
+func TestSaveMetadata_RecordsManualSource(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Manually Edited Book", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+
+	if err := db.SaveMetadata(id, MetadataFields{Title: "Edited"}); err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := db.GetEnrichmentSource(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != SourceManual {
+		t.Errorf("GetEnrichmentSource = %q, want %q", source, SourceManual)
+	}
+}
+
+func TestGetEnrichmentSource_NoRowYet(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Never Enriched Book", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan(libDir, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := db.GetEnrichmentSource(books[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != "" {
+		t.Errorf("GetEnrichmentSource = %q, want empty for a book with no book_enrichment row", source)
+	}
 }
 
 func TestApplyEnrichment_KeepsMatchingSeriesUnchanged(t *testing.T) {
@@ -150,7 +234,7 @@ func TestApplyEnrichment_KeepsMatchingSeriesUnchanged(t *testing.T) {
 		Title:       "Same Series Book",
 		Series:      "Existing Saga",
 		SeriesIndex: 2,
-	}); err != nil {
+	}, SourceHardcover); err != nil {
 		t.Fatal(err)
 	}
 
@@ -185,7 +269,7 @@ func TestApplyEnrichment_DescriptionKeptWhenSubstantial(t *testing.T) {
 	if err := db.ApplyEnrichment(id, HardcoverFields{
 		Title:       "Book With A Real Description",
 		Description: "Hardcover's alternate description",
-	}); err != nil {
+	}, SourceHardcover); err != nil {
 		t.Fatal(err)
 	}
 
@@ -219,7 +303,7 @@ func TestApplyEnrichment_DescriptionReplacedWhenPlaceholder(t *testing.T) {
 	if err := db.ApplyEnrichment(id, HardcoverFields{
 		Title:       "Book With A Stub Description",
 		Description: "Hardcover's real, much longer description of the book",
-	}); err != nil {
+	}, SourceHardcover); err != nil {
 		t.Fatal(err)
 	}
 

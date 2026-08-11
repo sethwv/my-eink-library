@@ -5,14 +5,19 @@ package users
 import (
 	"crypto/rand"
 	"database/sql"
+	"embed"
 	"encoding/base64"
 	"fmt"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	"github.com/swvn/eink-library/internal/mail"
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 // Role tiers, replacing the old single is_admin boolean. Stored as plain
 // TEXT (SQLite has no enum type); admin has both capabilities, the two
@@ -30,29 +35,6 @@ const (
 	resetTokenTTL  = time.Hour
 	inviteTokenTTL = 7 * 24 * time.Hour
 )
-
-const schema = `
-CREATE TABLE IF NOT EXISTS users (
-    id                         INTEGER PRIMARY KEY AUTOINCREMENT,
-    username                   TEXT NOT NULL UNIQUE,
-    password_hash              TEXT NOT NULL,
-    is_admin                   INTEGER NOT NULL DEFAULT 0,
-    created_at                 INTEGER NOT NULL,
-    bookmark_token_hash        TEXT,
-    bookmark_token_created_at  INTEGER
-);
-
-CREATE TABLE IF NOT EXISTS smtp_settings (
-    id         INTEGER PRIMARY KEY CHECK (id = 1),
-    host       TEXT NOT NULL DEFAULT '',
-    port       INTEGER NOT NULL DEFAULT 465,
-    encryption TEXT NOT NULL DEFAULT 'tls',
-    username   TEXT NOT NULL DEFAULT '',
-    password   TEXT NOT NULL DEFAULT '',
-    from_name  TEXT NOT NULL DEFAULT '',
-    from_addr  TEXT NOT NULL DEFAULT ''
-);
-`
 
 // dummyHash is compared against on username-not-found so failed logins take
 // roughly the same time whether or not the username exists.
@@ -75,7 +57,11 @@ type Store struct {
 	sql *sql.DB
 }
 
-// Open opens (creating if necessary) the users database at dbPath.
+// Open opens (creating if necessary) the users database at dbPath, applying
+// schema via goose (migrations/*.sql, embedded in the binary —
+// 0001_baseline.sql is a byte-for-byte copy of the CREATE TABLE IF NOT
+// EXISTS statements this package used to apply directly; anything added
+// after goose's adoption gets its own numbered migration file instead).
 func Open(dbPath string) (*Store, error) {
 	sdb, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
@@ -83,12 +69,19 @@ func Open(dbPath string) (*Store, error) {
 	}
 	sdb.SetMaxOpenConns(1)
 
-	if _, err := sdb.Exec(schema); err != nil {
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("sqlite3"); err != nil {
 		sdb.Close()
-		return nil, fmt.Errorf("apply users schema: %w", err)
+		return nil, fmt.Errorf("set migration dialect: %w", err)
+	}
+	if err := goose.Up(sdb, "migrations"); err != nil {
+		sdb.Close()
+		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
 
 	store := &Store{sql: sdb}
+	// Predates goose's adoption; stays as-is, see internal/index's Open for
+	// the same note (eink-library-y3h).
 	if err := store.migrateColumns(); err != nil {
 		sdb.Close()
 		return nil, fmt.Errorf("migrate users schema: %w", err)
@@ -679,6 +672,52 @@ func (s *Store) SaveSMTPSettings(m mail.Settings) error {
 			username = excluded.username, password = excluded.password,
 			from_name = excluded.from_name, from_addr = excluded.from_addr`,
 		m.Host, m.Port, m.Encryption, m.Username, m.Password, m.FromName, m.FromAddress,
+	)
+	return err
+}
+
+// IntegrationSettings holds the admin-configured, DB-backed toggle+
+// credential state for the app's optional metadata integrations (Hardcover,
+// Chaptarr), replacing the old env-var-only HARDCOVER_API_TOKEN as the live
+// source of truth. Same single-row-at-id-1 shape as mail.Settings/
+// smtp_settings above.
+type IntegrationSettings struct {
+	HardcoverEnabled bool
+	HardcoverToken   string
+	ChaptarrEnabled  bool
+	ChaptarrURL      string
+	ChaptarrAPIKey   string
+}
+
+// GetIntegrationSettings returns the currently saved integration settings,
+// or a zero-value (everything disabled/blank) IntegrationSettings if none
+// have been saved yet.
+func (s *Store) GetIntegrationSettings() (IntegrationSettings, error) {
+	var m IntegrationSettings
+	var hardcoverEnabled, chaptarrEnabled int
+	err := s.sql.QueryRow(`SELECT hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key FROM integration_settings WHERE id = 1`).
+		Scan(&hardcoverEnabled, &m.HardcoverToken, &chaptarrEnabled, &m.ChaptarrURL, &m.ChaptarrAPIKey)
+	if err == sql.ErrNoRows {
+		return IntegrationSettings{}, nil
+	}
+	if err != nil {
+		return IntegrationSettings{}, err
+	}
+	m.HardcoverEnabled = hardcoverEnabled != 0
+	m.ChaptarrEnabled = chaptarrEnabled != 0
+	return m, nil
+}
+
+// SaveIntegrationSettings upserts the single integration_settings row.
+func (s *Store) SaveIntegrationSettings(m IntegrationSettings) error {
+	_, err := s.sql.Exec(`
+		INSERT INTO integration_settings (id, hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key)
+		VALUES (1, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			hardcover_enabled = excluded.hardcover_enabled, hardcover_token = excluded.hardcover_token,
+			chaptarr_enabled = excluded.chaptarr_enabled, chaptarr_url = excluded.chaptarr_url,
+			chaptarr_api_key = excluded.chaptarr_api_key`,
+		boolToInt(m.HardcoverEnabled), m.HardcoverToken, boolToInt(m.ChaptarrEnabled), m.ChaptarrURL, m.ChaptarrAPIKey,
 	)
 	return err
 }

@@ -29,7 +29,7 @@ func TestSearch_SendsBearerTokenAndVariables(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("test-token")
+	c := New(true, "test-token")
 	c.http = srv.Client()
 	overrideEndpointForTest(t, srv.URL)
 
@@ -59,7 +59,7 @@ func TestSearch_SurfacesGraphQLErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("test-token")
+	c := New(true, "test-token")
 	c.http = srv.Client()
 	overrideEndpointForTest(t, srv.URL)
 
@@ -74,12 +74,30 @@ func TestClient_Enabled(t *testing.T) {
 	if (&Client{}).Enabled() {
 		t.Error("expected a client with no token to be disabled")
 	}
-	if !New("a-token").Enabled() {
-		t.Error("expected a client with a token to be enabled")
+	if !New(true, "a-token").Enabled() {
+		t.Error("expected an enabled client with a token to be enabled")
+	}
+	if New(false, "a-token").Enabled() {
+		t.Error("expected a client with a token but enabled=false to be disabled")
 	}
 	var nilClient *Client
 	if nilClient.Enabled() {
 		t.Error("expected a nil client to be disabled")
+	}
+}
+
+func TestClient_SetConfigTakesEffectImmediately(t *testing.T) {
+	c := New(false, "")
+	if c.Enabled() {
+		t.Fatal("expected a freshly-created disabled client to be disabled")
+	}
+	c.SetConfig(true, "new-token")
+	if !c.Enabled() {
+		t.Error("expected SetConfig(true, ...) to enable the client")
+	}
+	c.SetConfig(false, "new-token")
+	if c.Enabled() {
+		t.Error("expected SetConfig(false, ...) to disable the client even with a token set")
 	}
 }
 
@@ -89,7 +107,7 @@ func TestDetail_ParsesPublisherAndImage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("test-token")
+	c := New(true, "test-token")
 	c.http = srv.Client()
 	overrideEndpointForTest(t, srv.URL)
 
@@ -111,7 +129,7 @@ func TestDetail_MissingBook(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("test-token")
+	c := New(true, "test-token")
 	c.http = srv.Client()
 	overrideEndpointForTest(t, srv.URL)
 
@@ -130,7 +148,7 @@ func TestClient_ThrottlesRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New("test-token")
+	c := New(true, "test-token")
 	c.http = srv.Client()
 	overrideEndpointForTest(t, srv.URL)
 

@@ -5,89 +5,25 @@ package index
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
 
-const schema = `
-CREATE TABLE IF NOT EXISTS books (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_path       TEXT NOT NULL UNIQUE,
-    file_size       INTEGER NOT NULL,
-    file_mtime      INTEGER NOT NULL,
-
-    title           TEXT NOT NULL,
-    sort_title      TEXT NOT NULL,
-    author          TEXT NOT NULL DEFAULT '',
-    sort_author     TEXT NOT NULL DEFAULT '',
-    series          TEXT,
-    series_index    REAL,
-
-    description     TEXT,
-    language        TEXT,
-    publisher       TEXT,
-    published_date  TEXT,
-    identifier      TEXT,
-
-    cover_path      TEXT,
-    has_cover       INTEGER NOT NULL DEFAULT 0,
-
-    added_at        INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL,
-    parse_error     TEXT,
-
-    enrichment_status TEXT NOT NULL DEFAULT ''
-);
-
-CREATE INDEX IF NOT EXISTS idx_books_sort_title  ON books(sort_title);
-CREATE INDEX IF NOT EXISTS idx_books_sort_author ON books(sort_author);
-CREATE INDEX IF NOT EXISTS idx_books_series      ON books(series, series_index);
-CREATE INDEX IF NOT EXISTS idx_books_added_at    ON books(added_at);
-
-CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
-
-CREATE TABLE IF NOT EXISTS shelves (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    username   TEXT NOT NULL,
-    slug       TEXT NOT NULL,
-    name       TEXT NOT NULL,
-    is_system  INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL,
-    UNIQUE(username, slug)
-);
-
-CREATE TABLE IF NOT EXISTS shelf_books (
-    shelf_id INTEGER NOT NULL,
-    book_id  INTEGER NOT NULL,
-    added_at INTEGER NOT NULL,
-    PRIMARY KEY (shelf_id, book_id)
-);
-CREATE INDEX IF NOT EXISTS idx_shelf_books_book ON shelf_books(book_id);
-
-CREATE TABLE IF NOT EXISTS book_enrichment (
-    book_id         INTEGER PRIMARY KEY,
-    title           TEXT,
-    series          TEXT,
-    series_index    REAL,
-    published_date  TEXT,
-    description     TEXT,
-    genres          TEXT,
-    publisher       TEXT,
-    pages           INTEGER,
-    isbn            TEXT,
-    rating          REAL,
-    status          TEXT NOT NULL DEFAULT '',
-    updated_at      INTEGER NOT NULL,
-    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-);
-`
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 type DB struct {
 	sql *sql.DB
 }
 
-// Open opens (creating if necessary) the SQLite index at dbPath and applies the schema.
+// Open opens (creating if necessary) the SQLite index at dbPath and applies
+// the schema via goose (migrations/*.sql, embedded in the binary —
+// 0001_baseline.sql is a byte-for-byte copy of the CREATE TABLE IF NOT
+// EXISTS statements this package used to apply directly; anything added
+// after goose's adoption gets its own numbered migration file instead).
 func Open(dbPath string) (*DB, error) {
 	sdb, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
@@ -97,12 +33,23 @@ func Open(dbPath string) (*DB, error) {
 	// connection avoids "database is locked" errors from Go's connection pool.
 	sdb.SetMaxOpenConns(1)
 
-	if _, err := sdb.Exec(schema); err != nil {
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("sqlite3"); err != nil {
 		sdb.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+		return nil, fmt.Errorf("set migration dialect: %w", err)
+	}
+	if err := goose.Up(sdb, "migrations"); err != nil {
+		sdb.Close()
+		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
 
 	db := &DB{sql: sdb}
+	// These three predate goose's adoption and stay as-is: they upgrade
+	// databases whose book_enrichment/books tables were created before the
+	// columns they check for existed, which the goose baseline's
+	// CREATE-TABLE-IF-NOT-EXISTS alone can't retrofit onto an
+	// already-existing table. See eink-library-y3h for why this wasn't
+	// folded into individual historical migrations.
 	if err := db.migrateEnrichmentStatusColumn(); err != nil {
 		sdb.Close()
 		return nil, fmt.Errorf("migrate schema: %w", err)

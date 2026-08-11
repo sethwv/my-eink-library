@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/swvn/eink-library/internal/auth"
+	"github.com/swvn/eink-library/internal/chaptarr"
 	"github.com/swvn/eink-library/internal/config"
 	"github.com/swvn/eink-library/internal/hardcover"
 	"github.com/swvn/eink-library/internal/index"
@@ -86,14 +87,33 @@ func main() {
 		log.Fatalf("bootstrap admin user: %v", err)
 	}
 
+	// Hardcover/Chaptarr settings are DB-backed (admin Integrations page)
+	// and take precedence over env vars at every run after the first: if no
+	// integration_settings row exists yet, HARDCOVER_API_TOKEN (the old
+	// env-var-only config) seeds it once so existing deployments don't lose
+	// their token on upgrade, then the DB is authoritative from then on.
+	integrationSettings, err := userStore.GetIntegrationSettings()
+	if err != nil {
+		log.Fatalf("load integration settings: %v", err)
+	}
+	if integrationSettings == (users.IntegrationSettings{}) && cfg.HardcoverToken != "" {
+		integrationSettings.HardcoverEnabled = true
+		integrationSettings.HardcoverToken = cfg.HardcoverToken
+		if err := userStore.SaveIntegrationSettings(integrationSettings); err != nil {
+			log.Fatalf("seed integration settings from HARDCOVER_API_TOKEN: %v", err)
+		}
+	}
+
 	authn := auth.New(cfg.SessionSecret, cfg.SessionTTL, userStore)
-	hc := hardcover.New(cfg.HardcoverToken)
+	hc := hardcover.New(integrationSettings.HardcoverEnabled, integrationSettings.HardcoverToken)
+	ch := chaptarr.New(integrationSettings.ChaptarrEnabled, integrationSettings.ChaptarrURL, integrationSettings.ChaptarrAPIKey)
 	srv := &web.Server{
 		Auth:        authn,
 		DB:          db,
 		Covers:      covers,
 		Users:       userStore,
 		Hardcover:   hc,
+		Chaptarr:    ch,
 		LibraryPath: cfg.LibraryPath,
 		DataDir:     cfg.DataDir,
 		PageSize:    cfg.PageSize,
@@ -101,9 +121,12 @@ func main() {
 		PublicURL:   cfg.PublicURL,
 		StartedAt:   time.Now(),
 	}
-	if hc.Enabled() {
-		go srv.RunEnrichmentQueue(ctx)
-	}
+	// Both queues idle (rather than exit) while their integration is
+	// disabled, so enabling either from the admin Integrations page later
+	// starts processing without a restart — see RunEnrichmentQueue/
+	// RunChaptarrQueue's doc comments.
+	go srv.RunEnrichmentQueue(ctx)
+	go srv.RunChaptarrQueue(ctx)
 	if cfg.PublicURL == "" {
 		log.Printf("warning: PUBLIC_URL is not set; password-reset and invite emails will build their links from the request's Host header, which is not safe to trust in production")
 	}
@@ -149,6 +172,9 @@ func main() {
 	mux.Handle("POST /admin/server/enrichment-reset", authn.RequireManageServer(http.HandlerFunc(srv.ServerEnrichmentReset)))
 	mux.Handle("POST /admin/server/smtp", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPSave)))
 	mux.Handle("POST /admin/server/smtp/test", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPTest)))
+	mux.Handle("GET /admin/server/integrations", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrations)))
+	mux.Handle("POST /admin/server/integrations/hardcover", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrationsHardcoverSave)))
+	mux.Handle("POST /admin/server/integrations/chaptarr", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrationsChaptarrSave)))
 	mux.Handle("GET /account/bookmark", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmark)))
 	mux.Handle("POST /account/bookmark/regenerate", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmarkRegenerate)))
 	mux.Handle("GET /account/password", authn.RequireAuth(http.HandlerFunc(srv.AccountPassword)))
