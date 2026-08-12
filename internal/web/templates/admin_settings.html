@@ -1,0 +1,67 @@
+{{define "content"}}
+{{template "topbar" .}}
+{{template "admintabs" .}}
+
+<h1>Settings</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
+
+<h2>General</h2>
+<div class="table-wrap">
+<form method="POST" action="/admin/settings/general">
+<table>
+<tr><th>Site name</th><td><input type="text" name="site_name" value="{{.SiteName}}" required></td></tr>
+<tr><th>Public URL</th><td><input type="text" name="public_url" value="{{.PublicURL}}" placeholder="https://library.example.com">
+  <p class="muted">Trusted base URL used to build links emailed to users (password reset, invites). Leave blank to fall back to the request's Host header, which isn't safe to trust in production.</p>
+</td></tr>
+<tr><th>Cover width (px)</th><td><input type="number" name="cover_width" value="{{.CoverWidth}}" required>
+  <p class="muted">Applies to covers saved from now on (next rescan/reimport); already-cached covers keep their current size.</p>
+</td></tr>
+<tr><th>Books per page</th><td><input type="number" name="page_size" value="{{.PageSize}}" required></td></tr>
+<tr><th>Session length</th><td><input type="text" name="session_ttl" value="{{.SessionTTL}}" placeholder="720h">
+  <p class="muted">Go duration format (e.g. "720h" for 30 days). Applies to sessions issued from now on.</p>
+</td></tr>
+<tr><td colspan="2"><button type="submit">Save general settings</button></td></tr>
+</table>
+</form>
+</div>
+
+<h2>Email (SMTP)</h2>
+{{if .SMTPConfigured}}
+<p class="muted">Configured. Used for password-reset links, user invites, and the weekly new-book digest.</p>
+{{else}}
+<p class="muted">Not configured yet. Password reset, invites, and the digest email are disabled until this is set up.</p>
+{{end}}
+
+<div class="table-wrap">
+<form method="POST" action="/admin/settings/smtp">
+<table>
+<tr><th>SMTP Hostname</th><td><input type="text" name="host" value="{{.SMTPHost}}" placeholder="smtp.gmail.com"></td></tr>
+<tr><th>SMTP Port</th><td><input type="number" name="port" value="{{if .SMTPPort}}{{.SMTPPort}}{{end}}" placeholder="465"></td></tr>
+<tr><th>Encryption</th><td>
+  <select name="encryption">
+    <option value="tls" {{if eq .SMTPEncryption "tls"}}selected{{end}}>SSL/TLS</option>
+    <option value="starttls" {{if eq .SMTPEncryption "starttls"}}selected{{end}}>STARTTLS</option>
+    <option value="none" {{if eq .SMTPEncryption "none"}}selected{{end}}>None</option>
+  </select>
+</td></tr>
+<tr><th>SMTP Login</th><td><input type="text" name="username" value="{{.SMTPUsername}}" autocapitalize="off" autocorrect="off"></td></tr>
+<tr><th>SMTP Password</th><td><input type="password" name="password" placeholder="(unchanged)"></td></tr>
+<tr><th>From Name</th><td><input type="text" name="from_name" value="{{.SMTPFromName}}" placeholder="No Reply"></td></tr>
+<tr><th>From Email</th><td><input type="email" name="from_addr" value="{{.SMTPFromAddress}}" placeholder="noreply@example.com"></td></tr>
+<tr><td colspan="2"><button type="submit">Save SMTP settings</button></td></tr>
+</table>
+</form>
+</div>
+
+<div class="table-wrap" style="margin-top:1em;">
+<form method="POST" action="/admin/settings/smtp/test">
+<table>
+<tr><th>Send test email to</th><td><input type="email" name="test_email" required></td></tr>
+<tr><td colspan="2"><button type="submit">Send test email</button></td></tr>
+</table>
+</form>
+</div>
+
+<p><a href="/">&laquo; Back to library</a></p>
+{{end}}

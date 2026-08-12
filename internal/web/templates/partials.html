@@ -54,14 +54,20 @@
       <li><a class="shelf-toggle" href="/account/bookmark">Bookmark link</a></li>
       {{end}}
       {{end}}
-      {{if .CanManageUsers}}
-      <li><a class="shelf-toggle" href="/admin/users">Manage users</a></li>
-      {{end}}
-      {{if .CanManageServer}}
-      <li><a class="shelf-toggle" href="/admin/server">Manage server</a></li>
+      {{if or .CanManageUsers .CanManageServer}}
+      <li><a class="shelf-toggle" href="{{if .CanManageUsers}}/admin/users{{else}}/admin/server{{end}}">Admin</a></li>
       {{end}}
       <li><form method="POST" action="/logout"><button type="submit" class="shelf-toggle">Log out</button></form></li>
     </ul>
   </div>
 </div>
+{{end}}
+
+{{define "admintabs"}}
+<nav class="admin-tabs">
+  {{if .CanManageUsers}}<a href="/admin/users" class="{{if eq .AdminTab "users"}}is-active{{end}}">Users</a>{{end}}
+  {{if .CanManageServer}}<a href="/admin/server" class="{{if eq .AdminTab "server"}}is-active{{end}}">Server</a>{{end}}
+  {{if .CanManageServer}}<a href="/admin/settings" class="{{if eq .AdminTab "settings"}}is-active{{end}}">Settings</a>{{end}}
+  {{if .CanManageServer}}<a href="/admin/integrations" class="{{if eq .AdminTab "integrations"}}is-active{{end}}">Integrations</a>{{end}}
+</nav>
 {{end}}

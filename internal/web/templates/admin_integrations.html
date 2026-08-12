@@ -1,5 +1,6 @@
 {{define "content"}}
 {{template "topbar" .}}
+{{template "admintabs" .}}
 
 <h1>Integrations</h1>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
@@ -18,7 +19,7 @@
 </table>
 </div>
 
-<form method="POST" action="/admin/server/enrichment-reset" style="margin-top:1em;">
+<form method="POST" action="/admin/integrations/enrichment-reset" style="margin-top:1em;">
   <button type="submit">Clear all enrichment data &amp; requeue</button>
   <p class="muted">Clears every book's Hardcover/Chaptarr-derived series/date and status, without touching EPUB-scanned data. The background queue picks all books back up automatically.</p>
 </form>
@@ -34,7 +35,7 @@
 {{end}}
 
 <div class="table-wrap">
-<form method="POST" action="/admin/server/integrations/hardcover">
+<form method="POST" action="/admin/integrations/hardcover">
 <table>
 <tr><th>Enable</th><td><label><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable Hardcover enrichment</label></td></tr>
 <tr><th>API Token</th><td><input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></td></tr>
@@ -54,7 +55,7 @@
 <p class="muted">Matching is by relative file path, not exact path &mdash; Chaptarr's own library root doesn't need to match this app's. If a book isn't matching, check that the trailing folder/filename structure Chaptarr reports for it looks the same as this library's.</p>
 
 <div class="table-wrap">
-<form method="POST" action="/admin/server/integrations/chaptarr">
+<form method="POST" action="/admin/integrations/chaptarr">
 <table>
 <tr><th>Enable</th><td><label><input type="checkbox" name="chaptarr_enabled" {{if .ChaptarrEnabled}}checked{{end}}> Enable Chaptarr matching</label></td></tr>
 <tr><th>Base URL</th><td><input type="text" name="chaptarr_url" value="{{.ChaptarrURL}}" placeholder="http://chaptarr.local:8978"></td></tr>
@@ -64,5 +65,5 @@
 </form>
 </div>
 
-<p><a href="/admin/server">&laquo; Back to Manage Server</a></p>
+<p><a href="/">&laquo; Back to library</a></p>
 {{end}}

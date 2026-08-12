@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/swvn/eink-library/internal/users"
@@ -17,10 +18,16 @@ import (
 
 const CookieName = "eink_session"
 
+// Authenticator's ttl is mutable (see SetTTL) so the admin Settings page can
+// change the session lifetime without a restart; already-issued cookies
+// keep whatever expiry they were signed with, only sessions issued after
+// the change use the new ttl.
 type Authenticator struct {
 	users  *users.Store
 	secret []byte
-	ttl    time.Duration
+
+	mu  sync.RWMutex
+	ttl time.Duration
 }
 
 // New creates an Authenticator backed by the given users store.
@@ -30,6 +37,13 @@ func New(secret string, ttl time.Duration, store *users.Store) *Authenticator {
 		secret: []byte(secret),
 		ttl:    ttl,
 	}
+}
+
+// SetTTL updates the session lifetime used for sessions issued from now on.
+func (a *Authenticator) SetTTL(ttl time.Duration) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ttl = ttl
 }
 
 // CheckPassword reports whether the given credentials are a valid login.
@@ -59,7 +73,10 @@ func (a *Authenticator) IssueRestrictedSession(w http.ResponseWriter, r *http.Re
 }
 
 func (a *Authenticator) issueSession(w http.ResponseWriter, r *http.Request, username string, restricted bool) {
-	expires := time.Now().Add(a.ttl)
+	a.mu.RLock()
+	ttl := a.ttl
+	a.mu.RUnlock()
+	expires := time.Now().Add(ttl)
 	payload := username + "|" + strconv.FormatInt(expires.Unix(), 10)
 	if restricted {
 		payload += "|restricted"

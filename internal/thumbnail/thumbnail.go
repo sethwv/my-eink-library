@@ -11,13 +11,20 @@ import (
 	_ "image/png"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/disintegration/imaging"
 )
 
 // Store caches resized JPEG cover thumbnails on disk, keyed by book ID.
+// width is mutable (see SetWidth) so the admin Settings page can change it
+// without a restart; new covers pick it up immediately, but already-cached
+// files on disk keep their original size until next re-saved (e.g. a
+// rescan/reimport).
 type Store struct {
-	dir   string
+	dir string
+
+	mu    sync.RWMutex
 	width int
 }
 
@@ -33,6 +40,16 @@ func NewStore(coversDir string, width int) (*Store, error) {
 	return &Store{dir: coversDir, width: width}, nil
 }
 
+// SetWidth updates the resize width used for covers saved from now on.
+func (s *Store) SetWidth(width int) {
+	if width < 1 {
+		width = 300
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.width = width
+}
+
 // SaveCover decodes, resizes, and writes the cover for bookID, returning the
 // filename (relative to the covers dir) to store as cover_path.
 func (s *Store) SaveCover(bookID int64, data []byte, mediaType string) (string, error) {
@@ -41,7 +58,10 @@ func (s *Store) SaveCover(bookID int64, data []byte, mediaType string) (string, 
 		return "", fmt.Errorf("decode cover: %w", err)
 	}
 
-	resized := imaging.Resize(img, s.width, 0, imaging.Lanczos)
+	s.mu.RLock()
+	width := s.width
+	s.mu.RUnlock()
+	resized := imaging.Resize(img, width, 0, imaging.Lanczos)
 
 	name := fmt.Sprintf("%d.jpg", bookID)
 	fullPath := filepath.Join(s.dir, name)

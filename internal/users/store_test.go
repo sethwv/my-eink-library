@@ -580,3 +580,95 @@ func TestIntegrationSettings_SaveAndGet(t *testing.T) {
 		t.Errorf("ChaptarrAPIKey = %q, want it left unchanged by the re-save", got.ChaptarrAPIKey)
 	}
 }
+
+func TestGeneralSettings_SaveAndGet(t *testing.T) {
+	s := openTestStore(t)
+
+	empty, err := s.GetGeneralSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty != (GeneralSettings{}) {
+		t.Errorf("GetGeneralSettings() with nothing saved = %+v, want the zero value", empty)
+	}
+
+	m := GeneralSettings{
+		SiteName:   "My Library",
+		PublicURL:  "https://library.example.com",
+		CoverWidth: 400,
+		PageSize:   24,
+		SessionTTL: 48 * time.Hour,
+	}
+	if err := s.SaveGeneralSettings(m); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetGeneralSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != m {
+		t.Errorf("GetGeneralSettings() = %+v, want %+v", got, m)
+	}
+
+	// Saving again should upsert, not duplicate.
+	m.SiteName = "Renamed Library"
+	if err := s.SaveGeneralSettings(m); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetGeneralSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SiteName != "Renamed Library" {
+		t.Errorf("GetGeneralSettings().SiteName = %q, want Renamed Library", got.SiteName)
+	}
+}
+
+func TestSetEmail(t *testing.T) {
+	s := openTestStore(t)
+
+	if err := s.Create("alice", "hunter2", RoleMember, false, "alice@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Create("bob", "hunter2", RoleMember, false, "bob@example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var aliceID int64
+	for _, u := range list {
+		if u.Username == "alice" {
+			aliceID = u.ID
+		}
+	}
+	if aliceID == 0 {
+		t.Fatal("alice not found")
+	}
+
+	if err := s.SetEmail(aliceID, "alice2@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	list, err = s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range list {
+		if u.ID == aliceID && u.Email != "alice2@example.com" {
+			t.Errorf("Email = %q, want alice2@example.com", u.Email)
+		}
+	}
+
+	// Rejects duplicating another user's email.
+	if err := s.SetEmail(aliceID, "bob@example.com"); err == nil {
+		t.Error("expected SetEmail to reject an email already used by another user")
+	}
+
+	// Clearing to empty is allowed (multiple users can share an empty email).
+	if err := s.SetEmail(aliceID, ""); err != nil {
+		t.Fatal(err)
+	}
+}

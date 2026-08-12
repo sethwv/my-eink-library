@@ -56,7 +56,39 @@ func main() {
 	}
 	defer db.Close()
 
-	covers, err := thumbnail.NewStore(filepath.Join(cfg.DataDir, "covers"), cfg.CoverWidth)
+	userStore, err := users.Open(filepath.Join(cfg.DataDir, "users.db"))
+	if err != nil {
+		log.Fatalf("open users store: %v", err)
+	}
+	defer userStore.Close()
+	if err := userStore.Bootstrap(cfg.LibraryUser, cfg.LibraryPass); err != nil {
+		log.Fatalf("bootstrap admin user: %v", err)
+	}
+
+	// SiteName/PublicURL/CoverWidth/PageSize/SessionTTL are DB-backed (admin
+	// Settings page) and take precedence over env vars at every run after
+	// the first: if no general_settings row exists yet, the env-var config
+	// seeds it once so existing deployments don't lose their configured
+	// values on upgrade, then the DB is authoritative from then on (same
+	// precedence pattern as integration_settings/HARDCOVER_API_TOKEN below).
+	generalSettings, err := userStore.GetGeneralSettings()
+	if err != nil {
+		log.Fatalf("load general settings: %v", err)
+	}
+	if generalSettings == (users.GeneralSettings{}) {
+		generalSettings = users.GeneralSettings{
+			SiteName:   cfg.SiteName,
+			PublicURL:  cfg.PublicURL,
+			CoverWidth: cfg.CoverWidth,
+			PageSize:   cfg.PageSize,
+			SessionTTL: cfg.SessionTTL,
+		}
+		if err := userStore.SaveGeneralSettings(generalSettings); err != nil {
+			log.Fatalf("seed general settings from env vars: %v", err)
+		}
+	}
+
+	covers, err := thumbnail.NewStore(filepath.Join(cfg.DataDir, "covers"), generalSettings.CoverWidth)
 	if err != nil {
 		log.Fatalf("open cover store: %v", err)
 	}
@@ -78,15 +110,6 @@ func main() {
 	}
 	go watcher.Run(ctx)
 
-	userStore, err := users.Open(filepath.Join(cfg.DataDir, "users.db"))
-	if err != nil {
-		log.Fatalf("open users store: %v", err)
-	}
-	defer userStore.Close()
-	if err := userStore.Bootstrap(cfg.LibraryUser, cfg.LibraryPass); err != nil {
-		log.Fatalf("bootstrap admin user: %v", err)
-	}
-
 	// Hardcover/Chaptarr settings are DB-backed (admin Integrations page)
 	// and take precedence over env vars at every run after the first: if no
 	// integration_settings row exists yet, HARDCOVER_API_TOKEN (the old
@@ -104,7 +127,7 @@ func main() {
 		}
 	}
 
-	authn := auth.New(cfg.SessionSecret, cfg.SessionTTL, userStore)
+	authn := auth.New(cfg.SessionSecret, generalSettings.SessionTTL, userStore)
 	hc := hardcover.New(integrationSettings.HardcoverEnabled, integrationSettings.HardcoverToken)
 	ch := chaptarr.New(integrationSettings.ChaptarrEnabled, integrationSettings.ChaptarrURL, integrationSettings.ChaptarrAPIKey)
 	srv := &web.Server{
@@ -116,9 +139,9 @@ func main() {
 		Chaptarr:    ch,
 		LibraryPath: cfg.LibraryPath,
 		DataDir:     cfg.DataDir,
-		PageSize:    cfg.PageSize,
-		SiteName:    cfg.SiteName,
-		PublicURL:   cfg.PublicURL,
+		PageSize:    generalSettings.PageSize,
+		SiteName:    generalSettings.SiteName,
+		PublicURL:   generalSettings.PublicURL,
 		StartedAt:   time.Now(),
 	}
 	// Single background loop for both integrations (idles, rather than
@@ -128,8 +151,8 @@ func main() {
 	// polling ones, which enabling either from the admin Integrations page
 	// later still works without a restart.
 	go srv.RunEnrichmentQueue(ctx)
-	if cfg.PublicURL == "" {
-		log.Printf("warning: PUBLIC_URL is not set; password-reset and invite emails will build their links from the request's Host header, which is not safe to trust in production")
+	if generalSettings.PublicURL == "" {
+		log.Printf("warning: Public URL is not set; password-reset and invite emails will build their links from the request's Host header, which is not safe to trust in production")
 	}
 	if smtpSettings, err := userStore.GetSMTPSettings(); err != nil {
 		log.Printf("load smtp settings: %v", err)
@@ -167,15 +190,18 @@ func main() {
 	mux.Handle("POST /admin/users/{id}/reset-password", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersResetPassword)))
 	mux.Handle("POST /admin/users/invite", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersInvite)))
 	mux.Handle("POST /admin/users/{id}/invite/resend", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersResendInvite)))
+	mux.Handle("POST /admin/users/{id}/email", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersSetEmail)))
 	mux.Handle("GET /admin/server", authn.RequireManageServer(http.HandlerFunc(srv.ServerInfo)))
 	mux.Handle("POST /admin/server/rescan", authn.RequireManageServer(http.HandlerFunc(srv.ServerRescan)))
 	mux.Handle("POST /admin/server/reimport", authn.RequireManageServer(http.HandlerFunc(srv.ServerReimport)))
-	mux.Handle("POST /admin/server/enrichment-reset", authn.RequireManageServer(http.HandlerFunc(srv.ServerEnrichmentReset)))
-	mux.Handle("POST /admin/server/smtp", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPSave)))
-	mux.Handle("POST /admin/server/smtp/test", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPTest)))
-	mux.Handle("GET /admin/server/integrations", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrations)))
-	mux.Handle("POST /admin/server/integrations/hardcover", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrationsHardcoverSave)))
-	mux.Handle("POST /admin/server/integrations/chaptarr", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrationsChaptarrSave)))
+	mux.Handle("GET /admin/settings", authn.RequireManageServer(http.HandlerFunc(srv.AdminSettings)))
+	mux.Handle("POST /admin/settings/general", authn.RequireManageServer(http.HandlerFunc(srv.AdminSettingsGeneralSave)))
+	mux.Handle("POST /admin/settings/smtp", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPSave)))
+	mux.Handle("POST /admin/settings/smtp/test", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPTest)))
+	mux.Handle("GET /admin/integrations", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrations)))
+	mux.Handle("POST /admin/integrations/enrichment-reset", authn.RequireManageServer(http.HandlerFunc(srv.ServerEnrichmentReset)))
+	mux.Handle("POST /admin/integrations/hardcover", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrationsHardcoverSave)))
+	mux.Handle("POST /admin/integrations/chaptarr", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrationsChaptarrSave)))
 	mux.Handle("GET /account/bookmark", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmark)))
 	mux.Handle("POST /account/bookmark/regenerate", authn.RequireAuth(http.HandlerFunc(srv.AccountBookmarkRegenerate)))
 	mux.Handle("GET /account/password", authn.RequireAuth(http.HandlerFunc(srv.AccountPassword)))

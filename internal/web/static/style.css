@@ -150,6 +150,34 @@ label { display: block; margin: 0.6em 0; }
   .nav-icon { margin-right: 0; width: 1.3em; height: 1.3em; }
 }
 
+/* Admin section tab strip (Users/Server/Settings/Integrations) — same
+   inline-block-links-in-a-row technique as .topnav above, kept as a
+   separate class since it sits inside the page body, not the topbar, and
+   needs an .is-active state the topnav doesn't. */
+.admin-tabs {
+  margin: 0 0 1.2em;
+  padding: 0;
+  border-bottom: 1px solid #ddd;
+}
+.admin-tabs a {
+  display: inline-block;
+  padding: 0.65em 1em;
+  margin-bottom: -1px;
+  text-decoration: none;
+  color: #444;
+  border: 1px solid transparent;
+  border-bottom: none;
+  -webkit-border-radius: 5px 5px 0 0;
+  border-radius: 5px 5px 0 0;
+}
+.admin-tabs a:hover { color: #111; }
+.admin-tabs a.is-active {
+  color: #111;
+  font-weight: 600;
+  border-color: #ddd;
+  background: #f7f7f7;
+}
+
 /* Search/sort toolbar: a simple two-row table pairing each row's control
    (search input / sort select) with that row's action button (tables are
    a known-safe layout primitive on this engine) — every row is
@@ -383,6 +411,37 @@ label { display: block; margin: 0.6em 0; }
   border-radius: 5px;
 }
 .modal-box h3 { margin-top: 0; text-align: center;}
+/* Manage-user modal: role/email/password are three separate <form>s (each
+   posts to a different endpoint) but read as one flat settings sheet, not
+   three boxed tables — plain stacked label+input, no borders, grouped
+   under .modal-section-label headings. Delete sits below a divider since
+   it's the one destructive action here. */
+.modal-field-form { margin: 0 0 1.2em; }
+.modal-field-form label { display: block; font-size: 0.85em; color: #444; margin-bottom: 0.3em; }
+.modal-field-form input[type="text"],
+.modal-field-form input[type="email"],
+.modal-field-form input[type="password"],
+.modal-field-form select {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.6em;
+}
+.modal-checkbox-label {
+  display: block;
+  font-size: 1em !important;
+  color: #111 !important;
+  margin: 0.4em 0 0.6em !important;
+}
+.modal-field-form input[type="checkbox"] {
+  width: auto;
+  display: inline;
+  margin: 0 0.4em 0 0;
+}
+.modal-danger-zone {
+  margin-top: 1em;
+  padding-top: 1em;
+  border-top: 1px solid #ddd;
+}
 .modal-dates {
   margin-top: 0.5em;
   font-size: 0.85em;
@@ -400,13 +459,6 @@ label { display: block; margin: 0.6em 0; }
   font-size: 0.9em;
   color: #444;
   text-align: left;
-}
-/* Admin-only file path, shown at the bottom of the book modal — long
-   library paths need to wrap rather than overflow the modal box. */
-.modal-path {
-  margin: 1em 0 0;
-  font-size: 0.8em;
-  word-break: break-all;
 }
 .btn-download {
   display: block;

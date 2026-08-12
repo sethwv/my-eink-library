@@ -324,6 +324,17 @@ func (s *Store) Delete(id int64) error {
 	return err
 }
 
+// SetEmail updates an existing user's email address in place, refusing to
+// set it to one already in use by a different user (same uniqueness check
+// Create uses, via checkEmailAvailable's excludeID param).
+func (s *Store) SetEmail(id int64, email string) error {
+	if err := s.checkEmailAvailable(email, id); err != nil {
+		return err
+	}
+	_, err := s.sql.Exec(`UPDATE users SET email = ? WHERE id = ?`, nullIfEmpty(email), id)
+	return err
+}
+
 // ResetPassword sets a new password for the given user id.
 func (s *Store) ResetPassword(id int64, newPassword string) error {
 	if newPassword == "" {
@@ -718,6 +729,51 @@ func (s *Store) SaveIntegrationSettings(m IntegrationSettings) error {
 			chaptarr_enabled = excluded.chaptarr_enabled, chaptarr_url = excluded.chaptarr_url,
 			chaptarr_api_key = excluded.chaptarr_api_key`,
 		boolToInt(m.HardcoverEnabled), m.HardcoverToken, boolToInt(m.ChaptarrEnabled), m.ChaptarrURL, m.ChaptarrAPIKey,
+	)
+	return err
+}
+
+// GeneralSettings holds the admin-configured, DB-backed site-wide settings
+// that used to be env-var-only (SITE_NAME, PUBLIC_URL, COVER_WIDTH,
+// PAGE_SIZE, SESSION_TTL). Same single-row-at-id-1 shape as mail.Settings/
+// IntegrationSettings above. A zero value for any numeric field means "not
+// set" — the caller falls back to its own default rather than treating 0 as
+// a real width/page-size/TTL.
+type GeneralSettings struct {
+	SiteName   string
+	PublicURL  string
+	CoverWidth int
+	PageSize   int
+	SessionTTL time.Duration
+}
+
+// GetGeneralSettings returns the currently saved general settings, or a
+// zero-value GeneralSettings if none have been saved yet.
+func (s *Store) GetGeneralSettings() (GeneralSettings, error) {
+	var m GeneralSettings
+	var ttlSeconds int64
+	err := s.sql.QueryRow(`SELECT site_name, public_url, cover_width, page_size, session_ttl_seconds FROM general_settings WHERE id = 1`).
+		Scan(&m.SiteName, &m.PublicURL, &m.CoverWidth, &m.PageSize, &ttlSeconds)
+	if err == sql.ErrNoRows {
+		return GeneralSettings{}, nil
+	}
+	if err != nil {
+		return GeneralSettings{}, err
+	}
+	m.SessionTTL = time.Duration(ttlSeconds) * time.Second
+	return m, nil
+}
+
+// SaveGeneralSettings upserts the single general_settings row.
+func (s *Store) SaveGeneralSettings(m GeneralSettings) error {
+	_, err := s.sql.Exec(`
+		INSERT INTO general_settings (id, site_name, public_url, cover_width, page_size, session_ttl_seconds)
+		VALUES (1, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			site_name = excluded.site_name, public_url = excluded.public_url,
+			cover_width = excluded.cover_width, page_size = excluded.page_size,
+			session_ttl_seconds = excluded.session_ttl_seconds`,
+		m.SiteName, m.PublicURL, m.CoverWidth, m.PageSize, int64(m.SessionTTL/time.Second),
 	)
 	return err
 }

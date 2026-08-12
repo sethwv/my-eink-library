@@ -1,87 +1,117 @@
 {{define "content"}}
 {{template "topbar" .}}
+{{template "admintabs" .}}
 
 <h1>Manage Users</h1>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 
+<p>
+  <a href="#" class="btn" onclick="return openModal('add-user-modal');">+ Add user</a>
+  <a href="#" class="btn" onclick="return openModal('invite-user-modal');">+ Invite by email</a>
+</p>
+
 <div class="table-wrap">
 <table class="admin-users">
-<tr><th>Username</th><th>Email</th><th>Role &amp; bookmark link</th><th></th></tr>
+<tr><th>Username</th><th>Email</th><th>Role</th><th></th></tr>
 {{range .Users}}
 <tr>
   <td>{{.Username}}{{if .InvitePending}} <span class="muted">(invite pending)</span>{{end}}</td>
-  <td>{{.Email}}</td>
-  <td>
-    <form method="POST" action="/admin/users/{{.ID}}/role" class="inline-form">
+  <td>{{if .Email}}{{.Email}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+  <td>{{.Role}}</td>
+  <td><a href="#" onclick="return openModal('manage-user-{{.ID}}');">Manage</a></td>
+</tr>
+{{end}}
+</table>
+</div>
+
+{{range .Users}}
+<div id="manage-user-{{.ID}}" class="modal-overlay">
+  <div class="modal-box modal-box-wide">
+    <h3>{{.Username}}</h3>
+
+    <div class="modal-section-label">Role &amp; bookmark link</div>
+    <form method="POST" action="/admin/users/{{.ID}}/role" class="modal-field-form">
       <select name="role">
         <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
         <option value="user_manager" {{if eq .Role "user_manager"}}selected{{end}}>User Manager</option>
         <option value="server_manager" {{if eq .Role "server_manager"}}selected{{end}}>Server Manager</option>
         <option value="member" {{if eq .Role "member"}}selected{{end}}>Member</option>
       </select>
-      <label><input type="checkbox" name="can_bookmark" style="width:auto;display:inline" {{if .CanBookmark}}checked{{end}}> Allow bookmark link</label>
-      <button type="submit">Save</button>
+      <label class="modal-checkbox-label"><input type="checkbox" name="can_bookmark" {{if .CanBookmark}}checked{{end}}> Allow bookmark link</label>
+      <button type="submit">Save role</button>
     </form>
-  </td>
-  <td>
+
+    <div class="modal-section-label">Email</div>
+    <form method="POST" action="/admin/users/{{.ID}}/email" class="modal-field-form">
+      <input type="email" name="email" value="{{.Email}}" placeholder="user@example.com">
+      <button type="submit">Save email</button>
+    </form>
+
+    <div class="modal-section-label">Password</div>
     {{if .InvitePending}}
-    <form method="POST" action="/admin/users/{{.ID}}/invite/resend" class="inline-form">
+    <form method="POST" action="/admin/users/{{.ID}}/invite/resend" class="modal-field-form">
+      <p class="muted">Invite still pending.</p>
       <button type="submit">Resend invite</button>
     </form>
     {{else}}
-    <form method="POST" action="/admin/users/{{.ID}}/reset-password" class="inline-form">
+    <form method="POST" action="/admin/users/{{.ID}}/reset-password" class="modal-field-form">
       <input type="password" name="password" placeholder="new password" required>
       <button type="submit">Reset password</button>
     </form>
     {{end}}
-    <form method="POST" action="/admin/users/{{.ID}}/delete" class="inline-form">
-      <button type="submit">Delete</button>
-    </form>
-  </td>
-</tr>
+
+    <div class="modal-danger-zone">
+      <form method="POST" action="/admin/users/{{.ID}}/delete">
+        <button type="submit">Delete user</button>
+      </form>
+    </div>
+  </div>
+</div>
 {{end}}
-</table>
+
+<div id="add-user-modal" class="modal-overlay">
+  <div class="modal-box modal-box-wide">
+    <h3>Add user</h3>
+    <form method="POST" action="/admin/users" class="modal-field-form">
+      <label for="add-username">Username</label>
+      <input type="text" id="add-username" name="username" autocapitalize="off" autocorrect="off" required>
+      <label for="add-password">Password</label>
+      <input type="password" id="add-password" name="password" required>
+      <label for="add-email">Email</label>
+      <input type="email" id="add-email" name="email" placeholder="user@example.com">
+      <p class="muted" style="margin-top:-0.4em;">Optional, needed for self-service password reset.</p>
+      <label for="add-role">Role</label>
+      <select id="add-role" name="role">
+        <option value="member" selected>Member</option>
+        <option value="user_manager">User Manager</option>
+        <option value="server_manager">Server Manager</option>
+        <option value="admin">Admin</option>
+      </select>
+      <label class="modal-checkbox-label"><input type="checkbox" name="can_bookmark" checked> Allow bookmark link</label>
+      <button type="submit">Create user</button>
+    </form>
+  </div>
 </div>
 
-<h2>Add user</h2>
-<div class="table-wrap">
-<form method="POST" action="/admin/users">
-<table>
-<tr><th>Username</th><td><input type="text" name="username" autocapitalize="off" autocorrect="off" required></td></tr>
-<tr><th>Password</th><td><input type="password" name="password" required></td></tr>
-<tr><th>Email</th><td><input type="email" name="email"><p class="muted">Optional, needed for self-service password reset.</p></td></tr>
-<tr><th>Role</th><td>
-  <select name="role">
-    <option value="member" selected>Member</option>
-    <option value="user_manager">User Manager</option>
-    <option value="server_manager">Server Manager</option>
-    <option value="admin">Admin</option>
-  </select>
-</td></tr>
-<tr><th>Bookmark link</th><td><label><input type="checkbox" name="can_bookmark" style="width:auto;display:inline" checked> Allow</label></td></tr>
-<tr><td colspan="2"><button type="submit">Create user</button></td></tr>
-</table>
-</form>
-</div>
-
-<h2>Invite by email</h2>
-<p class="muted">Sends the invitee a link to set their own password. Requires SMTP to be configured on the <a href="/admin/server">Manage Server</a> page.</p>
-<div class="table-wrap">
-<form method="POST" action="/admin/users/invite">
-<table>
-<tr><th>Username</th><td><input type="text" name="username" autocapitalize="off" autocorrect="off" required></td></tr>
-<tr><th>Email</th><td><input type="email" name="email" required></td></tr>
-<tr><th>Role</th><td>
-  <select name="role">
-    <option value="member" selected>Member</option>
-    <option value="user_manager">User Manager</option>
-    <option value="server_manager">Server Manager</option>
-    <option value="admin">Admin</option>
-  </select>
-</td></tr>
-<tr><td colspan="2"><button type="submit">Send invite</button></td></tr>
-</table>
-</form>
+<div id="invite-user-modal" class="modal-overlay">
+  <div class="modal-box modal-box-wide">
+    <h3>Invite by email</h3>
+    <p class="muted">Sends the invitee a link to set their own password. Requires SMTP to be configured on the <a href="/admin/settings">Settings</a> page.</p>
+    <form method="POST" action="/admin/users/invite" class="modal-field-form">
+      <label for="invite-username">Username</label>
+      <input type="text" id="invite-username" name="username" autocapitalize="off" autocorrect="off" required>
+      <label for="invite-email">Email</label>
+      <input type="email" id="invite-email" name="email" required>
+      <label for="invite-role">Role</label>
+      <select id="invite-role" name="role">
+        <option value="member" selected>Member</option>
+        <option value="user_manager">User Manager</option>
+        <option value="server_manager">Server Manager</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button type="submit">Send invite</button>
+    </form>
+  </div>
 </div>
 
 <p><a href="/">&laquo; Back to library</a></p>

@@ -479,8 +479,9 @@ func (s *Server) AdminUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title": "Manage Users",
-		"Users": list,
+		"Title":    "Manage Users",
+		"AdminTab": "users",
+		"Users":    list,
 	}
 	mergeInto(data, base)
 	render(w, "admin_users.html", data)
@@ -490,9 +491,10 @@ func (s *Server) renderAdminUsersError(w http.ResponseWriter, r *http.Request, e
 	list, _ := s.Users.List()
 	base, _, _ := s.baseData(r)
 	data := map[string]any{
-		"Title": "Manage Users",
-		"Users": list,
-		"Error": errMsg,
+		"Title":    "Manage Users",
+		"AdminTab": "users",
+		"Users":    list,
+		"Error":    errMsg,
 	}
 	mergeInto(data, base)
 	render(w, "admin_users.html", data)
@@ -535,6 +537,26 @@ func (s *Server) AdminUsersSetRole(w http.ResponseWriter, r *http.Request) {
 	canBookmark := r.FormValue("can_bookmark") == "on"
 
 	if err := s.Users.SetRole(id, role, canBookmark); err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// AdminUsersSetEmail updates an existing user's email address in place.
+func (s *Server) AdminUsersSetEmail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.Users.SetEmail(id, r.FormValue("email")); err != nil {
 		s.renderAdminUsersError(w, r, err.Error())
 		return
 	}
@@ -727,13 +749,9 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 		lastScanDurationMs = v
 	}
 
-	smtp, err := s.Users.GetSMTPSettings()
-	if err != nil {
-		return nil, err
-	}
-
 	return map[string]any{
 		"Title":              "Manage Server",
+		"AdminTab":           "server",
 		"GoVersion":          runtime.Version(),
 		"Uptime":             time.Since(s.StartedAt).Round(time.Second).String(),
 		"LibraryPath":        s.LibraryPath,
@@ -745,13 +763,37 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 		"AdminCount":         adminCount,
 		"LastScanAt":         lastScanAt,
 		"LastScanDurationMs": lastScanDurationMs,
-		"SMTPConfigured":     smtp.Enabled(),
-		"SMTPHost":           smtp.Host,
-		"SMTPPort":           smtp.Port,
-		"SMTPEncryption":     smtp.Encryption,
-		"SMTPUsername":       smtp.Username,
-		"SMTPFromName":       smtp.FromName,
-		"SMTPFromAddress":    smtp.FromAddress,
+	}, nil
+}
+
+// adminSettingsData builds the template data for the admin Settings page:
+// general site settings (site name, public URL, cover width, page size,
+// session TTL) plus SMTP configuration, both DB-backed.
+func (s *Server) adminSettingsData() (map[string]any, error) {
+	general, err := s.Users.GetGeneralSettings()
+	if err != nil {
+		return nil, err
+	}
+	smtp, err := s.Users.GetSMTPSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"Title":           "Settings",
+		"AdminTab":        "settings",
+		"SiteName":        general.SiteName,
+		"PublicURL":       general.PublicURL,
+		"CoverWidth":      general.CoverWidth,
+		"PageSize":        general.PageSize,
+		"SessionTTL":      general.SessionTTL.String(),
+		"SMTPConfigured":  smtp.Enabled(),
+		"SMTPHost":        smtp.Host,
+		"SMTPPort":        smtp.Port,
+		"SMTPEncryption":  smtp.Encryption,
+		"SMTPUsername":    smtp.Username,
+		"SMTPFromName":    smtp.FromName,
+		"SMTPFromAddress": smtp.FromAddress,
 	}, nil
 }
 
@@ -771,6 +813,7 @@ func (s *Server) serverIntegrationsData() (map[string]any, error) {
 
 	return map[string]any{
 		"Title":               "Integrations",
+		"AdminTab":            "integrations",
 		"HardcoverEnabled":    settings.HardcoverEnabled,
 		"HardcoverActive":     s.Hardcover.Enabled(),
 		"HardcoverConfigured": settings.HardcoverToken != "",
@@ -800,15 +843,30 @@ func (s *Server) ServerInfo(w http.ResponseWriter, r *http.Request) {
 	render(w, "admin_server.html", data)
 }
 
-func (s *Server) renderAdminServerError(w http.ResponseWriter, r *http.Request, errMsg, statusMsg string) {
+func (s *Server) AdminSettings(w http.ResponseWriter, r *http.Request) {
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
-	data, err := s.serverInfoData()
+	data, err := s.adminSettingsData()
 	if err != nil {
-		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	mergeInto(data, base)
+	render(w, "admin_settings.html", data)
+}
+
+func (s *Server) renderAdminSettingsError(w http.ResponseWriter, r *http.Request, errMsg, statusMsg string) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data, err := s.adminSettingsData()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
 		return
 	}
 	if errMsg != "" {
@@ -818,7 +876,55 @@ func (s *Server) renderAdminServerError(w http.ResponseWriter, r *http.Request, 
 		data["Status"] = statusMsg
 	}
 	mergeInto(data, base)
-	render(w, "admin_server.html", data)
+	render(w, "admin_settings.html", data)
+}
+
+// AdminSettingsGeneralSave saves site name/public URL/cover width/page
+// size/session TTL, then applies the change to the running server
+// immediately (Covers.SetWidth, Auth.SetTTL, and the Server struct's own
+// SiteName/PublicURL/PageSize fields) so it takes effect without a restart
+// — the same live-apply pattern used by the Hardcover/Chaptarr settings.
+func (s *Server) AdminSettingsGeneralSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	coverWidth, err := strconv.Atoi(r.FormValue("cover_width"))
+	if err != nil || coverWidth < 1 {
+		s.renderAdminSettingsError(w, r, "cover width must be a positive number", "")
+		return
+	}
+	pageSize, err := strconv.Atoi(r.FormValue("page_size"))
+	if err != nil || pageSize < 1 {
+		s.renderAdminSettingsError(w, r, "page size must be a positive number", "")
+		return
+	}
+	sessionTTL, err := time.ParseDuration(r.FormValue("session_ttl"))
+	if err != nil || sessionTTL <= 0 {
+		s.renderAdminSettingsError(w, r, "session TTL must be a valid duration like 720h", "")
+		return
+	}
+
+	settings := users.GeneralSettings{
+		SiteName:   r.FormValue("site_name"),
+		PublicURL:  strings.TrimRight(r.FormValue("public_url"), "/"),
+		CoverWidth: coverWidth,
+		PageSize:   pageSize,
+		SessionTTL: sessionTTL,
+	}
+	if err := s.Users.SaveGeneralSettings(settings); err != nil {
+		s.renderAdminSettingsError(w, r, "failed to save settings: "+err.Error(), "")
+		return
+	}
+
+	s.SiteName = settings.SiteName
+	s.PublicURL = settings.PublicURL
+	s.PageSize = settings.PageSize
+	s.Covers.SetWidth(settings.CoverWidth)
+	s.Auth.SetTTL(settings.SessionTTL)
+
+	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)
 }
 
 // ServerSMTPSave saves the admin-configured SMTP settings. An empty
@@ -853,11 +959,11 @@ func (s *Server) ServerSMTPSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Users.SaveSMTPSettings(settings); err != nil {
-		s.renderAdminServerError(w, r, "failed to save SMTP settings: "+err.Error(), "")
+		s.renderAdminSettingsError(w, r, "failed to save SMTP settings: "+err.Error(), "")
 		return
 	}
 
-	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)
 }
 
 // ServerSMTPTest sends a test email to an admin-supplied address using the
@@ -875,17 +981,17 @@ func (s *Server) ServerSMTPTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !settings.Enabled() {
-		s.renderAdminServerError(w, r, "SMTP is not configured yet. Save settings first.", "")
+		s.renderAdminSettingsError(w, r, "SMTP is not configured yet. Save settings first.", "")
 		return
 	}
 
 	body := fmt.Sprintf("This is a test email from %s, confirming your SMTP settings work.", s.SiteName)
 	if err := mail.Send(settings, to, "Test email from "+s.SiteName, body); err != nil {
-		s.renderAdminServerError(w, r, "test email failed: "+err.Error(), "")
+		s.renderAdminSettingsError(w, r, "test email failed: "+err.Error(), "")
 		return
 	}
 
-	s.renderAdminServerError(w, r, "", "Test email sent to "+to+".")
+	s.renderAdminSettingsError(w, r, "", "Test email sent to "+to+".")
 }
 
 // ServerRescan triggers a synchronous full library rescan, then returns to the server info page.
@@ -916,7 +1022,7 @@ func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "enrichment reset failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/admin/server/integrations", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/integrations", http.StatusSeeOther)
 }
 
 // ServerIntegrations shows the admin Integrations page: Hardcover and
@@ -987,7 +1093,7 @@ func (s *Server) ServerIntegrationsHardcoverSave(w http.ResponseWriter, r *http.
 	}
 	s.Hardcover.SetConfig(current.HardcoverEnabled, current.HardcoverToken)
 
-	http.Redirect(w, r, "/admin/server/integrations", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/integrations", http.StatusSeeOther)
 }
 
 // ServerIntegrationsChaptarrSave saves the Chaptarr enable toggle, base
@@ -1021,7 +1127,7 @@ func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.R
 	}
 	s.Chaptarr.SetConfig(current.ChaptarrEnabled, current.ChaptarrURL, current.ChaptarrAPIKey)
 
-	http.Redirect(w, r, "/admin/server/integrations", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/integrations", http.StatusSeeOther)
 }
 
 // AccountBookmark shows the current bookmark-token status and a button to
