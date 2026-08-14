@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -35,6 +36,14 @@ var templateFuncs = template.FuncMap{
 	"plainText":           plainText,
 	"authorNames":         authorNames,
 	"withQueryParam":      withQueryParam,
+	"locationLabel":       locationLabel,
+}
+
+// locationLabel renders a book location as "<library root name>/<parent
+// folder>" (e.g. "Fiction/Jane Austen") for the modal's path pills — root is
+// an absolute configured LIBRARY_PATH entry, so only its base name is shown.
+func locationLabel(root, path string) string {
+	return filepath.Base(root) + "/" + filepath.Base(filepath.Dir(path))
 }
 
 // authorNames splits a book's stored author byline into individual,

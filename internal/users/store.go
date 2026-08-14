@@ -698,6 +698,12 @@ type IntegrationSettings struct {
 	ChaptarrEnabled  bool
 	ChaptarrURL      string
 	ChaptarrAPIKey   string
+	// HideNoChaptarrMatch/HideNoHardcoverMatch, default false, exclude books
+	// with a confirmed no-match status from the library/author/series/
+	// favourites views and their counts (internal/index.Filter's
+	// HideNoChaptarrMatch/HideNoHardcoverMatch fields).
+	HideNoChaptarrMatch  bool
+	HideNoHardcoverMatch bool
 }
 
 // GetIntegrationSettings returns the currently saved integration settings,
@@ -705,9 +711,9 @@ type IntegrationSettings struct {
 // have been saved yet.
 func (s *Store) GetIntegrationSettings() (IntegrationSettings, error) {
 	var m IntegrationSettings
-	var hardcoverEnabled, chaptarrEnabled int
-	err := s.sql.QueryRow(`SELECT hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key FROM integration_settings WHERE id = 1`).
-		Scan(&hardcoverEnabled, &m.HardcoverToken, &chaptarrEnabled, &m.ChaptarrURL, &m.ChaptarrAPIKey)
+	var hardcoverEnabled, chaptarrEnabled, hideNoChaptarr, hideNoHardcover int
+	err := s.sql.QueryRow(`SELECT hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key, hide_no_chaptarr_match, hide_no_hardcover_match FROM integration_settings WHERE id = 1`).
+		Scan(&hardcoverEnabled, &m.HardcoverToken, &chaptarrEnabled, &m.ChaptarrURL, &m.ChaptarrAPIKey, &hideNoChaptarr, &hideNoHardcover)
 	if err == sql.ErrNoRows {
 		return IntegrationSettings{}, nil
 	}
@@ -716,19 +722,24 @@ func (s *Store) GetIntegrationSettings() (IntegrationSettings, error) {
 	}
 	m.HardcoverEnabled = hardcoverEnabled != 0
 	m.ChaptarrEnabled = chaptarrEnabled != 0
+	m.HideNoChaptarrMatch = hideNoChaptarr != 0
+	m.HideNoHardcoverMatch = hideNoHardcover != 0
 	return m, nil
 }
 
 // SaveIntegrationSettings upserts the single integration_settings row.
 func (s *Store) SaveIntegrationSettings(m IntegrationSettings) error {
 	_, err := s.sql.Exec(`
-		INSERT INTO integration_settings (id, hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key)
-		VALUES (1, ?, ?, ?, ?, ?)
+		INSERT INTO integration_settings (id, hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key, hide_no_chaptarr_match, hide_no_hardcover_match)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			hardcover_enabled = excluded.hardcover_enabled, hardcover_token = excluded.hardcover_token,
 			chaptarr_enabled = excluded.chaptarr_enabled, chaptarr_url = excluded.chaptarr_url,
-			chaptarr_api_key = excluded.chaptarr_api_key`,
+			chaptarr_api_key = excluded.chaptarr_api_key,
+			hide_no_chaptarr_match = excluded.hide_no_chaptarr_match,
+			hide_no_hardcover_match = excluded.hide_no_hardcover_match`,
 		boolToInt(m.HardcoverEnabled), m.HardcoverToken, boolToInt(m.ChaptarrEnabled), m.ChaptarrURL, m.ChaptarrAPIKey,
+		boolToInt(m.HideNoChaptarrMatch), boolToInt(m.HideNoHardcoverMatch),
 	)
 	return err
 }

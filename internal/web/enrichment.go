@@ -126,6 +126,14 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 				deferred = append(deferred, c)
 				continue
 			}
+			// A confident "no path match": either Chaptarr is disabled (in
+			// which case chBooks is nil and this is skipped entirely below)
+			// or the list we checked against was fresh, not stale cache.
+			if chBooks != nil {
+				if err := s.DB.SetChaptarrStatus(c.ID, "no_match"); err != nil {
+					log.Printf("enrichment queue: mark chaptarr no_match failed for book %d: %v", c.ID, err)
+				}
+			}
 			if s.processHardcoverMatch(ctx, c) {
 				processedAny = true
 			}
@@ -141,6 +149,13 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 				if freshBooks != nil && s.processChaptarrMatch(ctx, c, freshBooks) {
 					processedAny = true
 					continue
+				}
+				// freshBooks (unlike the earlier cached chBooks) is never
+				// stale, so a miss against it is confident either way.
+				if freshBooks != nil {
+					if err := s.DB.SetChaptarrStatus(c.ID, "no_match"); err != nil {
+						log.Printf("enrichment queue: mark chaptarr no_match failed for book %d: %v", c.ID, err)
+					}
 				}
 				if s.processHardcoverMatch(ctx, c) {
 					processedAny = true
@@ -209,6 +224,15 @@ func (s *Server) processChaptarrMatch(ctx context.Context, c index.EnrichmentCan
 			}
 		}
 	}
+
+	// Run last: a merge deletes c.ID's books row if another row wins the
+	// tiebreak, so the cover-apply above (which still needs c.ID) must
+	// finish first.
+	if fields.ISBN != "" {
+		if err := s.DB.MergeDuplicateISBN(c.ID, s.LibraryPaths); err != nil {
+			log.Printf("enrichment queue: isbn merge check failed for book %d: %v", c.ID, err)
+		}
+	}
 	return true
 }
 
@@ -230,12 +254,18 @@ func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCa
 		if err := s.DB.SetEnrichmentStatus(c.ID, "error"); err != nil {
 			log.Printf("enrichment queue: mark error failed for book %d: %v", c.ID, err)
 		}
+		if err := s.DB.SetHardcoverStatus(c.ID, "error"); err != nil {
+			log.Printf("enrichment queue: mark hardcover error failed for book %d: %v", c.ID, err)
+		}
 		return true
 	}
 	best, ok := hardcover.BestConfidentMatch(matches, c.Title, c.Author)
 	if !ok {
 		if err := s.DB.SetEnrichmentStatus(c.ID, "no_match"); err != nil {
 			log.Printf("enrichment queue: mark no_match failed for book %d: %v", c.ID, err)
+		}
+		if err := s.DB.SetHardcoverStatus(c.ID, "no_match"); err != nil {
+			log.Printf("enrichment queue: mark hardcover no_match failed for book %d: %v", c.ID, err)
 		}
 		return true
 	}
@@ -282,6 +312,15 @@ func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCa
 
 	if err := s.DB.SetEnrichmentStatus(c.ID, "done"); err != nil {
 		log.Printf("enrichment queue: mark done failed for book %d: %v", c.ID, err)
+	}
+
+	// Run last: a merge deletes c.ID's books row if another row wins the
+	// tiebreak, so anything above that still needs c.ID (cover apply,
+	// status writes) must finish first.
+	if fields.ISBN != "" {
+		if err := s.DB.MergeDuplicateISBN(c.ID, s.LibraryPaths); err != nil {
+			log.Printf("enrichment queue: isbn merge check failed for book %d: %v", c.ID, err)
+		}
 	}
 	return true
 }

@@ -94,6 +94,11 @@
     {{end}}
     </ul>
     {{if .Description}}<p class="modal-description">{{plainText .Description}}</p>{{end}}
+    {{with index $.Locations .ID}}
+    <div class="modal-locations">
+    {{range .}}<span class="pill">{{locationLabel .LibraryRoot .FilePath}}</span>{{end}}
+    </div>
+    {{end}}
     {{if $.IsAdmin}}<a class="btn-hardcover" href="/books/{{.ID}}/edit-metadata">Edit Metadata</a>{{end}}
   </div>
 </div>

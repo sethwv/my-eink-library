@@ -338,7 +338,7 @@ func TestListAuthorsAndSeries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	authors, err := db.ListAuthors()
+	authors, err := db.ListAuthors(Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func TestListAuthors_SplitsMultiAuthorBooksIntoIndividualEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	authors, err := db.ListAuthors()
+	authors, err := db.ListAuthors(Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}

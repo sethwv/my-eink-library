@@ -57,11 +57,13 @@ const bookFrom = `books b LEFT JOIN book_enrichment be ON be.book_id = b.id`
 // List/Count signature change — add a field here and a clause in
 // buildWhereClause.
 type Filter struct {
-	Search     string // LIKE across title/author/series
-	Author     string // exact match, or one " & "-delimited component of a multi-author byline — see buildWhereClause
-	Series     string // exact match
-	ShelfID    int64  // books on this shelf (0 = unset)
-	AddedAfter int64  // unix seconds; books with added_at >= this (0 = unset)
+	Search               string // LIKE across title/author/series
+	Author               string // exact match, or one " & "-delimited component of a multi-author byline — see buildWhereClause
+	Series               string // exact match
+	ShelfID              int64  // books on this shelf (0 = unset)
+	AddedAfter           int64  // unix seconds; books with added_at >= this (0 = unset)
+	HideNoChaptarrMatch  bool   // exclude books with a confirmed chaptarr_status = 'no_match'
+	HideNoHardcoverMatch bool   // exclude books with a confirmed hardcover_status = 'no_match'
 }
 
 // List returns a page of books ordered by sort/dir, narrowed by f.
@@ -144,11 +146,27 @@ func buildWhereClause(f Filter) (string, []any) {
 		conds = append(conds, `b.added_at >= ?`)
 		args = append(args, f.AddedAfter)
 	}
+	conds = append(conds, hideMatchConds(f)...)
 
 	if len(conds) == 0 {
 		return "", nil
 	}
 	return "WHERE " + strings.Join(conds, " AND "), args
+}
+
+// hideMatchConds returns the WHERE fragments (no placeholders needed) for
+// the admin "hide no-Chaptarr-match"/"hide no-Hardcover-match" settings —
+// shared by buildWhereClause and the ListAuthors/ListSeries browse-index
+// queries, both of which join book_enrichment as `be` (see bookFrom).
+func hideMatchConds(f Filter) []string {
+	var conds []string
+	if f.HideNoChaptarrMatch {
+		conds = append(conds, `COALESCE(be.chaptarr_status, '') != 'no_match'`)
+	}
+	if f.HideNoHardcoverMatch {
+		conds = append(conds, `COALESCE(be.hardcover_status, '') != 'no_match'`)
+	}
+	return conds
 }
 
 // NameCount is one entry in an author/series browse-index page.
@@ -171,11 +189,12 @@ type NameCount struct {
 // for a book indexed before this feature shipped, without requiring a
 // reimport (reimporting is still needed for the *stored* column itself,
 // and thus for Filter.Author's component matching, to be consistent).
-func (d *DB) ListAuthors() ([]NameCount, error) {
-	rows, err := d.sql.Query(`
-		SELECT author, COUNT(*) FROM books
-		WHERE author != ''
-		GROUP BY author`)
+func (d *DB) ListAuthors(f Filter) ([]NameCount, error) {
+	conds := append([]string{`b.author != ''`}, hideMatchConds(f)...)
+	rows, err := d.sql.Query(fmt.Sprintf(`
+		SELECT b.author, COUNT(*) FROM %s
+		WHERE %s
+		GROUP BY b.author`, bookFrom, strings.Join(conds, " AND ")))
 	if err != nil {
 		return nil, fmt.Errorf("list authors: %w", err)
 	}
@@ -224,12 +243,16 @@ func escapeLike(s string) string {
 
 // ListSeries returns every distinct series with how many books it has,
 // ordered alphabetically.
-func (d *DB) ListSeries() ([]NameCount, error) {
+func (d *DB) ListSeries(f Filter) ([]NameCount, error) {
+	conds := append([]string{
+		fmt.Sprintf(`%s IS NOT NULL`, effectiveSeries),
+		fmt.Sprintf(`%s != ''`, effectiveSeries),
+	}, hideMatchConds(f)...)
 	rows, err := d.sql.Query(fmt.Sprintf(`
 		SELECT %s AS series_name, COUNT(*) FROM %s
-		WHERE %s IS NOT NULL AND %s != ''
+		WHERE %s
 		GROUP BY %s
-		ORDER BY series_name`, effectiveSeries, bookFrom, effectiveSeries, effectiveSeries, effectiveSeries))
+		ORDER BY series_name`, effectiveSeries, bookFrom, strings.Join(conds, " AND "), effectiveSeries))
 	if err != nil {
 		return nil, fmt.Errorf("list series: %w", err)
 	}
@@ -261,6 +284,48 @@ func (d *DB) Get(id int64) (*Book, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// Location is one known copy of a book on disk: its library root and the
+// root-relative file path.
+type Location struct {
+	LibraryRoot string
+	FilePath    string
+}
+
+// LocationsForBooks returns every extra known copy (beyond each book's own
+// canonical library_root/file_path) for the given book IDs, batched into a
+// single query -- same batching style as ShelfBookIDs, used to build a
+// per-book map without an N+1 query per card.
+func (d *DB) LocationsForBooks(ids []int64) (map[int64][]Location, error) {
+	out := make(map[int64][]Location)
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	rows, err := d.sql.Query(fmt.Sprintf(`
+		SELECT book_id, library_root, file_path FROM book_locations
+		WHERE book_id IN (%s)`, placeholders), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var bookID int64
+		var loc Location
+		if err := rows.Scan(&bookID, &loc.LibraryRoot, &loc.FilePath); err != nil {
+			return nil, err
+		}
+		out[bookID] = append(out[bookID], loc)
+	}
+	return out, rows.Err()
 }
 
 type rowScanner interface {

@@ -177,6 +177,20 @@ type bookListParams struct {
 	viewingShelfID int64 // set only when viewing a specific shelf (e.g. Favourites); its shelf-toggle button removes the book from the page instead of just flipping the checkmark
 }
 
+// hideMatchFilter returns a Filter carrying just the current admin-configured
+// hide-no-match settings, read fresh on every call (not cached on Server) so
+// a save on the Integrations page takes effect on the very next request.
+func (s *Server) hideMatchFilter() index.Filter {
+	settings, err := s.Users.GetIntegrationSettings()
+	if err != nil {
+		return index.Filter{}
+	}
+	return index.Filter{
+		HideNoChaptarrMatch:  settings.HideNoChaptarrMatch,
+		HideNoHardcoverMatch: settings.HideNoHardcoverMatch,
+	}
+}
+
 func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookListParams) {
 	q := r.URL.Query()
 
@@ -205,6 +219,9 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	search := strings.TrimSpace(q.Get("q"))
 	filter := p.filter
 	filter.Search = search
+	hide := s.hideMatchFilter()
+	filter.HideNoChaptarrMatch = hide.HideNoChaptarrMatch
+	filter.HideNoHardcoverMatch = hide.HideNoHardcoverMatch
 
 	books, err := s.DB.List(sort, descending, page, pageSize, filter)
 	if err != nil {
@@ -242,6 +259,19 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		memberships[sh.ID] = ids
 	}
 
+	ids := make([]int64, len(books))
+	for i, b := range books {
+		ids[i] = b.ID
+	}
+	locations, err := s.DB.LocationsForBooks(ids)
+	if err != nil {
+		http.Error(w, "failed to load library", http.StatusInternalServerError)
+		return
+	}
+	for _, b := range books {
+		locations[b.ID] = append([]index.Location{{LibraryRoot: b.LibraryRoot, FilePath: b.FilePath}}, locations[b.ID]...)
+	}
+
 	data := map[string]any{
 		"Title":            p.heading,
 		"Heading":          p.heading,
@@ -259,6 +289,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"Name":             p.name,
 		"ShelfMemberships": memberships,
 		"ViewingShelfID":   p.viewingShelfID,
+		"Locations":        locations,
 	}
 	mergeInto(data, base)
 	render(w, "library.html", data)
@@ -269,7 +300,9 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 func (s *Server) AuthorsHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {
-		s.renderNameIndex(w, r, "Authors", "/authors", s.DB.ListAuthors)
+		s.renderNameIndex(w, r, "Authors", "/authors", func() ([]index.NameCount, error) {
+			return s.DB.ListAuthors(s.hideMatchFilter())
+		})
 		return
 	}
 	s.renderBookList(w, r, bookListParams{
@@ -286,7 +319,9 @@ func (s *Server) AuthorsHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) SeriesHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {
-		s.renderNameIndex(w, r, "Series", "/series", s.DB.ListSeries)
+		s.renderNameIndex(w, r, "Series", "/series", func() ([]index.NameCount, error) {
+			return s.DB.ListSeries(s.hideMatchFilter())
+		})
 		return
 	}
 	s.renderBookList(w, r, bookListParams{
@@ -719,11 +754,11 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	authors, err := s.DB.ListAuthors()
+	authors, err := s.DB.ListAuthors(index.Filter{})
 	if err != nil {
 		return nil, err
 	}
-	series, err := s.DB.ListSeries()
+	series, err := s.DB.ListSeries(index.Filter{})
 	if err != nil {
 		return nil, err
 	}
@@ -812,19 +847,21 @@ func (s *Server) serverIntegrationsData() (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"Title":               "Integrations",
-		"AdminTab":            "integrations",
-		"HardcoverEnabled":    settings.HardcoverEnabled,
-		"HardcoverActive":     s.Hardcover.Enabled(),
-		"HardcoverConfigured": settings.HardcoverToken != "",
-		"ChaptarrEnabled":     settings.ChaptarrEnabled,
-		"ChaptarrActive":      s.Chaptarr.Enabled(),
-		"ChaptarrURL":         settings.ChaptarrURL,
-		"ChaptarrConfigured":  settings.ChaptarrAPIKey != "",
-		"EnrichmentPending":   enrichmentStats.Pending,
-		"EnrichmentDone":      enrichmentStats.Done,
-		"EnrichmentNoMatch":   enrichmentStats.NoMatch,
-		"EnrichmentErrored":   enrichmentStats.Errored,
+		"Title":                "Integrations",
+		"AdminTab":             "integrations",
+		"HardcoverEnabled":     settings.HardcoverEnabled,
+		"HardcoverActive":      s.Hardcover.Enabled(),
+		"HardcoverConfigured":  settings.HardcoverToken != "",
+		"HideNoHardcoverMatch": settings.HideNoHardcoverMatch,
+		"ChaptarrEnabled":      settings.ChaptarrEnabled,
+		"ChaptarrActive":       s.Chaptarr.Enabled(),
+		"ChaptarrURL":          settings.ChaptarrURL,
+		"ChaptarrConfigured":   settings.ChaptarrAPIKey != "",
+		"HideNoChaptarrMatch":  settings.HideNoChaptarrMatch,
+		"EnrichmentPending":    enrichmentStats.Pending,
+		"EnrichmentDone":       enrichmentStats.Done,
+		"EnrichmentNoMatch":    enrichmentStats.NoMatch,
+		"EnrichmentErrored":    enrichmentStats.Errored,
 	}, nil
 }
 
@@ -1086,6 +1123,7 @@ func (s *Server) ServerIntegrationsHardcoverSave(w http.ResponseWriter, r *http.
 	}
 	current.HardcoverEnabled = r.FormValue("hardcover_enabled") == "on"
 	current.HardcoverToken = token
+	current.HideNoHardcoverMatch = r.FormValue("hide_no_hardcover_match") == "on"
 
 	if err := s.Users.SaveIntegrationSettings(current); err != nil {
 		s.renderAdminIntegrationsError(w, r, "failed to save Hardcover settings: "+err.Error(), "")
@@ -1120,6 +1158,7 @@ func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.R
 	current.ChaptarrEnabled = r.FormValue("chaptarr_enabled") == "on"
 	current.ChaptarrURL = r.FormValue("chaptarr_url")
 	current.ChaptarrAPIKey = apiKey
+	current.HideNoChaptarrMatch = r.FormValue("hide_no_chaptarr_match") == "on"
 
 	if err := s.Users.SaveIntegrationSettings(current); err != nil {
 		s.renderAdminIntegrationsError(w, r, "failed to save Chaptarr settings: "+err.Error(), "")

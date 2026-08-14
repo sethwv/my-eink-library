@@ -107,6 +107,28 @@ func (d *DB) SetEnrichmentStatus(bookID int64, status string) error {
 	return err
 }
 
+// SetChaptarrStatus records Chaptarr's own outcome for a book, independent
+// of the combined status/source columns -- used by the admin "hide no
+// Chaptarr match" filter. Valid statuses: "done", "no_match", "error".
+func (d *DB) SetChaptarrStatus(bookID int64, status string) error {
+	_, err := d.sql.Exec(`
+		INSERT INTO book_enrichment (book_id, chaptarr_status, updated_at) VALUES (?, ?, strftime('%s','now'))
+		ON CONFLICT(book_id) DO UPDATE SET chaptarr_status = excluded.chaptarr_status, updated_at = excluded.updated_at`,
+		bookID, status)
+	return err
+}
+
+// SetHardcoverStatus records Hardcover's own outcome for a book, independent
+// of the combined status/source columns -- used by the admin "hide no
+// Hardcover match" filter. Valid statuses: "done", "no_match", "error".
+func (d *DB) SetHardcoverStatus(bookID int64, status string) error {
+	_, err := d.sql.Exec(`
+		INSERT INTO book_enrichment (book_id, hardcover_status, updated_at) VALUES (?, ?, strftime('%s','now'))
+		ON CONFLICT(book_id) DO UPDATE SET hardcover_status = excluded.hardcover_status, updated_at = excluded.updated_at`,
+		bookID, status)
+	return err
+}
+
 // EnrichmentStats summarizes enrichment progress for the admin page.
 type EnrichmentStats struct {
 	Pending int // still a candidate per needsEnrichmentWhere
@@ -286,7 +308,16 @@ func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields, source string) er
 		final.rating = hc.Rating
 	}
 
-	return d.upsertEnrichment(bookID, final, "done", source)
+	if err := d.upsertEnrichment(bookID, final, "done", source); err != nil {
+		return err
+	}
+	switch source {
+	case SourceChaptarr:
+		return d.SetChaptarrStatus(bookID, "done")
+	case SourceHardcover:
+		return d.SetHardcoverStatus(bookID, "done")
+	}
+	return nil
 }
 
 // MetadataFields is every field the Edit Metadata page can write to

@@ -39,6 +39,7 @@
 <table>
 <tr><th>Enable</th><td><label><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable Hardcover enrichment</label></td></tr>
 <tr><th>API Token</th><td><input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></td></tr>
+<tr><th>Hide unmatched</th><td><label><input type="checkbox" name="hide_no_hardcover_match" {{if .HideNoHardcoverMatch}}checked{{end}}> Hide books with no Hardcover match from the library, author, series, and favourites views</label></td></tr>
 <tr><td colspan="2"><button type="submit">Save Hardcover settings</button></td></tr>
 </table>
 </form>
@@ -60,6 +61,7 @@
 <tr><th>Enable</th><td><label><input type="checkbox" name="chaptarr_enabled" {{if .ChaptarrEnabled}}checked{{end}}> Enable Chaptarr matching</label></td></tr>
 <tr><th>Base URL</th><td><input type="text" name="chaptarr_url" value="{{.ChaptarrURL}}" placeholder="http://chaptarr.local:8978"></td></tr>
 <tr><th>API Key</th><td><input type="password" name="chaptarr_api_key" placeholder="{{if .ChaptarrConfigured}}(unchanged){{else}}paste your Chaptarr API key{{end}}"></td></tr>
+<tr><th>Hide unmatched</th><td><label><input type="checkbox" name="hide_no_chaptarr_match" {{if .HideNoChaptarrMatch}}checked{{end}}> Hide books with no Chaptarr match from the library, author, series, and favourites views</label></td></tr>
 <tr><td colspan="2"><button type="submit">Save Chaptarr settings</button></td></tr>
 </table>
 </form>
