@@ -192,6 +192,17 @@ func (d *DB) SetMeta(key, value string) error {
 	return err
 }
 
+// BackfillLibraryRoot tags any row left over from before multi-root support
+// (library_root = ”) with root, the first configured LIBRARY_PATH entry at
+// the time of upgrade. It preserves row IDs (and therefore shelves/
+// enrichment), so it must run once, before the first post-upgrade Scan, or
+// those rows would otherwise look "missing" from every configured root and
+// get pruned/re-inserted with new IDs. A no-op once rows are tagged.
+func (d *DB) BackfillLibraryRoot(root string) error {
+	_, err := d.sql.Exec(`UPDATE books SET library_root = ? WHERE library_root = ''`, root)
+	return err
+}
+
 // GetMeta returns the value for key and whether it was found.
 func (d *DB) GetMeta(key string) (string, bool, error) {
 	var value string

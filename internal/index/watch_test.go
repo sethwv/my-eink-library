@@ -11,11 +11,11 @@ import (
 func TestWatcher_DetectsNewAndRemovedFiles(t *testing.T) {
 	libDir := t.TempDir()
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
-	w, err := NewWatcher(libDir, db, nil)
+	w, err := NewWatcher([]string{libDir}, db, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

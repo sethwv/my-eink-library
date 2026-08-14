@@ -12,7 +12,7 @@ func TestBooksNeedingEnrichment_OnlyMissingFieldsUnprocessed(t *testing.T) {
 	writeTestEpubWithDate(t, filepath.Join(libDir, "b3.epub"), "Has Date Only", "Amy Zed", "2020-01-01")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -53,7 +53,7 @@ func TestBooksNeedingEnrichment_ChaptarrClaimIsNeverRevisitedByHardcover(t *test
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Claimed By Chaptarr", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -98,7 +98,7 @@ func TestGetEnrichmentStats(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b3.epub"), "Book Three", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -133,7 +133,7 @@ func TestApplyEnrichment_OverwritesTitleSeriesAndAlwaysFillableFields(t *testing
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Has Series Already", "Amy Zed", "Existing Saga", 2)
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -197,7 +197,7 @@ func TestApplyEnrichment_RecordsChaptarrSource(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Chaptarr Sourced Book", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -224,7 +224,7 @@ func TestSaveMetadata_RecordsManualSource(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Manually Edited Book", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -251,7 +251,7 @@ func TestGetEnrichmentSource_NoRowYet(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Never Enriched Book", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -273,7 +273,7 @@ func TestApplyEnrichment_KeepsMatchingSeriesUnchanged(t *testing.T) {
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Same Series Book", "Amy Zed", "Existing Saga", 2)
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -304,7 +304,7 @@ func TestApplyEnrichment_DescriptionKeptWhenSubstantial(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Book With A Real Description", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -339,7 +339,7 @@ func TestApplyEnrichment_DescriptionReplacedWhenPlaceholder(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Book With A Stub Description", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -373,7 +373,7 @@ func TestSaveMetadata_OverwritesExisting(t *testing.T) {
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Old Title", "Amy Zed", "Old Saga", 1)
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -416,7 +416,7 @@ func TestSaveMetadata_BlankFieldsLeftAlone(t *testing.T) {
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b1.epub"), "Keep This Title", "Amy Zed", "Keep Saga", 1)
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -447,7 +447,7 @@ func TestSetCover_UpdatesPathAndHasCover(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Coverless Book", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	books, err := db.List(SortTitle, false, 1, 10, Filter{})

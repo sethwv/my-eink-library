@@ -21,15 +21,15 @@ type CoverSaver interface {
 	SaveCover(bookID int64, data []byte, mediaType string) (relPath string, err error)
 }
 
-// Scan walks libraryPath for .epub files and upserts them into the index,
-// then deletes rows for files that no longer exist. Per-file parse errors
-// are logged and stored on the row rather than aborting the scan. Records
-// last_scan_at/last_scan_duration_ms in the meta table on success. Files
-// whose size/mtime haven't changed since the last scan are skipped without
-// re-parsing; use Reimport to force a full re-parse.
-func (d *DB) Scan(libraryPath string, saver CoverSaver) error {
+// Scan walks each of libraryRoots for .epub files and upserts them into the
+// index, then deletes rows for files that no longer exist in any of them.
+// Per-file parse errors are logged and stored on the row rather than
+// aborting the scan. Records last_scan_at/last_scan_duration_ms in the meta
+// table on success. Files whose size/mtime haven't changed since the last
+// scan are skipped without re-parsing; use Reimport to force a full re-parse.
+func (d *DB) Scan(libraryRoots []string, saver CoverSaver) error {
 	start := time.Now()
-	if err := d.scan(libraryPath, saver, false); err != nil {
+	if err := d.scan(libraryRoots, saver, false); err != nil {
 		return err
 	}
 
@@ -43,9 +43,9 @@ func (d *DB) Scan(libraryPath string, saver CoverSaver) error {
 // identifier extraction) applies to books that are already indexed. Each
 // book's added_at is preserved: the UPDATE path used for existing files
 // never touches that column, only the INSERT path (new files) does.
-func (d *DB) Reimport(libraryPath string, saver CoverSaver) error {
+func (d *DB) Reimport(libraryRoots []string, saver CoverSaver) error {
 	start := time.Now()
-	if err := d.scan(libraryPath, saver, true); err != nil {
+	if err := d.scan(libraryRoots, saver, true); err != nil {
 		return err
 	}
 
@@ -54,40 +54,50 @@ func (d *DB) Reimport(libraryPath string, saver CoverSaver) error {
 	return nil
 }
 
-func (d *DB) scan(libraryPath string, saver CoverSaver, force bool) error {
-	seen := make(map[string]bool)
+// seenKey identifies a file within a specific library root, so two roots
+// that happen to contain the same relative path (e.g. "Author/Book.epub")
+// aren't treated as the same book during pruning.
+type seenKey struct {
+	root string
+	rel  string
+}
 
-	err := filepath.WalkDir(libraryPath, func(path string, entry fs.DirEntry, err error) error {
+func (d *DB) scan(libraryRoots []string, saver CoverSaver, force bool) error {
+	seen := make(map[seenKey]bool)
+
+	for _, root := range libraryRoots {
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				log.Printf("scan: walk error at %s: %v", path, err)
+				return nil
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if !strings.EqualFold(filepath.Ext(entry.Name()), ".epub") {
+				return nil
+			}
+
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				rel = path
+			}
+			seen[seenKey{root, rel}] = true
+
+			info, err := entry.Info()
+			if err != nil {
+				log.Printf("scan: stat error for %s: %v", rel, err)
+				return nil
+			}
+
+			if err := d.upsertIfChanged(root, rel, path, info, saver, force); err != nil {
+				log.Printf("scan: upsert error for %s: %v", rel, err)
+			}
+			return nil
+		})
 		if err != nil {
-			log.Printf("scan: walk error at %s: %v", path, err)
-			return nil
+			return fmt.Errorf("walk library %s: %w", root, err)
 		}
-		if entry.IsDir() {
-			return nil
-		}
-		if !strings.EqualFold(filepath.Ext(entry.Name()), ".epub") {
-			return nil
-		}
-
-		rel, err := filepath.Rel(libraryPath, path)
-		if err != nil {
-			rel = path
-		}
-		seen[rel] = true
-
-		info, err := entry.Info()
-		if err != nil {
-			log.Printf("scan: stat error for %s: %v", rel, err)
-			return nil
-		}
-
-		if err := d.upsertIfChanged(rel, path, info, saver, force); err != nil {
-			log.Printf("scan: upsert error for %s: %v", rel, err)
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("walk library: %w", err)
 	}
 
 	if err := d.pruneMissing(seen); err != nil {
@@ -97,13 +107,13 @@ func (d *DB) scan(libraryPath string, saver CoverSaver, force bool) error {
 	return nil
 }
 
-func (d *DB) upsertIfChanged(relPath, fullPath string, info fs.FileInfo, saver CoverSaver, force bool) error {
+func (d *DB) upsertIfChanged(root, relPath, fullPath string, info fs.FileInfo, saver CoverSaver, force bool) error {
 	size := info.Size()
 	mtime := info.ModTime().Unix()
 
 	var existingID int64
 	var existingSize, existingMtime int64
-	err := d.sql.QueryRow(`SELECT id, file_size, file_mtime FROM books WHERE file_path = ?`, relPath).
+	err := d.sql.QueryRow(`SELECT id, file_size, file_mtime FROM books WHERE library_root = ? AND file_path = ?`, root, relPath).
 		Scan(&existingID, &existingSize, &existingMtime)
 	switch {
 	case err == sql.ErrNoRows:
@@ -154,11 +164,11 @@ func (d *DB) upsertIfChanged(relPath, fullPath string, info fs.FileInfo, saver C
 			}
 		}
 		_, err := d.sql.Exec(`
-			UPDATE books SET file_size=?, file_mtime=?, title=?, sort_title=?, author=?, sort_author=?,
+			UPDATE books SET library_root=?, file_size=?, file_mtime=?, title=?, sort_title=?, author=?, sort_author=?,
 				series=?, series_index=?, description=?, language=?, publisher=?, published_date=?, identifier=?,
 				cover_path=?, has_cover=?, updated_at=?, parse_error=?
 			WHERE id=?`,
-			size, mtime, title, sortTitle, author, sortAuthor,
+			root, size, mtime, title, sortTitle, author, sortAuthor,
 			nullableString(series), nullableFloat(seriesIndex, series != ""), nullableString(description),
 			nullableString(language), nullableString(publisher), nullableString(publishedDate), nullableString(identifier),
 			nullableString(coverPath), boolToInt(hasCover), now, nullableString(parseErrStr),
@@ -168,11 +178,11 @@ func (d *DB) upsertIfChanged(relPath, fullPath string, info fs.FileInfo, saver C
 	}
 
 	res, err := d.sql.Exec(`
-		INSERT INTO books (file_path, file_size, file_mtime, title, sort_title, author, sort_author,
+		INSERT INTO books (library_root, file_path, file_size, file_mtime, title, sort_title, author, sort_author,
 			series, series_index, description, language, publisher, published_date, identifier,
 			cover_path, has_cover, added_at, updated_at, parse_error)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		relPath, size, mtime, title, sortTitle, author, sortAuthor,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		root, relPath, size, mtime, title, sortTitle, author, sortAuthor,
 		nullableString(series), nullableFloat(seriesIndex, series != ""), nullableString(description),
 		nullableString(language), nullableString(publisher), nullableString(publishedDate), nullableString(identifier),
 		nullableString(coverPath), boolToInt(hasCover), now, now, nullableString(parseErrStr),
@@ -195,20 +205,20 @@ func (d *DB) upsertIfChanged(relPath, fullPath string, info fs.FileInfo, saver C
 	return nil
 }
 
-func (d *DB) pruneMissing(seen map[string]bool) error {
-	rows, err := d.sql.Query(`SELECT id, file_path FROM books`)
+func (d *DB) pruneMissing(seen map[seenKey]bool) error {
+	rows, err := d.sql.Query(`SELECT id, library_root, file_path FROM books`)
 	if err != nil {
 		return err
 	}
 	var stale []int64
 	for rows.Next() {
 		var id int64
-		var path string
-		if err := rows.Scan(&id, &path); err != nil {
+		var root, path string
+		if err := rows.Scan(&id, &root, &path); err != nil {
 			rows.Close()
 			return err
 		}
-		if !seen[path] {
+		if !seen[seenKey{root, path}] {
 			stale = append(stale, id)
 		}
 	}
@@ -222,20 +232,20 @@ func (d *DB) pruneMissing(seen map[string]bool) error {
 	return nil
 }
 
-// DeleteByPath removes the indexed row for a single file path, used by the fsnotify watcher.
-func (d *DB) DeleteByPath(relPath string) error {
-	_, err := d.sql.Exec(`DELETE FROM books WHERE file_path = ?`, relPath)
+// DeleteByPath removes the indexed row for a single file path within root, used by the fsnotify watcher.
+func (d *DB) DeleteByPath(root, relPath string) error {
+	_, err := d.sql.Exec(`DELETE FROM books WHERE library_root = ? AND file_path = ?`, root, relPath)
 	return err
 }
 
-// UpsertPath re-scans a single file, used by the fsnotify watcher.
-func (d *DB) UpsertPath(libraryPath, relPath string, saver CoverSaver) error {
-	fullPath := filepath.Join(libraryPath, relPath)
+// UpsertPath re-scans a single file within root, used by the fsnotify watcher.
+func (d *DB) UpsertPath(root, relPath string, saver CoverSaver) error {
+	fullPath := filepath.Join(root, relPath)
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return err
 	}
-	return d.upsertIfChanged(relPath, fullPath, info, saver, false)
+	return d.upsertIfChanged(root, relPath, fullPath, info, saver, false)
 }
 
 func nullableString(s string) any {

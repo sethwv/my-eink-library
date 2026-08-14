@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -55,6 +56,9 @@ func main() {
 		log.Fatalf("open index: %v", err)
 	}
 	defer db.Close()
+	if err := db.BackfillLibraryRoot(cfg.LibraryPaths[0]); err != nil {
+		log.Fatalf("backfill library root: %v", err)
+	}
 
 	userStore, err := users.Open(filepath.Join(cfg.DataDir, "users.db"))
 	if err != nil {
@@ -93,8 +97,8 @@ func main() {
 		log.Fatalf("open cover store: %v", err)
 	}
 
-	log.Printf("scanning library at %s", cfg.LibraryPath)
-	if err := db.Scan(cfg.LibraryPath, covers); err != nil {
+	log.Printf("scanning library at %s", strings.Join(cfg.LibraryPaths, ", "))
+	if err := db.Scan(cfg.LibraryPaths, covers); err != nil {
 		log.Fatalf("initial scan: %v", err)
 	}
 	if n, err := db.Count(index.Filter{}); err == nil {
@@ -104,7 +108,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	watcher, err := index.NewWatcher(cfg.LibraryPath, db, covers)
+	watcher, err := index.NewWatcher(cfg.LibraryPaths, db, covers)
 	if err != nil {
 		log.Fatalf("start watcher: %v", err)
 	}
@@ -131,18 +135,18 @@ func main() {
 	hc := hardcover.New(integrationSettings.HardcoverEnabled, integrationSettings.HardcoverToken)
 	ch := chaptarr.New(integrationSettings.ChaptarrEnabled, integrationSettings.ChaptarrURL, integrationSettings.ChaptarrAPIKey)
 	srv := &web.Server{
-		Auth:        authn,
-		DB:          db,
-		Covers:      covers,
-		Users:       userStore,
-		Hardcover:   hc,
-		Chaptarr:    ch,
-		LibraryPath: cfg.LibraryPath,
-		DataDir:     cfg.DataDir,
-		PageSize:    generalSettings.PageSize,
-		SiteName:    generalSettings.SiteName,
-		PublicURL:   generalSettings.PublicURL,
-		StartedAt:   time.Now(),
+		Auth:         authn,
+		DB:           db,
+		Covers:       covers,
+		Users:        userStore,
+		Hardcover:    hc,
+		Chaptarr:     ch,
+		LibraryPaths: cfg.LibraryPaths,
+		DataDir:      cfg.DataDir,
+		PageSize:     generalSettings.PageSize,
+		SiteName:     generalSettings.SiteName,
+		PublicURL:    generalSettings.PublicURL,
+		StartedAt:    time.Now(),
 	}
 	// Single background loop for both integrations (idles, rather than
 	// exiting, while both are disabled) — see RunEnrichmentQueue's doc
@@ -223,7 +227,7 @@ func main() {
 
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("eink-library starting on :%s (library=%s data=%s)", cfg.Port, cfg.LibraryPath, cfg.DataDir)
+		log.Printf("eink-library starting on :%s (library=%s data=%s)", cfg.Port, strings.Join(cfg.LibraryPaths, ", "), cfg.DataDir)
 		serveErr <- httpSrv.ListenAndServe()
 	}()
 

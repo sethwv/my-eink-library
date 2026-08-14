@@ -153,7 +153,7 @@ func TestFilter_ShelfID(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Banana Republic", "Bob Young")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 

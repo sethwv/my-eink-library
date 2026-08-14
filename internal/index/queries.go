@@ -44,7 +44,7 @@ var sortColumns = map[SortKey]string{
 	SortReleased: effectivePublishedDate,
 }
 
-const bookColumns = `b.id, b.file_path, b.file_size, b.file_mtime, ` + effectiveTitle + `, b.sort_title, b.author, b.sort_author,
+const bookColumns = `b.id, b.library_root, b.file_path, b.file_size, b.file_mtime, ` + effectiveTitle + `, b.sort_title, b.author, b.sort_author,
 	` + effectiveSeries + `, ` + effectiveSeriesIndex + `, ` + effectiveDescription + `, b.language, ` + effectivePublisher + `, ` + effectivePublishedDate + `, b.identifier,
 	b.cover_path, b.has_cover, b.added_at, b.updated_at, b.parse_error,
 	be.genres, be.pages, be.isbn, be.rating`
@@ -277,7 +277,7 @@ func scanBook(row rowScanner) (*Book, error) {
 	var hasCover int
 
 	err := row.Scan(
-		&b.ID, &b.FilePath, &b.FileSize, &b.FileMtime, &b.Title, &b.SortTitle, &b.Author, &b.SortAuthor,
+		&b.ID, &b.LibraryRoot, &b.FilePath, &b.FileSize, &b.FileMtime, &b.Title, &b.SortTitle, &b.Author, &b.SortAuthor,
 		&series, &seriesIndex, &description, &language, &publisher, &publishedAt, &identifier,
 		&coverPath, &hasCover, &b.AddedAt, &b.UpdatedAt, &parseError,
 		&genres, &pages, &isbn, &rating,

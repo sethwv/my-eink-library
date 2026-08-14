@@ -3,6 +3,7 @@ package index
 // Book is a single indexed row from the books table.
 type Book struct {
 	ID          int64
+	LibraryRoot string
 	FilePath    string
 	FileSize    int64
 	FileMtime   int64

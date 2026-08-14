@@ -42,7 +42,7 @@ func TestScan_RecordsLastScanMeta(t *testing.T) {
 	writeTestEpub(t, libDir+"/book1.epub", "Book One", "Author A")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 

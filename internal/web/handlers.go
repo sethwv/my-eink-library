@@ -21,18 +21,18 @@ import (
 )
 
 type Server struct {
-	Auth        *auth.Authenticator
-	DB          *index.DB
-	Covers      *thumbnail.Store
-	Users       *users.Store
-	Hardcover   *hardcover.Client // nil-safe: Enabled() is false with no token, callers check before use
-	Chaptarr    *chaptarr.Client  // nil-safe: Enabled() is false with no URL/key, callers check before use
-	LibraryPath string
-	DataDir     string
-	PageSize    int
-	SiteName    string
-	PublicURL   string // trusted base URL for emailed links; see config.Config.PublicURL
-	StartedAt   time.Time
+	Auth         *auth.Authenticator
+	DB           *index.DB
+	Covers       *thumbnail.Store
+	Users        *users.Store
+	Hardcover    *hardcover.Client // nil-safe: Enabled() is false with no token, callers check before use
+	Chaptarr     *chaptarr.Client  // nil-safe: Enabled() is false with no URL/key, callers check before use
+	LibraryPaths []string
+	DataDir      string
+	PageSize     int
+	SiteName     string
+	PublicURL    string // trusted base URL for emailed links; see config.Config.PublicURL
+	StartedAt    time.Time
 }
 
 const favoritesSlug = "favourites"
@@ -410,7 +410,7 @@ func (s *Server) DownloadEPUB(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fullPath := filepath.Join(s.LibraryPath, book.FilePath)
+	fullPath := filepath.Join(book.LibraryRoot, book.FilePath)
 	filename := filenameFor(book.Title, book.Author, "epub")
 
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
@@ -424,7 +424,7 @@ func (s *Server) DownloadKepub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fullPath := filepath.Join(s.LibraryPath, book.FilePath)
+	fullPath := filepath.Join(book.LibraryRoot, book.FilePath)
 	filename := filenameFor(book.Title, book.Author, "kepub.epub")
 
 	w.Header().Set("Content-Type", "application/epub+zip")
@@ -754,7 +754,7 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 		"AdminTab":           "server",
 		"GoVersion":          runtime.Version(),
 		"Uptime":             time.Since(s.StartedAt).Round(time.Second).String(),
-		"LibraryPath":        s.LibraryPath,
+		"LibraryPath":        strings.Join(s.LibraryPaths, ", "),
 		"DataDir":            s.DataDir,
 		"BookCount":          bookCount,
 		"AuthorCount":        len(authors),
@@ -996,7 +996,7 @@ func (s *Server) ServerSMTPTest(w http.ResponseWriter, r *http.Request) {
 
 // ServerRescan triggers a synchronous full library rescan, then returns to the server info page.
 func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
-	if err := s.DB.Scan(s.LibraryPath, s.Covers); err != nil {
+	if err := s.DB.Scan(s.LibraryPaths, s.Covers); err != nil {
 		http.Error(w, "rescan failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1008,7 +1008,7 @@ func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
 // rescan, which skips unchanged files) — used to pick up EPUB metadata
 // parsing fixes on books that are already indexed.
 func (s *Server) ServerReimport(w http.ResponseWriter, r *http.Request) {
-	if err := s.DB.Reimport(s.LibraryPath, s.Covers); err != nil {
+	if err := s.DB.Reimport(s.LibraryPaths, s.Covers); err != nil {
 		http.Error(w, "reimport failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

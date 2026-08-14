@@ -114,7 +114,7 @@ func TestScan_IndexesBooks(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "book2.epub"), "The Book Two", "Author B")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
 
@@ -144,7 +144,7 @@ func TestScan_PrunesDeletedFiles(t *testing.T) {
 	writeTestEpub(t, bookPath, "Book One", "Author A")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ := db.Count(Filter{}); n != 1 {
@@ -154,7 +154,7 @@ func TestScan_PrunesDeletedFiles(t *testing.T) {
 	if err := os.Remove(bookPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ := db.Count(Filter{}); n != 0 {
@@ -167,7 +167,7 @@ func TestScan_SkipsUnchangedFiles(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "book1.epub"), "Book One", "Author A")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	before, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -175,7 +175,7 @@ func TestScan_SkipsUnchangedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 	after, err := db.List(SortTitle, false, 1, 10, Filter{})
@@ -195,7 +195,7 @@ func TestScan_MalformedEpubStillIndexed(t *testing.T) {
 	}
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -220,7 +220,7 @@ func TestSearch_MatchesTitleAuthorSeries(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Banana Republic", "Bob Young")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -263,7 +263,7 @@ func TestFilter_ExactAuthorAndSeries(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Banana Republic", "Bob Young")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -292,7 +292,7 @@ func TestList_ReleasedSortNullsLast(t *testing.T) {
 	writeTestEpubWithDate(t, filepath.Join(libDir, "b3.epub"), "Undated Book", "Amy Zed", "")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -334,7 +334,7 @@ func TestListAuthorsAndSeries(t *testing.T) {
 	writeTestEpubWithSeries(t, filepath.Join(libDir, "b3.epub"), "The Second Dawn", "Bob Young", "Light Saga", 2)
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -360,7 +360,7 @@ func TestListAuthors_SplitsMultiAuthorBooksIntoIndividualEntries(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Solo Book", "P.C. Cast")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -392,7 +392,7 @@ func TestFilter_Author_MatchesIndividualCoAuthor(t *testing.T) {
 	writeTestEpub(t, filepath.Join(libDir, "b2.epub"), "Unrelated Book", "Amy Zed")
 
 	db := openTestDB(t)
-	if err := db.Scan(libDir, nil); err != nil {
+	if err := db.Scan([]string{libDir}, nil); err != nil {
 		t.Fatal(err)
 	}
 

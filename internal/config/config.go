@@ -4,13 +4,14 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type Config struct {
-	LibraryPath   string
+	LibraryPaths  []string
 	DataDir       string
 	LibraryUser   string
 	LibraryPass   string
@@ -39,7 +40,7 @@ type Config struct {
 
 func Load() (*Config, error) {
 	c := &Config{
-		LibraryPath:    getenv("LIBRARY_PATH", "/library"),
+		LibraryPaths:   splitPaths(getenv("LIBRARY_PATH", "/library")),
 		DataDir:        getenv("DATA_DIR", "/data"),
 		LibraryUser:    os.Getenv("LIBRARY_USER"),
 		LibraryPass:    os.Getenv("LIBRARY_PASS"),
@@ -61,6 +62,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	if len(c.LibraryPaths) == 0 {
+		return nil, fmt.Errorf("LIBRARY_PATH must be set")
+	}
 	if c.LibraryUser == "" {
 		return nil, fmt.Errorf("LIBRARY_USER must be set")
 	}
@@ -79,6 +83,27 @@ func getenv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// splitPaths parses a comma-separated LIBRARY_PATH into a cleaned,
+// deduplicated list of directories, so config.LibraryPaths can be compared
+// or joined without callers re-normalizing.
+func splitPaths(v string) []string {
+	var paths []string
+	seen := make(map[string]bool)
+	for _, p := range strings.Split(v, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		p = filepath.Clean(p)
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		paths = append(paths, p)
+	}
+	return paths
 }
 
 func getenvInt(key string, def int) (int, error) {

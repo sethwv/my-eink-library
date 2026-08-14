@@ -26,6 +26,19 @@ services:
       - /path/to/your/epubs:/library:ro
 ```
 
+To combine multiple folders into one library, bind-mount each and list them
+in `LIBRARY_PATH` as a comma-separated list:
+
+```yaml
+services:
+  eink-library:
+    environment:
+      - LIBRARY_PATH=/library/fiction,/library/nonfiction
+    volumes:
+      - /path/to/fiction:/library/fiction:ro
+      - /path/to/nonfiction:/library/nonfiction:ro
+```
+
 Then:
 
 ```bash
@@ -51,7 +64,7 @@ All configuration is via environment variables:
 
 | Var | Default | Purpose |
 |---|---|---|
-| `LIBRARY_PATH` | `/library` | read-only directory to scan for `.epub` files |
+| `LIBRARY_PATH` | `/library` | comma-separated list of read-only directories to scan for `.epub` files, combined into one library |
 | `DATA_DIR` | `/data` | writable dir for the SQLite index, users DB, cover cache |
 | `LIBRARY_USER` | *(required)* | bootstrap admin username (first run only) |
 | `LIBRARY_PASS` | *(required)* | bootstrap admin password (first run only) |
