@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ var templateFuncs = template.FuncMap{
 	"authorNames":         authorNames,
 	"withQueryParam":      withQueryParam,
 	"locationLabel":       locationLabel,
+	"pageURL":             pageURL,
 }
 
 // locationLabel renders a book location as "<library root name>/<parent
@@ -75,6 +77,24 @@ func withQueryParam(rawURL, key string, value any) string {
 	q.Set(key, fmt.Sprint(value))
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+// pageURL builds a book-list pagination/sort link with all query params
+// properly escaped via url.Values.Encode() — used by library.html's
+// prev/next links and mirrored by infinite-scroll.js's own query-string
+// construction for XHR requests, so both paths agree on the same param set.
+func pageURL(action, sort, dir string, page int, q, name string) string {
+	v := url.Values{}
+	v.Set("sort", sort)
+	v.Set("dir", dir)
+	v.Set("page", strconv.Itoa(page))
+	if q != "" {
+		v.Set("q", q)
+	}
+	if name != "" {
+		v.Set("name", name)
+	}
+	return action + "?" + v.Encode()
 }
 
 var htmlTagPattern = regexp.MustCompile(`<[^>]*>`)
@@ -182,6 +202,31 @@ func render(w http.ResponseWriter, page string, data any) {
 	// Some older browser engines cache GET responses aggressively, including
 	// distinct ?q=/?sort= query variations — force revalidation so paging,
 	// searching, and navigating "home" always reflect the current state.
+	w.Header().Set("Cache-Control", "no-cache")
+	buf.WriteTo(w)
+}
+
+// renderPartials renders one or more named blocks from partials.html only
+// (skipping layout.html and the page template), for XHR responses that need
+// just a fragment of a page — e.g. infinite-scroll.js re-fetching book_cards
+// without the surrounding topbar/toolbar/HTML shell. Same buffer-then-write
+// rationale as render.
+func renderPartials(w http.ResponseWriter, data any, names ...string) {
+	tmpl, err := template.New("root").Funcs(templateFuncs).ParseFS(templatesFS, "templates/partials.html")
+	if err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+		return
+	}
+
+	var buf bytes.Buffer
+	for _, name := range names {
+		if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+			http.Error(w, "render error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	buf.WriteTo(w)
 }

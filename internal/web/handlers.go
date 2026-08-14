@@ -223,11 +223,6 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	filter.HideNoChaptarrMatch = hide.HideNoChaptarrMatch
 	filter.HideNoHardcoverMatch = hide.HideNoHardcoverMatch
 
-	books, err := s.DB.List(sort, descending, page, pageSize, filter)
-	if err != nil {
-		http.Error(w, "failed to load library", http.StatusInternalServerError)
-		return
-	}
 	total, err := s.DB.Count(filter)
 	if err != nil {
 		http.Error(w, "failed to load library", http.StatusInternalServerError)
@@ -237,6 +232,15 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	totalPages := (total + pageSize - 1) / pageSize
 	if totalPages < 1 {
 		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+
+	books, err := s.DB.List(sort, descending, page, pageSize, filter)
+	if err != nil {
+		http.Error(w, "failed to load library", http.StatusInternalServerError)
+		return
 	}
 
 	toggleDir := "desc"
@@ -292,6 +296,10 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"Locations":        locations,
 	}
 	mergeInto(data, base)
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		renderPartials(w, data, "book_cards", "pagination_state")
+		return
+	}
 	render(w, "library.html", data)
 }
 
