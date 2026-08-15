@@ -87,6 +87,13 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			continue
 		}
 
+		overwriteCover := false
+		if settings, err := s.Users.GetIntegrationSettings(); err != nil {
+			log.Printf("enrichment queue: load integration settings: %v", err)
+		} else {
+			overwriteCover = settings.HardcoverOverwriteCover
+		}
+
 		var chBooks []chaptarr.Book
 		fromCache := false
 		if s.Chaptarr.Enabled() {
@@ -118,7 +125,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			default:
 			}
 
-			if s.processChaptarrMatch(ctx, c, chBooks) {
+			if s.processChaptarrMatch(ctx, c, chBooks, overwriteCover) {
 				processedAny = true
 				continue
 			}
@@ -134,7 +141,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 					log.Printf("enrichment queue: mark chaptarr no_match failed for book %d: %v", c.ID, err)
 				}
 			}
-			if s.processHardcoverMatch(ctx, c) {
+			if s.processHardcoverMatch(ctx, c, overwriteCover) {
 				processedAny = true
 			}
 		}
@@ -146,7 +153,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 				freshBooks = nil
 			}
 			for _, c := range deferred {
-				if freshBooks != nil && s.processChaptarrMatch(ctx, c, freshBooks) {
+				if freshBooks != nil && s.processChaptarrMatch(ctx, c, freshBooks, overwriteCover) {
 					processedAny = true
 					continue
 				}
@@ -157,7 +164,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 						log.Printf("enrichment queue: mark chaptarr no_match failed for book %d: %v", c.ID, err)
 					}
 				}
-				if s.processHardcoverMatch(ctx, c) {
+				if s.processHardcoverMatch(ctx, c, overwriteCover) {
 					processedAny = true
 				}
 			}
@@ -189,7 +196,7 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 // status=” here (not "no_match" — that status means "checked and
 // confirmed no match", which a local path heuristic alone can't assert) so
 // it's free to fall through to processHardcoverMatch in this same pass.
-func (s *Server) processChaptarrMatch(ctx context.Context, c index.EnrichmentCandidate, chBooks []chaptarr.Book) bool {
+func (s *Server) processChaptarrMatch(ctx context.Context, c index.EnrichmentCandidate, chBooks []chaptarr.Book, overwriteCover bool) bool {
 	if !s.Chaptarr.Enabled() || chBooks == nil {
 		return false
 	}
@@ -214,11 +221,12 @@ func (s *Server) processChaptarrMatch(ctx context.Context, c index.EnrichmentCan
 		return true
 	}
 
-	// Only ever auto-apply a cover when the book doesn't have one — never
-	// silently replace an existing cover. Manual override (any time) lives
-	// in the Edit Metadata page.
+	// Auto-apply a cover when the book doesn't have one, or unconditionally
+	// when the admin has enabled "always overwrite cover" — see
+	// IntegrationSettings.HardcoverOverwriteCover. Manual override (any
+	// time) also lives in the Edit Metadata page.
 	if hcDetail.Image != "" {
-		if book, err := s.DB.Get(c.ID); err == nil && book != nil && !book.HasCover {
+		if book, err := s.DB.Get(c.ID); err == nil && book != nil && (overwriteCover || !book.HasCover) {
 			if err := s.applyCoverFromURL(ctx, c.ID, hcDetail.Image); err != nil {
 				log.Printf("enrichment queue: chaptarr cover fetch failed for book %d: %v", c.ID, err)
 			}
@@ -243,7 +251,7 @@ func (s *Server) processChaptarrMatch(ctx context.Context, c index.EnrichmentCan
 // (matched, no_match, or error), so the caller's "did any real work happen
 // this pass" bookkeeping is accurate; false only when Hardcover is disabled
 // and nothing was attempted at all.
-func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCandidate) bool {
+func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCandidate, overwriteCover bool) bool {
 	if !s.Hardcover.Enabled() {
 		return false
 	}
@@ -299,11 +307,12 @@ func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCa
 		return true
 	}
 
-	// Only ever auto-apply a cover when the book doesn't have one — never
-	// silently replace an existing cover. Manual override (any time) lives
-	// in the Edit Metadata page.
+	// Auto-apply a cover when the book doesn't have one, or unconditionally
+	// when the admin has enabled "always overwrite cover" — see
+	// IntegrationSettings.HardcoverOverwriteCover. Manual override (any
+	// time) also lives in the Edit Metadata page.
 	if detail.Image != "" {
-		if book, err := s.DB.Get(c.ID); err == nil && book != nil && !book.HasCover {
+		if book, err := s.DB.Get(c.ID); err == nil && book != nil && (overwriteCover || !book.HasCover) {
 			if err := s.applyCoverFromURL(ctx, c.ID, detail.Image); err != nil {
 				log.Printf("enrichment queue: cover fetch failed for book %d: %v", c.ID, err)
 			}

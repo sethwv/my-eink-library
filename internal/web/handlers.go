@@ -855,21 +855,22 @@ func (s *Server) serverIntegrationsData() (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"Title":                "Integrations",
-		"AdminTab":             "integrations",
-		"HardcoverEnabled":     settings.HardcoverEnabled,
-		"HardcoverActive":      s.Hardcover.Enabled(),
-		"HardcoverConfigured":  settings.HardcoverToken != "",
-		"HideNoHardcoverMatch": settings.HideNoHardcoverMatch,
-		"ChaptarrEnabled":      settings.ChaptarrEnabled,
-		"ChaptarrActive":       s.Chaptarr.Enabled(),
-		"ChaptarrURL":          settings.ChaptarrURL,
-		"ChaptarrConfigured":   settings.ChaptarrAPIKey != "",
-		"HideNoChaptarrMatch":  settings.HideNoChaptarrMatch,
-		"EnrichmentPending":    enrichmentStats.Pending,
-		"EnrichmentDone":       enrichmentStats.Done,
-		"EnrichmentNoMatch":    enrichmentStats.NoMatch,
-		"EnrichmentErrored":    enrichmentStats.Errored,
+		"Title":                   "Integrations",
+		"AdminTab":                "integrations",
+		"HardcoverEnabled":        settings.HardcoverEnabled,
+		"HardcoverActive":         s.Hardcover.Enabled(),
+		"HardcoverConfigured":     settings.HardcoverToken != "",
+		"HideNoHardcoverMatch":    settings.HideNoHardcoverMatch,
+		"HardcoverOverwriteCover": settings.HardcoverOverwriteCover,
+		"ChaptarrEnabled":         settings.ChaptarrEnabled,
+		"ChaptarrActive":          s.Chaptarr.Enabled(),
+		"ChaptarrURL":             settings.ChaptarrURL,
+		"ChaptarrConfigured":      settings.ChaptarrAPIKey != "",
+		"HideNoChaptarrMatch":     settings.HideNoChaptarrMatch,
+		"EnrichmentPending":       enrichmentStats.Pending,
+		"EnrichmentDone":          enrichmentStats.Done,
+		"EnrichmentNoMatch":       enrichmentStats.NoMatch,
+		"EnrichmentErrored":       enrichmentStats.Errored,
 	}, nil
 }
 
@@ -1132,6 +1133,7 @@ func (s *Server) ServerIntegrationsHardcoverSave(w http.ResponseWriter, r *http.
 	current.HardcoverEnabled = r.FormValue("hardcover_enabled") == "on"
 	current.HardcoverToken = token
 	current.HideNoHardcoverMatch = r.FormValue("hide_no_hardcover_match") == "on"
+	current.HardcoverOverwriteCover = r.FormValue("hardcover_overwrite_cover") == "on"
 
 	if err := s.Users.SaveIntegrationSettings(current); err != nil {
 		s.renderAdminIntegrationsError(w, r, "failed to save Hardcover settings: "+err.Error(), "")

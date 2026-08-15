@@ -113,9 +113,13 @@ function applyResponse(html, replace) {
         liveGrid.removeChild(liveGrid.firstChild);
       }
     }
+    // Batch into a fragment and append once, rather than one appendChild
+    // per card, to avoid a reflow per card on slow engines.
+    var fragment = document.createDocumentFragment();
     while (newGrid.firstChild) {
-      liveGrid.appendChild(newGrid.firstChild);
+      fragment.appendChild(newGrid.firstChild);
     }
+    liveGrid.appendChild(fragment);
   }
 
   var oldState = document.getElementById("pagination-state");
@@ -209,26 +213,6 @@ function updateLoadMoreVisibility() {
   loadMoreBtn.style.display = hasNext ? "block" : "none";
 }
 
-// Flag-based throttle (setTimeout debounce) rather than a timer loop, to
-// stay simple/ES5. Triggers a load-more once within ~800px of the bottom.
-var scrollScheduled = false;
-
-function onScrollOrResize() {
-  if (scrollScheduled) {
-    return;
-  }
-  scrollScheduled = true;
-  setTimeout(function () {
-    scrollScheduled = false;
-    var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-    var viewport = window.innerHeight || document.documentElement.clientHeight || 0;
-    var full = document.body.scrollHeight || 0;
-    if (full - (scrollY + viewport) < 800) {
-      loadMore();
-    }
-  }, 150);
-}
-
 function initInfiniteScroll() {
   if (!document.getElementById("pagination-state")) {
     // Not a book-list page (or a template render error) - never touch the
@@ -252,9 +236,6 @@ function initInfiniteScroll() {
     liveGrid.parentNode.insertBefore(loadMoreBtn, liveGrid.nextSibling);
     updateLoadMoreVisibility();
   }
-
-  window.onscroll = onScrollOrResize;
-  window.onresize = onScrollOrResize;
 
   var sortEl = document.getElementById("sort");
   if (sortEl) {

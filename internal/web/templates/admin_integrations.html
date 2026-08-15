@@ -40,6 +40,7 @@
 <tr><th>Enable</th><td><label><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable Hardcover enrichment</label></td></tr>
 <tr><th>API Token</th><td><input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></td></tr>
 <tr><th>Hide unmatched</th><td><label><input type="checkbox" name="hide_no_hardcover_match" {{if .HideNoHardcoverMatch}}checked{{end}}> Hide books with no Hardcover match from the library, author, series, and favourites views</label></td></tr>
+<tr><th>Overwrite covers</th><td><label><input type="checkbox" name="hardcover_overwrite_cover" {{if .HardcoverOverwriteCover}}checked{{end}}> Always use Hardcover's cover, even if the book already has one</label><p class="muted">Only applies going forward &mdash; use "Reset enrichment" below to make it re-fetch covers for books already processed.</p></td></tr>
 <tr><td colspan="2"><button type="submit">Save Hardcover settings</button></td></tr>
 </table>
 </form>

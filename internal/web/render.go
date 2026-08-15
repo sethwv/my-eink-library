@@ -41,11 +41,12 @@ var templateFuncs = template.FuncMap{
 	"pageURL":             pageURL,
 }
 
-// locationLabel renders a book location as "<library root name>/<parent
-// folder>" (e.g. "Fiction/Jane Austen") for the modal's path pills — root is
-// an absolute configured LIBRARY_PATH entry, so only its base name is shown.
+// locationLabel renders a book location as "<library root name>/<epub
+// filename>" (e.g. "Fiction/pride-and-prejudice.epub") for the modal's path
+// pills — root is an absolute configured LIBRARY_PATH entry, so only its
+// base name is shown.
 func locationLabel(root, path string) string {
-	return filepath.Base(root) + "/" + filepath.Base(filepath.Dir(path))
+	return filepath.Base(root) + "/" + filepath.Base(path)
 }
 
 // authorNames splits a book's stored author byline into individual,

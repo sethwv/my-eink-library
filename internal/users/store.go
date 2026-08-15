@@ -704,6 +704,11 @@ type IntegrationSettings struct {
 	// HideNoChaptarrMatch/HideNoHardcoverMatch fields).
 	HideNoChaptarrMatch  bool
 	HideNoHardcoverMatch bool
+	// HardcoverOverwriteCover, default false, makes enrichment always apply
+	// Hardcover's cover image even when the book already has one, instead of
+	// only filling in a missing cover. Toggling it on doesn't retroactively
+	// affect already-enriched books — see ServerEnrichmentReset.
+	HardcoverOverwriteCover bool
 }
 
 // GetIntegrationSettings returns the currently saved integration settings,
@@ -711,9 +716,9 @@ type IntegrationSettings struct {
 // have been saved yet.
 func (s *Store) GetIntegrationSettings() (IntegrationSettings, error) {
 	var m IntegrationSettings
-	var hardcoverEnabled, chaptarrEnabled, hideNoChaptarr, hideNoHardcover int
-	err := s.sql.QueryRow(`SELECT hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key, hide_no_chaptarr_match, hide_no_hardcover_match FROM integration_settings WHERE id = 1`).
-		Scan(&hardcoverEnabled, &m.HardcoverToken, &chaptarrEnabled, &m.ChaptarrURL, &m.ChaptarrAPIKey, &hideNoChaptarr, &hideNoHardcover)
+	var hardcoverEnabled, chaptarrEnabled, hideNoChaptarr, hideNoHardcover, overwriteCover int
+	err := s.sql.QueryRow(`SELECT hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key, hide_no_chaptarr_match, hide_no_hardcover_match, hardcover_overwrite_cover FROM integration_settings WHERE id = 1`).
+		Scan(&hardcoverEnabled, &m.HardcoverToken, &chaptarrEnabled, &m.ChaptarrURL, &m.ChaptarrAPIKey, &hideNoChaptarr, &hideNoHardcover, &overwriteCover)
 	if err == sql.ErrNoRows {
 		return IntegrationSettings{}, nil
 	}
@@ -724,22 +729,24 @@ func (s *Store) GetIntegrationSettings() (IntegrationSettings, error) {
 	m.ChaptarrEnabled = chaptarrEnabled != 0
 	m.HideNoChaptarrMatch = hideNoChaptarr != 0
 	m.HideNoHardcoverMatch = hideNoHardcover != 0
+	m.HardcoverOverwriteCover = overwriteCover != 0
 	return m, nil
 }
 
 // SaveIntegrationSettings upserts the single integration_settings row.
 func (s *Store) SaveIntegrationSettings(m IntegrationSettings) error {
 	_, err := s.sql.Exec(`
-		INSERT INTO integration_settings (id, hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key, hide_no_chaptarr_match, hide_no_hardcover_match)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO integration_settings (id, hardcover_enabled, hardcover_token, chaptarr_enabled, chaptarr_url, chaptarr_api_key, hide_no_chaptarr_match, hide_no_hardcover_match, hardcover_overwrite_cover)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			hardcover_enabled = excluded.hardcover_enabled, hardcover_token = excluded.hardcover_token,
 			chaptarr_enabled = excluded.chaptarr_enabled, chaptarr_url = excluded.chaptarr_url,
 			chaptarr_api_key = excluded.chaptarr_api_key,
 			hide_no_chaptarr_match = excluded.hide_no_chaptarr_match,
-			hide_no_hardcover_match = excluded.hide_no_hardcover_match`,
+			hide_no_hardcover_match = excluded.hide_no_hardcover_match,
+			hardcover_overwrite_cover = excluded.hardcover_overwrite_cover`,
 		boolToInt(m.HardcoverEnabled), m.HardcoverToken, boolToInt(m.ChaptarrEnabled), m.ChaptarrURL, m.ChaptarrAPIKey,
-		boolToInt(m.HideNoChaptarrMatch), boolToInt(m.HideNoHardcoverMatch),
+		boolToInt(m.HideNoChaptarrMatch), boolToInt(m.HideNoHardcoverMatch), boolToInt(m.HardcoverOverwriteCover),
 	)
 	return err
 }

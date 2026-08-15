@@ -545,11 +545,12 @@ func TestIntegrationSettings_SaveAndGet(t *testing.T) {
 	}
 
 	m := IntegrationSettings{
-		HardcoverEnabled: true,
-		HardcoverToken:   "hc-token",
-		ChaptarrEnabled:  true,
-		ChaptarrURL:      "http://chaptarr.local:8978",
-		ChaptarrAPIKey:   "ch-key",
+		HardcoverEnabled:        true,
+		HardcoverToken:          "hc-token",
+		ChaptarrEnabled:         true,
+		ChaptarrURL:             "http://chaptarr.local:8978",
+		ChaptarrAPIKey:          "ch-key",
+		HardcoverOverwriteCover: true,
 	}
 	if err := s.SaveIntegrationSettings(m); err != nil {
 		t.Fatal(err)
