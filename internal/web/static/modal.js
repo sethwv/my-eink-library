@@ -25,6 +25,9 @@ function openModal(id) {
     el.style.display = "block";
     openModalId = id;
   }
+  if (window.syncThemeModeControl) {
+    window.syncThemeModeControl();
+  }
   if (backdrop) {
     backdrop.style.display = "block";
   }

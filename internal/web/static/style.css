@@ -650,3 +650,64 @@ th { background: #f7f7f7; }
   padding-top: 1.2em;
 }
 .table-wrap tr:first-child th.field-group-heading { padding-top: 0.6em; }
+
+/* Dark appearance uses literal overrides, rather than CSS custom properties,
+   so it remains usable on the Kobo QtWebKit target. */
+html.theme-dark { background: #181818; }
+html.theme-dark body { color: #f2f2f2; background: #181818; }
+html.theme-dark a { color: #f2f2f2; }
+html.theme-dark .footer, html.theme-dark .muted { color: #c4c4c4; }
+html.theme-dark .error { color: #ff9b9b; border-color: #ff9b9b; }
+html.theme-dark button, html.theme-dark .btn {
+  color: #f2f2f2;
+  background: #222;
+  border-color: #9b9b9b;
+}
+html.theme-dark button:hover { background: #303030; }
+html.theme-dark input[type="text"], html.theme-dark input[type="password"],
+html.theme-dark input[type="email"], html.theme-dark input[type="number"],
+html.theme-dark select, html.theme-dark textarea {
+  color: #f2f2f2;
+  background: #222;
+  border-color: #595959;
+}
+html.theme-dark input[type="text"]:focus, html.theme-dark input[type="password"]:focus,
+html.theme-dark input[type="email"]:focus, html.theme-dark input[type="number"]:focus {
+  outline-color: #c4c4c4;
+}
+html.theme-dark .topbar, html.theme-dark .admin-tabs,
+html.theme-dark .name-list li, html.theme-dark .pagination,
+html.theme-dark .modal-danger-zone { border-color: #595959; }
+html.theme-dark .topnav a, html.theme-dark .admin-tabs a { color: #c4c4c4; }
+html.theme-dark .topnav a:hover, html.theme-dark .admin-tabs a:hover,
+html.theme-dark .admin-tabs a.is-active { color: #f2f2f2; }
+html.theme-dark .admin-tabs a.is-active { border-color: #595959; background: #292929; }
+html.theme-dark .login-card, html.theme-dark .card, html.theme-dark .modal-box,
+html.theme-dark .match-card { background: #222; border-color: #595959; }
+html.theme-dark .card .cover, html.theme-dark .edit-cover-wrap { background: #292929; }
+html.theme-dark .card-author, html.theme-dark .card-series, html.theme-dark .card-date,
+html.theme-dark .modal-field-form label, html.theme-dark .modal-dates,
+html.theme-dark .modal-section-label, html.theme-dark .source-badge,
+html.theme-dark .match-card-meta { color: #c4c4c4; }
+html.theme-dark .pill { color: #c4c4c4; background: #303030; border-color: #595959; }
+html.theme-dark .shelf-toggle { background: #222; border-color: #595959; }
+html.theme-dark .shelf-toggle.is-on, html.theme-dark .match-card.is-on { background: #303030; border-color: #c4c4c4; }
+html.theme-dark .modal-checkbox-label { color: #f2f2f2 !important; }
+html.theme-dark .btn-download, html.theme-dark .btn-hardcover { color: #f2f2f2; border-color: #9b9b9b; }
+html.theme-dark .btn-download:hover, html.theme-dark .btn-hardcover:hover { background: #303030; }
+html.theme-dark .table-wrap { border-color: #595959; }
+html.theme-dark th, html.theme-dark td { border-color: #595959; }
+html.theme-dark th { background: #292929; }
+html.theme-dark .table-wrap th.field-group-heading { background: #222; }
+
+/* Appearance selector lives above the account actions without changing their
+   full-width, touch-friendly list treatment. */
+.appearance-mode-label {
+  display: block;
+  margin: 0 0 0.3em;
+  color: #444;
+  font-size: 0.9em;
+  text-align: left;
+}
+.appearance-mode { display: block; width: 100%; margin: 0 0 1em; }
+html.theme-dark .appearance-mode-label { color: #c4c4c4; }

@@ -45,6 +45,12 @@
 <div id="account-modal" class="modal-overlay">
   <div class="modal-box">
     <h3>{{.Username}}</h3>
+    <label class="appearance-mode-label" for="theme-mode">Appearance</label>
+    <select id="theme-mode" class="appearance-mode" onchange="setThemeMode(this.value);">
+      <option value="auto">Auto</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
     <ul class="shelf-list">
       {{if .Restricted}}
       <li><a class="shelf-toggle" href="/login">Log in</a></li>
