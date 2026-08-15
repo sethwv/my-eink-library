@@ -42,11 +42,15 @@ services:
 Then:
 
 ```bash
-docker compose up -d --build
+BUILD_VERSION="$(sh scripts/build-version)" docker compose up -d --build
 ```
 
 Compose automatically merges `docker-compose.override.yml` over
 `docker-compose.yml`. Visit `http://localhost:8080` and log in.
+
+The footer displays the current exact Git tag when the checkout is clean and
+tagged, otherwise its short commit SHA, followed by the image build date. A
+dirty checkout also uses its short commit SHA.
 
 ## Users
 

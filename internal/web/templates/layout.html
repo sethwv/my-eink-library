@@ -13,6 +13,7 @@
 <div class="container">
 {{template "content" .}}
 </div>
+{{if .BuildVersion}}<footer class="footer">{{.BuildVersion}} {{formatBuildDate .BuildDate}}</footer>{{end}}
 </body>
 </html>
 {{end}}

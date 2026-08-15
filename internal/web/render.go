@@ -34,6 +34,7 @@ var templateFuncs = template.FuncMap{
 	"formatPublished":     formatPublished,
 	"formatYear":          formatYear,
 	"formatPublishedYear": formatPublishedYear,
+	"formatBuildDate":     formatBuildDate,
 	"plainText":           plainText,
 	"authorNames":         authorNames,
 	"withQueryParam":      withQueryParam,
@@ -130,6 +131,15 @@ func formatYear(sec int64) string {
 		return ""
 	}
 	return time.Unix(sec, 0).UTC().Format("2006")
+}
+
+// formatBuildDate renders the ISO date injected at build time for the footer.
+func formatBuildDate(raw string) string {
+	t, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return raw
+	}
+	return t.Format("01-02-2006")
 }
 
 // formatPublished renders an EPUB's raw <dc:date> string as "MM/DD/YYYY" when

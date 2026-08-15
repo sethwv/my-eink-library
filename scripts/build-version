@@ -1,0 +1,16 @@
+#!/bin/sh
+# Print the build revision for Docker's BUILD_VERSION argument.
+set -eu
+
+short_sha=$(git rev-parse --short HEAD 2>/dev/null || true)
+if [ -z "$short_sha" ]; then
+  printf '%s\n' dev
+  exit 0
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+	printf '%s\n' "$short_sha"
+  exit 0
+fi
+
+git describe --exact-match --tags HEAD 2>/dev/null || printf '%s\n' "$short_sha"

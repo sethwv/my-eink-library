@@ -22,6 +22,11 @@ import (
 	"github.com/swvn/eink-library/internal/web"
 )
 
+// buildVersion is set by release builds with -ldflags. The fallback keeps
+// direct go build invocations usable when no build metadata is supplied.
+var buildVersion = "dev"
+var buildDate = "unknown"
+
 // runHealthcheck is invoked as `server -healthcheck` from the Dockerfile's
 // HEALTHCHECK instruction; distroless has no shell/curl for a CMD-SHELL probe.
 func runHealthcheck() {
@@ -147,6 +152,8 @@ func main() {
 		SiteName:     generalSettings.SiteName,
 		PublicURL:    generalSettings.PublicURL,
 		StartedAt:    time.Now(),
+		BuildVersion: buildVersion,
+		BuildDate:    buildDate,
 	}
 	// Single background loop for both integrations (idles, rather than
 	// exiting, while both are disabled) — see RunEnrichmentQueue's doc

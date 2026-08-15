@@ -33,6 +33,8 @@ type Server struct {
 	SiteName     string
 	PublicURL    string // trusted base URL for emailed links; see config.Config.PublicURL
 	StartedAt    time.Time
+	BuildVersion string
+	BuildDate    string
 }
 
 const favoritesSlug = "favourites"
@@ -77,6 +79,8 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 		"Shelves":         shelves,
 		"SiteName":        s.SiteName,
 		"CurrentURL":      r.URL.RequestURI(),
+		"BuildVersion":    s.BuildVersion,
+		"BuildDate":       s.BuildDate,
 	}
 	return data, shelves, nil
 }
