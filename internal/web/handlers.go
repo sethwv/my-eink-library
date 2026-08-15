@@ -240,6 +240,10 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	if page > totalPages {
 		page = totalPages
 	}
+	pages := make([]int, totalPages)
+	for i := range pages {
+		pages[i] = i + 1
+	}
 
 	books, err := s.DB.List(sort, descending, page, pageSize, filter)
 	if err != nil {
@@ -292,6 +296,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"NextPage":         page + 1,
 		"HasNext":          page < totalPages,
 		"TotalPages":       totalPages,
+		"Pages":            pages,
 		"Query":            search,
 		"Action":           p.action,
 		"Name":             p.name,
@@ -300,10 +305,6 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		"Locations":        locations,
 	}
 	mergeInto(data, base)
-	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
-		renderPartials(w, data, "book_cards", "pagination_state")
-		return
-	}
 	render(w, "library.html", data)
 }
 

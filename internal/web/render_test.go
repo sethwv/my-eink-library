@@ -105,3 +105,107 @@ func TestWithQueryParam_InvalidURLReturnsUnchanged(t *testing.T) {
 		t.Errorf("withQueryParam(%q, ...) = %q, want the input unchanged on a parse failure", bad, got)
 	}
 }
+
+func TestRenderLibraryPager(t *testing.T) {
+	tests := []struct {
+		name            string
+		page            int
+		totalPages      int
+		pages           []int
+		wantPrevious    bool
+		wantNext        bool
+		wantSelectedOpt string
+	}{
+		{
+			name:            "first page",
+			page:            1,
+			totalPages:      3,
+			pages:           []int{1, 2, 3},
+			wantNext:        true,
+			wantSelectedOpt: `<option value="1" selected>Page 1 of 3</option>`,
+		},
+		{
+			name:            "last page",
+			page:            3,
+			totalPages:      3,
+			pages:           []int{1, 2, 3},
+			wantPrevious:    true,
+			wantSelectedOpt: `<option value="3" selected>Page 3 of 3</option>`,
+		},
+		{
+			name:            "empty list has one page",
+			page:            1,
+			totalPages:      1,
+			pages:           []int{1},
+			wantSelectedOpt: `<option value="1" selected>Page 1 of 1</option>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			render(recorder, "library.html", map[string]any{
+				"Title":      "Library",
+				"SiteName":   "eink-library",
+				"Action":     "/authors",
+				"Sort":       "author",
+				"Dir":        "asc",
+				"Query":      "Moby Dick",
+				"Name":       "Herman Melville",
+				"Page":       tt.page,
+				"PrevPage":   tt.page - 1,
+				"NextPage":   tt.page + 1,
+				"HasNext":    tt.wantNext,
+				"TotalPages": tt.totalPages,
+				"Pages":      tt.pages,
+			})
+
+			if recorder.Code != 200 {
+				t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body.String())
+			}
+			body := recorder.Body.String()
+			if !strings.Contains(body, tt.wantSelectedOpt) {
+				t.Errorf("page select missing selected option %q", tt.wantSelectedOpt)
+			}
+			if got := strings.Contains(body, `aria-label="Previous page"`); got != tt.wantPrevious {
+				t.Errorf("previous link = %t, want %t", got, tt.wantPrevious)
+			}
+			if got := strings.Contains(body, `aria-label="Next page"`); got != tt.wantNext {
+				t.Errorf("next link = %t, want %t", got, tt.wantNext)
+			}
+			if !strings.Contains(body, `onchange="this.form.submit()"`) {
+				t.Error("page select does not submit on selection")
+			}
+			if tt.wantPrevious || tt.wantNext {
+				if !strings.Contains(body, `class="pagination-icon"`) {
+					t.Error("pager does not render SVG chevrons")
+				}
+				if !strings.Contains(body, `href="/authors?`) {
+					t.Error("pager does not render a navigation link")
+				}
+			}
+		})
+	}
+}
+
+func TestPageURLPreservesListView(t *testing.T) {
+	raw := pageURL("/authors", "author", "asc", 2, "Moby Dick", "Herman Melville")
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("pageURL() = %q, not a valid URL: %v", raw, err)
+	}
+	if parsed.Path != "/authors" {
+		t.Errorf("path = %q, want /authors", parsed.Path)
+	}
+	for key, want := range map[string]string{
+		"dir":  "asc",
+		"name": "Herman Melville",
+		"page": "2",
+		"q":    "Moby Dick",
+		"sort": "author",
+	} {
+		if got := parsed.Query().Get(key); got != want {
+			t.Errorf("query[%q] = %q, want %q", key, got, want)
+		}
+	}
+}

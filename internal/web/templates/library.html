@@ -44,19 +44,18 @@
 {{end}}
 
 {{template "book_cards" .}}
-{{template "pagination_state" .}}
 
 <nav class="pagination" id="pagination-nav">
-{{if gt .Page 1}}<a href="{{pageURL .Action .Sort .Dir .PrevPage .Query .Name}}">&laquo; prev</a>{{end}}
-<span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
-{{if .HasNext}}<a href="{{pageURL .Action .Sort .Dir .NextPage .Query .Name}}">next &raquo;</a>{{end}}
+{{if gt .Page 1}}<a class="pagination-arrow" href="{{pageURL .Action .Sort .Dir .PrevPage .Query .Name}}" aria-label="Previous page" title="Previous page"><svg class="pagination-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></a>{{end}}
 <form method="GET" action="{{.Action}}" class="jump-form">
   <input type="hidden" name="sort" value="{{.Sort}}">
   <input type="hidden" name="dir" value="{{.Dir}}">
   <input type="hidden" name="q" value="{{.Query}}">
   {{if .Name}}<input type="hidden" name="name" value="{{.Name}}">{{end}}
-  <input type="number" id="jump-page" name="page" min="1" max="{{.TotalPages}}" value="{{.Page}}" class="jump-input">
-  <button type="submit" class="jump-btn">Go</button>
+  <select id="jump-page" name="page" class="jump-input" aria-label="Page" onchange="this.form.submit()">
+  {{range .Pages}}<option value="{{.}}" {{if eq . $.Page}}selected{{end}}>Page {{.}} of {{$.TotalPages}}</option>{{end}}
+  </select>
 </form>
+{{if .HasNext}}<a class="pagination-arrow" href="{{pageURL .Action .Sort .Dir .NextPage .Query .Name}}" aria-label="Next page" title="Next page"><svg class="pagination-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></a>{{end}}
 </nav>
 {{end}}

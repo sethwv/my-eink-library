@@ -522,40 +522,35 @@ label { display: block; margin: 0.6em 0; }
   color: #111;
 }
 .btn-hardcover:hover { background: #f7f7f7; }
-/* Pagination — centered text with inline-block links instead of flexbox */
+/* Pagination uses inline-block controls, centered on the same vertical line.
+   Kobo flattens select styling, so matching padding alone cannot align it. */
 .pagination {
   text-align: center;
   margin-top: 2em;
   padding-top: 1.5em;
   border-top: 1px solid #ddd;
 }
-.pagination a, .pagination span {
-  display: inline-block;
-  margin: 0 0.6em;
-  padding: 0.5em;
-}
-.jump-form {
+.pagination a, .pagination form {
   display: inline-block;
   vertical-align: middle;
-  margin: 0.4em 0 0;
+}
+.jump-form {
+  margin: 0 0.35em;
 }
 .jump-input {
   display: inline-block;
-  width: 4em;
-  margin-right: 0.4em;
+  vertical-align: middle;
 }
-.jump-btn {
+.pagination-arrow {
   display: inline-block;
+  padding: 0.5em;
+  text-decoration: none;
 }
-
-/* Load-more button, injected by infinite-scroll.js — hidden by default so
-   a page with JS disabled (or a slow/failed script load) never shows a
-   dead button; the script only reveals it once initialized. */
-.load-more-btn {
-  display: none;
-  width: 100%;
-  margin: 1.5em 0;
-  padding: 0.8em;
+.pagination-icon {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1.3em;
+  height: 1.3em;
 }
 
 /* Tables (admin users, server info) */

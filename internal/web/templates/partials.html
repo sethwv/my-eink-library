@@ -135,8 +135,6 @@
 </div>
 {{end}}
 
-{{define "pagination_state"}}<div id="pagination-state" data-has-next="{{.HasNext}}" data-next-page="{{.NextPage}}" data-total-pages="{{.TotalPages}}" data-page="{{.Page}}" data-sort="{{.Sort}}" data-dir="{{.Dir}}" style="display:none"></div>{{end}}
-
 {{define "admintabs"}}
 <nav class="admin-tabs">
   {{if .CanManageUsers}}<a href="/admin/users" class="{{if eq .AdminTab "users"}}is-active{{end}}">Users</a>{{end}}
