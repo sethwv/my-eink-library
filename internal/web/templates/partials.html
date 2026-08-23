@@ -45,12 +45,12 @@
 <div id="account-modal" class="modal-overlay">
   <div class="modal-box">
     <h3>{{.Username}}</h3>
-    <label class="appearance-mode-label" for="theme-mode">Appearance</label>
-    <select id="theme-mode" class="appearance-mode" onchange="setThemeMode(this.value);">
-      <option value="auto">Auto</option>
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-    </select>
+    <div id="appearance-mode-label" class="appearance-mode-label">Appearance</div>
+    <div id="theme-mode" class="appearance-mode" role="group" aria-labelledby="appearance-mode-label">
+      <button type="button" class="appearance-mode-auto" value="auto" aria-pressed="false" onclick="setThemeMode('auto');">Auto</button>
+      <button type="button" class="appearance-mode-light" value="light" aria-pressed="false" onclick="setThemeMode('light');">Light</button>
+      <button type="button" class="appearance-mode-dark" value="dark" aria-pressed="false" onclick="setThemeMode('dark');">Dark</button>
+    </div>
     <ul class="shelf-list">
       {{if .Restricted}}
       <li><a class="shelf-toggle" href="/login">Log in</a></li>

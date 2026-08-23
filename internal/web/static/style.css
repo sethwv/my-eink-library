@@ -695,8 +695,9 @@ html.theme-dark th, html.theme-dark td { border-color: #595959; }
 html.theme-dark th { background: #292929; }
 html.theme-dark .table-wrap th.field-group-heading { background: #222; }
 
-/* Appearance selector lives above the account actions without changing their
-   full-width, touch-friendly list treatment. */
+/* Appearance controls avoid a native select, whose popup locks up Kobo's
+   QtWebKit browser. The selected state is managed by theme.js; :active is
+   only immediate touch feedback. */
 .appearance-mode-label {
   display: block;
   margin: 0 0 0.3em;
@@ -704,5 +705,34 @@ html.theme-dark .table-wrap th.field-group-heading { background: #222; }
   font-size: 0.9em;
   text-align: left;
 }
-.appearance-mode { display: block; width: 100%; margin: 0 0 1em; }
+.appearance-mode { display: block; width: 100%; margin: 0 0 1em; font-size: 0; }
+.appearance-mode button {
+  display: inline-block;
+  width: 33.333%;
+  margin: 0;
+  padding: 0.65em 0.3em;
+  border-color: #ddd;
+  -webkit-border-radius: 0;
+  border-radius: 0;
+  font-size: 1rem;
+}
+.appearance-mode button + button { margin-left: -1px; }
+.appearance-mode .appearance-mode-auto {
+  -webkit-border-radius: 5px 0 0 5px;
+  border-radius: 5px 0 0 5px;
+}
+.appearance-mode .appearance-mode-dark {
+  -webkit-border-radius: 0 5px 5px 0;
+  border-radius: 0 5px 5px 0;
+}
+.appearance-mode button.is-selected {
+  position: relative;
+  z-index: 1;
+  background: #f7f7f7;
+  border-color: #888;
+}
+.appearance-mode button:active { background: #f0f0f0; }
 html.theme-dark .appearance-mode-label { color: #c4c4c4; }
+html.theme-dark .appearance-mode button { background: #222; border-color: #595959; }
+html.theme-dark .appearance-mode button.is-selected { background: #303030; border-color: #c4c4c4; }
+html.theme-dark .appearance-mode button:active { background: #383838; }

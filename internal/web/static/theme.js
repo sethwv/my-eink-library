@@ -52,9 +52,23 @@
   };
 
   window.syncThemeModeControl = function () {
-    var control = document.getElementById("theme-mode");
-    if (control) {
-      control.value = preference();
+    var group = document.getElementById("theme-mode");
+    if (!group) {
+      return;
+    }
+    var mode = preference();
+    var controls = group.getElementsByTagName("button");
+    for (var i = 0; i < controls.length; i++) {
+      var control = controls[i];
+      if (control.value === mode) {
+        if ((" " + control.className + " ").indexOf(" is-selected ") === -1) {
+          control.className += " is-selected";
+        }
+        control.setAttribute("aria-pressed", "true");
+      } else {
+        control.className = (" " + control.className + " ").replace(" is-selected ", " ").replace(/^\s+|\s+$/g, "");
+        control.setAttribute("aria-pressed", "false");
+      }
     }
   };
 
