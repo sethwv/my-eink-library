@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/pressly/goose/v3"
-	"github.com/swvn/eink-library/internal/mail"
+	"github.com/sethwv/my-eink-library/internal/mail"
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 )

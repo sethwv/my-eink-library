@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement.
+labels: [feature, triage]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Functional area
+      options:
+        - Library/indexing
+        - Web UI/e-reader
+        - Authentication/users
+        - Downloads/KEPUB
+        - Integrations
+        - Deployment/docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Proposed outcome
+    validations:
+      required: true

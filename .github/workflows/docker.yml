@@ -1,0 +1,75 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version without the v prefix
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version != '' && format('release-{0}', inputs.version) || (github.head_ref || github.ref) }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/automated-testing.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Compute release tags
+        id: version
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: echo "major_minor=${VERSION%.*}" >> "$GITHUB_OUTPUT"
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/sethwv/my-eink-library
+          tags: |
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ inputs.version != '' }}
+            type=raw,value=latest,enable=${{ inputs.version != '' }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' && inputs.version == '' }}
+            type=sha,prefix=dev-,format=short,enable=${{ github.ref == 'refs/heads/dev' && inputs.version == '' }}
+          labels: |
+            org.opencontainers.image.title=my-eink-library
+            org.opencontainers.image.description=Self-hosted EPUB library for e-readers
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.source=https://github.com/sethwv/my-eink-library
+      - name: Log in to GHCR
+        if: inputs.version != '' || github.ref == 'refs/heads/dev'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.version != '' || github.ref == 'refs/heads/dev' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_VERSION=${{ inputs.version || github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

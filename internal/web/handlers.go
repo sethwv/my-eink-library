@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/swvn/eink-library/internal/auth"
-	"github.com/swvn/eink-library/internal/chaptarr"
-	"github.com/swvn/eink-library/internal/hardcover"
-	"github.com/swvn/eink-library/internal/index"
-	"github.com/swvn/eink-library/internal/kepub"
-	"github.com/swvn/eink-library/internal/mail"
-	"github.com/swvn/eink-library/internal/thumbnail"
-	"github.com/swvn/eink-library/internal/users"
+	"github.com/sethwv/my-eink-library/internal/auth"
+	"github.com/sethwv/my-eink-library/internal/chaptarr"
+	"github.com/sethwv/my-eink-library/internal/hardcover"
+	"github.com/sethwv/my-eink-library/internal/index"
+	"github.com/sethwv/my-eink-library/internal/kepub"
+	"github.com/sethwv/my-eink-library/internal/mail"
+	"github.com/sethwv/my-eink-library/internal/thumbnail"
+	"github.com/sethwv/my-eink-library/internal/users"
 )
 
 type Server struct {

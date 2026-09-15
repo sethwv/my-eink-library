@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/swvn/eink-library/internal/epub"
+	"github.com/sethwv/my-eink-library/internal/epub"
 )
 
 // SortKey identifies which column a listing should be ordered by.

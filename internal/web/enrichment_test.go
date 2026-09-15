@@ -3,8 +3,8 @@ package web
 import (
 	"testing"
 
-	"github.com/swvn/eink-library/internal/chaptarr"
-	"github.com/swvn/eink-library/internal/hardcover"
+	"github.com/sethwv/my-eink-library/internal/chaptarr"
+	"github.com/sethwv/my-eink-library/internal/hardcover"
 )
 
 func TestMergeChaptarrFields_ChaptarrWinsWhenBothHaveAField(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/swvn/eink-library/internal/users"
+	"github.com/sethwv/my-eink-library/internal/users"
 )
 
 const CookieName = "eink_session"

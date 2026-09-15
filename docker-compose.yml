@@ -1,9 +1,6 @@
 services:
   eink-library:
-    build:
-      context: .
-      args:
-        BUILD_VERSION: ${BUILD_VERSION:-dev}
+    image: ghcr.io/sethwv/my-eink-library:latest
     ports:
       - "8080:8080"
     environment:
@@ -14,8 +11,7 @@ services:
       - DATA_DIR=/data
       - PORT=8080
     volumes:
-      - /Users/seth/Downloads/book-new:/library:ro
-      - ./test/data:/data
+      - eink-library-data:/data
     restart: unless-stopped
 
 volumes:

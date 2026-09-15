@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/swvn/eink-library/internal/epub"
+	"github.com/sethwv/my-eink-library/internal/epub"
 )
 
 // insertLocation records fullPath's file as an additional known location of

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/swvn/eink-library/internal/chaptarr"
-	"github.com/swvn/eink-library/internal/hardcover"
-	"github.com/swvn/eink-library/internal/index"
+	"github.com/sethwv/my-eink-library/internal/chaptarr"
+	"github.com/sethwv/my-eink-library/internal/hardcover"
+	"github.com/sethwv/my-eink-library/internal/index"
 )
 
 // idlePollInterval is how long the background enrichment queue waits before

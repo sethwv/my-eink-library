@@ -21,11 +21,11 @@ docker-compose.override.yml
 .idea/
 .vscode/
 
-# Beads: only the jsonl export is tracked, everything else is local tooling
+# Local AI tooling and issue database
 .agents/
 .codex/
-.beads/*
-!.beads/*.jsonl
+.beads/
+.claude/
 AGENTS.md
 CLAUDE.md
 

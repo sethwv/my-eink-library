@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/swvn/eink-library/internal/index"
-	"github.com/swvn/eink-library/internal/mail"
+	"github.com/sethwv/my-eink-library/internal/index"
+	"github.com/sethwv/my-eink-library/internal/mail"
 )
 
 // digestInterval is how often the weekly new-book digest goes out; digestCheckInterval
