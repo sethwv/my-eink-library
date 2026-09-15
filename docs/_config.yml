@@ -9,7 +9,7 @@ plugins:
   - jekyll-remote-theme
   - jekyll-seo-tag
 
-color_scheme: light
+color_scheme: dark
 search_enabled: true
 search:
   heading_level: 3
