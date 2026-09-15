@@ -1,6 +1,7 @@
 ---
 title: Roadmap
-nav_order: 6
+parent: Project
+nav_order: 2
 ---
 
 # Roadmap
@@ -33,4 +34,4 @@ Clarify account actions and ensure restricted sessions only show controls they c
 
 Explore Kindle delivery and MOBI indexing alongside EPUB without creating a second-class format path.
 
-For the principles behind these priorities, read the [project vision](vision.md). For constraints that affect implementation, read [Known limitations](limitations.md).
+For the principles behind these priorities, read the [Vision](vision.md). For constraints that affect implementation, read [Browser limitations](../technical/browser-limitations.md).

@@ -1,9 +1,10 @@
 ---
-title: Project vision
-nav_order: 5
+title: Vision
+parent: Project
+nav_order: 1
 ---
 
-# Project vision
+# Vision
 
 my-eink-library is a self-hosted EPUB library for people who want to read the files they own on the e-readers they already use.
 
@@ -26,4 +27,4 @@ my-eink-library is a self-hosted EPUB library for people who want to read the fi
 
 my-eink-library is not a cloud bookshelf, a DRM service, or a replacement for an e-reader's native library. It is not a downloader and does not discover, acquire, source, or manage book files. It also does not replace applications that interface with indexers or other acquisition services. It is a private, browser-accessible home for an EPUB collection you already have.
 
-See [Known limitations](limitations.md) for the browser trade-offs that shape these choices and [Roadmap](roadmap.md) for current priorities.
+See [Browser limitations](../technical/browser-limitations.md) for the browser trade-offs that shape these choices and [Roadmap](roadmap.md) for current priorities.

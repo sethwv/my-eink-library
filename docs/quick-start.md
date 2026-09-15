@@ -1,11 +1,11 @@
 ---
-title: Getting started
+title: Quick Start
 nav_order: 2
 ---
 
-# Getting started
+# Quick Start
 
-Docker is the quickest way to run my-eink-library. Your EPUB files remain mounted read-only, while its index and user database live in a named Docker volume. For Windows and Debian package installation, see [Deployment](deployment.html).
+Docker is the quickest way to run my-eink-library. Your EPUB files remain mounted read-only, while its index and user database live in a named Docker volume. For Windows and Debian package installation, see [Deployment](deployment/).
 
 ## 1. Create an override file
 

@@ -1,9 +1,10 @@
 ---
-title: Known limitations
-nav_order: 7
+title: Browser Limitations
+parent: Technical
+nav_order: 1
 ---
 
-# Known limitations
+# Browser Limitations
 
 The primary target is Kobo's built-in browser, a roughly 2015-era QtWebKit engine. The behavior below is confirmed on project hardware. Modern browser testing is useful for regressions, but it does not certify an e-reader browser.
 

@@ -8,7 +8,7 @@ description: "A self-hosted EPUB library made for e-reader browsers."
   <h1>my-eink-library</h1>
   <p class="hero-lede">A purpose built EPUB library for Kobo e-reader web browsers.</p>
   <div class="hero-actions">
-    <a class="btn btn-primary" href="{{ '/getting-started' | relative_url }}">Get started</a>
+    <a class="btn btn-primary" href="{{ '/quick-start' | relative_url }}">Get started</a>
     <a class="btn btn-secondary" href="https://github.com/sethwv/my-eink-library/releases">Download releases</a>
     <a class="btn btn-secondary" href="https://github.com/sethwv/my-eink-library">View source</a>
   </div>
@@ -41,8 +41,8 @@ description: "A self-hosted EPUB library made for e-reader browsers."
 [More screenshots](screenshots)
 
 ## Explore
-- [Project vision](vision.md)
-- [Deployment](deployment.md)
-- [Roadmap](roadmap.md)
-- [Known limitations](limitations.md)
+- [Vision](project/vision.md)
+- [Deployment](deployment/)
+- [Roadmap](project/roadmap.md)
+- [Browser Limitations](technical/browser-limitations.md)
 - [Contributing](contributing.md)
