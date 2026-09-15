@@ -22,6 +22,17 @@ body {
   background: var(--paper);
 }
 
+.main-header,
+.aux-nav {
+  background: var(--paper-deep);
+  border-bottom-color: var(--line);
+}
+
+.aux-nav .site-button {
+  background: transparent;
+  border-color: var(--line);
+}
+
 .side-bar {
   border-right: 1px solid var(--line);
 }
@@ -217,6 +228,50 @@ button,
   line-height: 1.7;
 }
 
+.screenshot-pair {
+  border-top: 1px solid var(--line);
+  margin: 2.5rem 0;
+  padding-top: 1.25rem;
+}
+
+.screenshot-pair figcaption {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.screenshot-pair figcaption strong {
+  color: var(--moss-dark);
+  font-family: Fraunces, Georgia, serif;
+  font-size: 1.35rem;
+}
+
+.screenshot-pair figcaption span,
+.screenshot-pair-images span {
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+  font-size: 0.72rem;
+}
+
+.screenshot-pair-images {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.screenshot-pair-images a {
+  color: var(--muted);
+  display: grid;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.screenshot-pair-images img {
+  border: 1px solid var(--line);
+  display: block;
+  width: 100%;
+}
+
 .main-content table {
   border-color: var(--line);
   font-size: 0.9rem;
@@ -226,8 +281,48 @@ button,
   background: var(--paper-deep);
 }
 
-code {
+.main-content th,
+.main-content td {
+  border-color: var(--line);
+}
+
+.main-content th {
+  color: var(--moss-dark);
+  font-family: "DM Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.main-content tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+:not(pre) > code {
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
   color: var(--rust);
+  font-family: "DM Mono", monospace;
+  font-size: 0.82em;
+  padding: 0.12em 0.3em;
+}
+
+pre,
+.highlight {
+  background: #0e1310;
+  border: 1px solid var(--line);
+}
+
+pre {
+  padding: 1rem;
+}
+
+pre code,
+.highlight code {
+  background: transparent;
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  font-size: 0.8rem;
 }
 
 a:focus-visible,
@@ -245,6 +340,10 @@ button:focus-visible,
   }
 
   .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .screenshot-pair-images {
     grid-template-columns: 1fr;
   }
 }

@@ -1,0 +1,16 @@
+{
+  "name": "eink-library-screenshot-harness",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fixtures": "node fixtures.mjs",
+    "download-covers": "node download-covers.mjs",
+    "capture": "node capture.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "playwright": "1.57.0",
+    "yaml": "2.8.2",
+    "yazl": "3.3.1"
+  }
+}

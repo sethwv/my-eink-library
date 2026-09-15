@@ -42,7 +42,14 @@ description: "A self-hosted EPUB library made for e-reader browsers."
 
 ## Screenshots
 
-Add public-safe captures to [`assets/images/`](assets/images/). Good first additions are the login page, library grid, book modal, and server settings. Avoid private book covers, usernames, email addresses, local paths, and tokens.
+
+{% include screenshot-pair.html id="login" %}
+
+{% include screenshot-pair.html id="library-grid" %}
+
+{% include screenshot-pair.html id="book-modal" %}
+
+{% include screenshot-pair.html id="admin-settings" %}
 
 ## Next step
 

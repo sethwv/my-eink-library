@@ -1,0 +1,16 @@
+- id: login
+  title: Sign in
+  description: The minimal sign-in page used on desktop and e-reader browsers.
+  scenario: login
+- id: library-grid
+  title: Library grid
+  description: A populated library with search, sort controls, covers, and pagination.
+  scenario: library-grid
+- id: book-modal
+  title: Book details
+  description: A book's download, author, series, and shelf actions in the detail modal.
+  scenario: book-modal
+- id: admin-settings
+  title: Server settings
+  description: Admin controls for the server's general and SMTP settings.
+  scenario: admin-settings

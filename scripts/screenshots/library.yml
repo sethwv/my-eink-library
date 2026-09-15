@@ -1,0 +1,110 @@
+copies_per_book: 1
+
+# Covers are vendored from Project Gutenberg editions of public-domain works.
+covers:
+  pride: pride-and-prejudice.jpg
+  frankenstein: frankenstein.jpg
+  dracula: dracula.jpg
+  moby_dick: moby-dick.jpg
+  jane_eyre: jane-eyre.jpg
+  sherlock: sherlock-holmes.jpg
+  dorian_gray: dorian-gray.jpg
+  tale_of_two_cities: tale-of-two-cities.jpg
+  lyrical_ballads: lyrical-ballads.jpg
+  awakening: awakening.jpg
+  alice: alice-in-wonderland.jpg
+  christmas_carol: a-christmas-carol.jpg
+  great_expectations: great-expectations.jpg
+  wuthering_heights: wuthering-heights.jpg
+  war_and_peace: war-and-peace.jpg
+  count_of_monte_cristo: count-of-monte-cristo.jpg
+  time_machine: time-machine.jpg
+  secret_garden: secret-garden.jpg
+  little_women: little-women.jpg
+  wizard_of_oz: wizard-of-oz.jpg
+  hound_of_baskervilles: hound-of-baskervilles.jpg
+  importance_of_earnest: importance-of-being-earnest.jpg
+  anne_of_green_gables: anne-of-green-gables.jpg
+  scarlet_letter: scarlet-letter.jpg
+  call_of_the_wild: call-of-the-wild.jpg
+  wind_in_willows: wind-in-the-willows.jpg
+  jungle_book: jungle-book.jpg
+  peter_pan: peter-pan.jpg
+  metamorphosis: metamorphosis.jpg
+  room_with_a_view: room-with-a-view.jpg
+
+cover_sources:
+  pride: https://www.gutenberg.org/cache/epub/1342/pg1342.cover.medium.jpg
+  frankenstein: https://www.gutenberg.org/cache/epub/84/pg84.cover.medium.jpg
+  dracula: https://www.gutenberg.org/cache/epub/345/pg345.cover.medium.jpg
+  moby_dick: https://www.gutenberg.org/cache/epub/2701/pg2701.cover.medium.jpg
+  jane_eyre: https://www.gutenberg.org/cache/epub/1260/pg1260.cover.medium.jpg
+  sherlock: https://www.gutenberg.org/cache/epub/1661/pg1661.cover.medium.jpg
+  dorian_gray: https://www.gutenberg.org/cache/epub/174/pg174.cover.medium.jpg
+  tale_of_two_cities: https://www.gutenberg.org/cache/epub/98/pg98.cover.medium.jpg
+  lyrical_ballads: https://www.gutenberg.org/cache/epub/9622/pg9622.cover.medium.jpg
+  awakening: https://www.gutenberg.org/cache/epub/160/pg160.cover.medium.jpg
+  alice: https://www.gutenberg.org/cache/epub/11/pg11.cover.medium.jpg
+  christmas_carol: https://www.gutenberg.org/cache/epub/46/pg46.cover.medium.jpg
+  great_expectations: https://www.gutenberg.org/cache/epub/1400/pg1400.cover.medium.jpg
+  wuthering_heights: https://www.gutenberg.org/cache/epub/768/pg768.cover.medium.jpg
+  war_and_peace: https://www.gutenberg.org/cache/epub/2600/pg2600.cover.medium.jpg
+  count_of_monte_cristo: https://www.gutenberg.org/cache/epub/1184/pg1184.cover.medium.jpg
+  time_machine: https://www.gutenberg.org/cache/epub/35/pg35.cover.medium.jpg
+  secret_garden: https://www.gutenberg.org/cache/epub/17396/pg17396.cover.medium.jpg
+  little_women: https://www.gutenberg.org/cache/epub/514/pg514.cover.medium.jpg
+  wizard_of_oz: https://www.gutenberg.org/cache/epub/55/pg55.cover.medium.jpg
+  hound_of_baskervilles: https://www.gutenberg.org/cache/epub/2852/pg2852.cover.medium.jpg
+  importance_of_earnest: https://www.gutenberg.org/cache/epub/844/pg844.cover.medium.jpg
+  anne_of_green_gables: https://www.gutenberg.org/cache/epub/45/pg45.cover.medium.jpg
+  scarlet_letter: https://www.gutenberg.org/cache/epub/25344/pg25344.cover.medium.jpg
+  call_of_the_wild: https://www.gutenberg.org/cache/epub/215/pg215.cover.medium.jpg
+  wind_in_willows: https://www.gutenberg.org/cache/epub/289/pg289.cover.medium.jpg
+  jungle_book: https://www.gutenberg.org/cache/epub/236/pg236.cover.medium.jpg
+  peter_pan: https://www.gutenberg.org/cache/epub/16/pg16.cover.medium.jpg
+  metamorphosis: https://www.gutenberg.org/cache/epub/5200/pg5200.cover.medium.jpg
+  room_with_a_view: https://www.gutenberg.org/cache/epub/2641/pg2641.cover.medium.jpg
+
+mocked_hardcover:
+  pride:
+    description: Elizabeth Bennet is determined to judge character by action, not rank, until a proud stranger makes every encounter more complicated.
+  frankenstein:
+    description: A young scientist gives life to an extraordinary creature and must confront the consequences of abandoning it.
+  dracula:
+    description: A circle of friends follows a trail from Transylvania to England to stop a predatory count.
+  moby_dick:
+    description: Ishmael joins a whaling voyage commanded by a captain consumed by a white whale.
+  jane_eyre:
+    description: An independent governess finds work at Thornfield Hall, where a guarded employer and a hidden past change her future.
+
+books:
+  - { title: Pride and Prejudice, authors: [Jane Austen], series: Austen Classics, series_index: 1, published: 1813-01-28, cover: pride }
+  - { title: Frankenstein, authors: [Mary Shelley], published: 1818-01-01, cover: frankenstein }
+  - { title: Dracula, authors: [Bram Stoker], published: 1897-05-26, cover: dracula }
+  - { title: Moby-Dick, authors: [Herman Melville], published: 1851-10-18, cover: moby_dick }
+  - { title: Jane Eyre, authors: [Charlotte Bronte], published: 1847-10-16, cover: jane_eyre }
+  - { title: The Adventures of Sherlock Holmes, authors: [Arthur Conan Doyle], series: Sherlock Holmes, series_index: 3, published: 1892-10-14, cover: sherlock }
+  - { title: The Picture of Dorian Gray, authors: [Oscar Wilde], published: 1890-06-20, cover: dorian_gray }
+  - { title: A Tale of Two Cities, authors: [Charles Dickens], published: 1859-01-01, epub2: true, cover: tale_of_two_cities }
+  - { title: Lyrical Ballads, authors: [William Wordsworth, Samuel Taylor Coleridge], published: 1798-01-01, cover: lyrical_ballads }
+  - { title: The Awakening, authors: [Kate Chopin], published: 1899-01-01, cover: awakening }
+  - { title: Alice's Adventures in Wonderland, authors: [Lewis Carroll], published: 1865-11-26, cover: alice }
+  - { title: A Christmas Carol, authors: [Charles Dickens], published: 1843-12-19, cover: christmas_carol }
+  - { title: Great Expectations, authors: [Charles Dickens], published: 1861-08-01, cover: great_expectations }
+  - { title: Wuthering Heights, authors: [Emily Bronte], published: 1847-12-01, cover: wuthering_heights }
+  - { title: War and Peace, authors: [Leo Tolstoy], published: 1869-01-01, cover: war_and_peace }
+  - { title: The Count of Monte Cristo, authors: [Alexandre Dumas], published: 1844-01-01, cover: count_of_monte_cristo }
+  - { title: The Time Machine, authors: [H. G. Wells], published: 1895-01-01, cover: time_machine }
+  - { title: The Secret Garden, authors: [Frances Hodgson Burnett], published: 1911-01-01, cover: secret_garden }
+  - { title: Little Women, authors: [Louisa May Alcott], published: 1868-01-01, cover: little_women }
+  - { title: The Wonderful Wizard of Oz, authors: [L. Frank Baum], published: 1900-05-17, cover: wizard_of_oz }
+  - { title: The Hound of the Baskervilles, authors: [Arthur Conan Doyle], published: 1902-01-01, cover: hound_of_baskervilles }
+  - { title: The Importance of Being Earnest, authors: [Oscar Wilde], published: 1895-02-14, cover: importance_of_earnest }
+  - { title: Anne of Green Gables, authors: [L. M. Montgomery], published: 1908-01-01, cover: anne_of_green_gables }
+  - { title: The Scarlet Letter, authors: [Nathaniel Hawthorne], published: 1850-01-01, cover: scarlet_letter }
+  - { title: The Call of the Wild, authors: [Jack London], published: 1903-01-01, cover: call_of_the_wild }
+  - { title: The Wind in the Willows, authors: [Kenneth Grahame], published: 1908-01-01, cover: wind_in_willows }
+  - { title: The Jungle Book, authors: [Rudyard Kipling], published: 1894-01-01, cover: jungle_book }
+  - { title: Peter Pan, authors: [J. M. Barrie], published: 1911-01-01, cover: peter_pan }
+  - { title: The Metamorphosis, authors: [Franz Kafka], published: 1915-01-01, cover: metamorphosis }
+  - { title: A Room with a View, authors: [E. M. Forster], published: 1908-01-01, cover: room_with_a_view }

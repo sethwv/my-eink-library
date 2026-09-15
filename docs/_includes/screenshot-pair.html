@@ -1,0 +1,18 @@
+{% assign screenshot = site.data.screenshots | where: "id", include.id | first %}
+{% assign image_base = "/assets/images/generated/" | append: screenshot.id %}
+<figure class="screenshot-pair" id="screenshot-{{ screenshot.id }}">
+  <figcaption>
+    <strong>{{ screenshot.title }}</strong>
+    <span>{{ screenshot.description }}</span>
+  </figcaption>
+  <div class="screenshot-pair-images">
+    <a href="{{ image_base | append: '-desktop.png' | relative_url }}">
+      <img src="{{ image_base | append: '-desktop.png' | relative_url }}" alt="{{ screenshot.title }} on a desktop browser">
+      <span>Desktop, 1440 x 810</span>
+    </a>
+    <a href="{{ image_base | append: '-ereader.png' | relative_url }}">
+      <img src="{{ image_base | append: '-ereader.png' | relative_url }}" alt="{{ screenshot.title }} on a 4:3 e-reader browser">
+      <span>E-reader portrait, 768 x 1024</span>
+    </a>
+  </div>
+</figure>

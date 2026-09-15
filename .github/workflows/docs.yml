@@ -1,0 +1,84 @@
+name: Deploy documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/docs.yml"
+      - "docs/**"
+      - "src/internal/**"
+      - "scripts/screenshots/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: src/go.mod
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: scripts/screenshots/package-lock.json
+      - run: npm ci --prefix scripts/screenshots
+      - run: npx --prefix scripts/screenshots playwright install --with-deps chromium
+      - run: npm run fixtures --prefix scripts/screenshots -- --output "$RUNNER_TEMP/library"
+      - id: build-info
+        run: >-
+          printf 'version=%s\n' "$(git describe --tags --always)" >> "$GITHUB_OUTPUT";
+          printf 'date=%s\n' "$(git log -1 --format=%as)" >> "$GITHUB_OUTPUT"
+      - run: go build -ldflags="-X main.buildVersion=${{ steps.build-info.outputs.version }} -X main.buildDate=${{ steps.build-info.outputs.date }}" -o "$RUNNER_TEMP/server" ./cmd/server
+        working-directory: src
+      - name: Start fixture server
+        run: >-
+          PORT=8080
+          LIBRARY_PATH="$RUNNER_TEMP/library"
+          DATA_DIR="$RUNNER_TEMP/data"
+          LIBRARY_USER=fixture-admin
+          LIBRARY_PASS=fixture-password
+          SESSION_SECRET=fixture-session-secret-for-documentation-captures
+          SITE_NAME="my-eink-library"
+          "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
+      - name: Wait for fixture server
+        run: >-
+          for attempt in {1..30}; do
+          curl --fail --silent http://127.0.0.1:8080/healthz && exit 0;
+          printf 'Waiting for fixture server (%s/30)\n' "$attempt";
+          sleep 1;
+          done;
+          cat "$RUNNER_TEMP/server.log";
+          exit 1
+      - run: npm run capture --prefix scripts/screenshots
+        env:
+          LIBRARY_USER: admin
+          LIBRARY_PASS: fixture-password
+          SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: docs
+          destination: _site
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
