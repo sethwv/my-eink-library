@@ -56,7 +56,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/sethwv/my-eink-library
       - name: Log in to GHCR
         if: inputs.version != '' || github.ref == 'refs/heads/dev'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
