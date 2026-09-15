@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/disintegration/imaging"
+	"golang.org/x/image/draw"
 )
 
 // Store caches resized JPEG cover thumbnails on disk, keyed by book ID.
@@ -61,7 +61,10 @@ func (s *Store) SaveCover(bookID int64, data []byte, mediaType string) (string, 
 	s.mu.RLock()
 	width := s.width
 	s.mu.RUnlock()
-	resized := imaging.Resize(img, width, 0, imaging.Lanczos)
+	bounds := img.Bounds()
+	height := max(1, width*bounds.Dy()/bounds.Dx())
+	resized := image.NewRGBA(image.Rect(0, 0, width, height))
+	draw.CatmullRom.Scale(resized, resized.Bounds(), img, bounds, draw.Over, nil)
 
 	name := fmt.Sprintf("%d.jpg", bookID)
 	fullPath := filepath.Join(s.dir, name)
