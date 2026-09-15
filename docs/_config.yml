@@ -24,7 +24,7 @@ nav_external_links:
   - title: Buy me a Coffee
     url: https://ko-fi.com/sethwv
 
-footer_content: "&copy; <script>document.write(new Date().getFullYear());</script>, licensed under <a href=\"https://github.com/sethwv/my-eink-library/blob/main/LICENSE\">AGPL-3.0-only</a>."
+footer_content: "&copy; <script>document.write(new Date().getFullYear());</script> swvn.io • licensed under <a href=\"https://github.com/sethwv/my-eink-library/blob/main/LICENSE\">AGPL-3.0-only</a>."
 
 gh_edit_link: true
 gh_edit_link_text: Improve this page on GitHub
