@@ -1,0 +1,43 @@
+title: my-eink-library
+description: A self-hosted EPUB library for e-readers.
+url: "https://sethwv.github.io"
+baseurl: "/my-eink-library"
+
+remote_theme: just-the-docs/just-the-docs
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+color_scheme: eink
+search_enabled: true
+search:
+  heading_level: 3
+
+aux_links:
+  "View on GitHub":
+    - "https://github.com/sethwv/my-eink-library"
+
+aux_links_new_tab: true
+
+nav_external_links:
+  - title: Ko-fi
+    url: https://ko-fi.com/sethwv
+
+footer_content: "my-eink-library is licensed under <a href=\"https://github.com/sethwv/my-eink-library/blob/main/LICENSE\">AGPL-3.0-only</a>."
+
+gh_edit_link: true
+gh_edit_link_text: Improve this page on GitHub
+gh_edit_repository: "https://github.com/sethwv/my-eink-library"
+gh_edit_branch: main
+gh_edit_source: docs
+gh_edit_view_mode: edit
+
+back_to_top: true
+back_to_top_text: "Back to top"
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

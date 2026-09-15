@@ -9,9 +9,9 @@ A self-hosted EPUB library for e-readers. Browse a read-only library, download o
 - Supports multiple users, admin controls, shelves, and metadata enrichment
 - Converts EPUBs to KEPUB on demand for Kobo devices
 
-## Screenshots
+## Documentation
 
-Screenshots belong in [`docs/screenshots/`](docs/screenshots/). Add public-safe captures for the login page, library grid, book modal, and admin settings here as they become available.
+Browse the responsive [documentation site](https://sethwv.github.io/my-eink-library/) for setup and deployment guidance. Public-safe screenshots belong in [`docs/assets/images/`](docs/assets/images/).
 
 ## Run It
 
