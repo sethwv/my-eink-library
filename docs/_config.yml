@@ -1,7 +1,7 @@
 title: my-eink-library
 description: A self-hosted EPUB library for e-readers.
 url: "https://sethwv.github.io"
-baseurl: "/my-eink-library"
+baseurl: "/"
 
 remote_theme: just-the-docs/just-the-docs
 
@@ -21,10 +21,10 @@ aux_links:
 aux_links_new_tab: true
 
 nav_external_links:
-  - title: Ko-fi
+  - title: Buy me a Coffee
     url: https://ko-fi.com/sethwv
 
-footer_content: "my-eink-library is licensed under <a href=\"https://github.com/sethwv/my-eink-library/blob/main/LICENSE\">AGPL-3.0-only</a>."
+footer_content: "&copy; <script>document.write(new Date().getFullYear());</script>, licensed under <a href=\"https://github.com/sethwv/my-eink-library/blob/main/LICENSE\">AGPL-3.0-only</a>."
 
 gh_edit_link: true
 gh_edit_link_text: Improve this page on GitHub
@@ -33,8 +33,8 @@ gh_edit_branch: main
 gh_edit_source: docs
 gh_edit_view_mode: edit
 
-back_to_top: true
-back_to_top_text: "Back to top"
+# back_to_top: true
+# back_to_top_text: "Back to top"
 
 defaults:
   - scope:

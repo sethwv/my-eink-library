@@ -11,10 +11,12 @@ If this project has been useful, tips are appreciated.
 
 ## Highlights
 
-- Reads book metadata and covers from EPUB files, with no sidecar files required
-- Watches one or more library directories and updates its local index
-- Supports multiple users, admin controls, shelves, and metadata enrichment
-- Converts EPUBs to KEPUB on demand for Kobo devices
+- Complatible with web-browser equipped Kobo devices
+- Reads book metadata and covers directly from EPUB files
+- Watches one or more library directories as read-only
+- Supports multiple users, admin controls, favourites
+- Converts EPUBs to KEPUB on demand
+- Supports Hardcover & Chaptarr Integrations
 
 ## Documentation
 
