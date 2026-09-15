@@ -46,7 +46,7 @@ jobs:
           PORT=8080
           LIBRARY_PATH="$RUNNER_TEMP/library"
           DATA_DIR="$RUNNER_TEMP/data"
-          LIBRARY_USER=fixture-admin
+          LIBRARY_USER=admin
           LIBRARY_PASS=fixture-password
           SESSION_SECRET=fixture-session-secret-for-documentation-captures
           SITE_NAME="my-eink-library"
