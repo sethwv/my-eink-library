@@ -40,7 +40,7 @@ jobs:
         run: echo "major_minor=${VERSION%.*}" >> "$GITHUB_OUTPUT"
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/sethwv/my-eink-library
           tags: |
