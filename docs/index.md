@@ -41,15 +41,17 @@ description: "A self-hosted EPUB library made for e-reader browsers."
 - Watches the library for changes and updates its local SQLite index
 
 ## Screenshots
+[More screenshots](screenshots)
 
-
-{% include screenshot-pair.html id="login" %}
+<!-- {% include screenshot-pair.html id="login" %} -->
 
 {% include screenshot-pair.html id="library-grid" %}
 
 {% include screenshot-pair.html id="book-modal" %}
 
-{% include screenshot-pair.html id="admin-settings" %}
+{% include screenshot-pair.html id="library-dark" %}
+
+<!-- {% include screenshot-pair.html id="admin-settings" %} -->
 
 ## Next step
 

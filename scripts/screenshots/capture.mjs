@@ -34,6 +34,13 @@ const scenarios = [
   { name: "login", prepare: (page) => page.goto(`${baseURL}/login`, { waitUntil: "networkidle" }) },
   { name: "library-grid", prepare: login },
   {
+    name: "library-dark",
+    async prepare(page) {
+      await page.context().addCookies([{ name: "eink-library-theme", value: "dark", url: baseURL }]);
+      await login(page);
+    },
+  },
+  {
     name: "book-modal",
     async prepare(page) {
       await login(page);
@@ -49,6 +56,27 @@ const scenarios = [
     async prepare(page) {
       await login(page);
       await page.goto(`${baseURL}/admin/settings`, { waitUntil: "networkidle" });
+    },
+  },
+  {
+    name: "authors",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/authors`, { waitUntil: "networkidle" });
+    },
+  },
+  {
+    name: "series",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/series`, { waitUntil: "networkidle" });
+    },
+  },
+  {
+    name: "admin-users",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/users`, { waitUntil: "networkidle" });
     },
   },
 ];

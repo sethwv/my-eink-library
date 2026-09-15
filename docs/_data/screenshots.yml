@@ -6,6 +6,10 @@
   title: Library grid
   description: A populated library with search, sort controls, covers, and pagination.
   scenario: library-grid
+- id: library-dark
+  title: Library grid, dark mode
+  description: The same library view with the persisted dark appearance selected.
+  scenario: library-dark
 - id: book-modal
   title: Book details
   description: A book's download, author, series, and shelf actions in the detail modal.
@@ -14,3 +18,15 @@
   title: Server settings
   description: Admin controls for the server's general and SMTP settings.
   scenario: admin-settings
+- id: authors
+  title: Authors
+  description: The author index groups the generated library by creator.
+  scenario: authors
+- id: series
+  title: Series
+  description: The series index makes related books easy to browse.
+  scenario: series
+- id: admin-users
+  title: User administration
+  description: The administrator view for managing library accounts.
+  scenario: admin-users
