@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -40,8 +41,27 @@ func Send(s Settings, to, subject, body string) error {
 	if !s.Enabled() {
 		return fmt.Errorf("mail: not configured")
 	}
+	if err := validateHeaderValue(subject); err != nil {
+		return fmt.Errorf("mail: invalid subject: %w", err)
+	}
+	if err := validateHeaderValue(s.FromName); err != nil {
+		return fmt.Errorf("mail: invalid from name: %w", err)
+	}
+
+	toAddr, err := parseAddress(to)
+	if err != nil {
+		return fmt.Errorf("mail: invalid recipient address: %w", err)
+	}
+	fromAddr, err := parseAddress(s.FromAddress)
+	if err != nil {
+		return fmt.Errorf("mail: invalid sender address: %w", err)
+	}
+
 	addr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
-	msg := buildMessage(s, to, subject, body)
+	msg, err := buildMessage(s, toAddr, subject, body)
+	if err != nil {
+		return err
+	}
 
 	var auth smtp.Auth
 	if s.Username != "" {
@@ -49,27 +69,61 @@ func Send(s Settings, to, subject, body string) error {
 	}
 
 	if s.Encryption == "tls" {
-		return sendImplicitTLS(addr, s.Host, auth, s.FromAddress, to, msg)
+		return sendImplicitTLS(addr, s.Host, auth, fromAddr, toAddr, msg)
 	}
-	return smtp.SendMail(addr, auth, s.FromAddress, []string{to}, msg)
+	return smtp.SendMail(addr, auth, fromAddr, []string{toAddr}, msg)
 }
 
-func buildMessage(s Settings, to, subject, body string) []byte {
-	fromHeader := s.FromAddress
+func buildMessage(s Settings, to, subject, body string) ([]byte, error) {
+	if err := validateHeaderValue(subject); err != nil {
+		return nil, fmt.Errorf("mail: invalid subject: %w", err)
+	}
+	if err := validateHeaderValue(s.FromName); err != nil {
+		return nil, fmt.Errorf("mail: invalid from name: %w", err)
+	}
+
+	fromAddr, err := parseAddress(s.FromAddress)
+	if err != nil {
+		return nil, fmt.Errorf("mail: invalid sender address: %w", err)
+	}
+	toAddr, err := parseAddress(to)
+	if err != nil {
+		return nil, fmt.Errorf("mail: invalid recipient address: %w", err)
+	}
+
+	fromHeader := fromAddr
 	if s.FromName != "" {
-		fromHeader = fmt.Sprintf("%s <%s>", s.FromName, s.FromAddress)
+		fromHeader = fmt.Sprintf("%s <%s>", s.FromName, fromAddr)
 	}
 
 	var b strings.Builder
 	b.WriteString("From: " + fromHeader + "\r\n")
-	b.WriteString("To: " + to + "\r\n")
+	b.WriteString("To: " + toAddr + "\r\n")
 	b.WriteString("Subject: " + subject + "\r\n")
 	b.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
 	b.WriteString("\r\n")
 	b.WriteString(body)
-	return []byte(b.String())
+	return []byte(b.String()), nil
+}
+
+func validateHeaderValue(v string) error {
+	if strings.ContainsAny(v, "\r\n") {
+		return fmt.Errorf("contains newline characters")
+	}
+	return nil
+}
+
+func parseAddress(v string) (string, error) {
+	if err := validateHeaderValue(v); err != nil {
+		return "", err
+	}
+	addr, err := mail.ParseAddress(v)
+	if err != nil {
+		return "", err
+	}
+	return addr.Address, nil
 }
 
 func sendImplicitTLS(addr, host string, auth smtp.Auth, from, to string, msg []byte) error {
