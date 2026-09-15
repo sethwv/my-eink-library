@@ -1,0 +1,73 @@
+name: Build Standalone Binaries
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version without the v prefix
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache: true
+          cache-dependency-path: src/go.sum
+      - name: Compute build metadata
+        id: metadata
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          version="$RELEASE_VERSION"
+          if [ -z "$version" ]; then
+            version="0+dev.${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "date=$(git log -1 --format=%as)" >> "$GITHUB_OUTPUT"
+      - name: Build Windows executable
+        working-directory: src
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_DATE: ${{ steps.metadata.outputs.date }}
+        run: |
+          mkdir -p ../dist
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
+            -ldflags="-s -w -X main.buildVersion=${VERSION} -X main.buildDate=${BUILD_DATE}" \
+            -o "../dist/eink-library_${VERSION}_windows_amd64.exe" ./cmd/server
+      - name: Build Debian packages
+        working-directory: src
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          BUILD_DATE: ${{ steps.metadata.outputs.date }}
+        run: |
+          for arch in amd64 arm64; do
+            package="../dist/package-${arch}"
+            mkdir -p "$package/DEBIAN" "$package/usr/bin"
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags="-s -w -X main.buildVersion=${VERSION} -X main.buildDate=${BUILD_DATE}" \
+              -o "$package/usr/bin/eink-library" ./cmd/server
+            printf '%s\n' \
+              'Package: eink-library' \
+              "Version: ${VERSION}" \
+              "Architecture: ${arch}" \
+              'Maintainer: Seth WV <sethwv@users.noreply.github.com>' \
+              'Description: Self-hosted EPUB library for e-readers' \
+              > "$package/DEBIAN/control"
+            dpkg-deb --root-owner-group --build "$package" "../dist/eink-library_${VERSION}_linux_${arch}.deb"
+          done
+          rm -rf ../dist/package-amd64 ../dist/package-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: standalone-binaries
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
