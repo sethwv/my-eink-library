@@ -2,6 +2,13 @@
 
 A self-hosted EPUB library for e-readers. Browse a read-only library, download original EPUBs or Kobo-optimized KEPUBs, and manage access through a small authenticated web UI built for older e-reader browsers.
 
+## Support
+
+If this project has been useful, tips are appreciated.
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/sethwv)
+
+
 ## Highlights
 
 - Reads book metadata and covers from EPUB files, with no sidecar files required
@@ -11,7 +18,7 @@ A self-hosted EPUB library for e-readers. Browse a read-only library, download o
 
 ## Documentation
 
-Browse the responsive [documentation site](https://sethwv.github.io/my-eink-library/) for setup and deployment guidance. Public-safe screenshots belong in [`docs/assets/images/`](docs/assets/images/).
+[See the docs site](https://sethwv.github.io/my-eink-library/) for setup and deployment guidance.
 
 ## Run It
 
@@ -37,12 +44,6 @@ docker compose up -d
 Visit `http://localhost:8080`. The supplied Compose file persists application data in a named volume and intentionally contains placeholder credentials.
 
 For local development, configuration details, and validation commands, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Support
-
-If this project has been useful, tips are appreciated.
-
-[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/sethwv)
 
 ## Contributing
 
