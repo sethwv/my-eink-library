@@ -27,13 +27,22 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: scripts/screenshots/package-lock.json
       - run: npm ci --prefix scripts/screenshots
-      - run: npx --prefix scripts/screenshots playwright install --with-deps chromium
+      - id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('scripts/screenshots/package-lock.json') }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx --prefix scripts/screenshots playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx --prefix scripts/screenshots playwright install chromium
       - run: npm run fixtures --prefix scripts/screenshots -- --output "$RUNNER_TEMP/library"
       - id: build-info
         run: >-
