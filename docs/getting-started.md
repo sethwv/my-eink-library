@@ -5,7 +5,7 @@ nav_order: 2
 
 # Getting started
 
-my-eink-library runs as one container. Your EPUB files remain mounted read-only, while its index and user database live in a named Docker volume.
+Docker is the quickest way to run my-eink-library. Your EPUB files remain mounted read-only, while its index and user database live in a named Docker volume. For Windows and Debian package installation, see [Deployment](deployment.html).
 
 ## 1. Create an override file
 
