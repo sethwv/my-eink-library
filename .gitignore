@@ -1,6 +1,6 @@
 # Go build artifacts
-/eink-library
-/server
+/src/eink-library
+/src/server
 *.exe
 *.test
 *.out

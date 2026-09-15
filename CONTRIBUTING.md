@@ -13,6 +13,7 @@ Submitting a pull request grants my-eink-library and its maintainers a perpetual
 Install Go 1.25.7 and Docker Compose. Clone the repository, then download dependencies:
 
 ```bash
+cd src
 go mod download
 ```
 
@@ -24,7 +25,7 @@ LIBRARY_PASS=adminpass \
 SESSION_SECRET=dev-secret \
 LIBRARY_PATH=/path/to/epubs \
 DATA_DIR=/tmp/my-eink-library-data \
-go run ./cmd/server
+(cd src && go run ./cmd/server)
 ```
 
 `LIBRARY_USER` and `LIBRARY_PASS` create the first admin only when the user database is empty. Subsequent account management is stored in `DATA_DIR`.
@@ -55,6 +56,7 @@ For Docker development, add local credentials and the EPUB bind mount in `docker
 Run these before opening a pull request:
 
 ```bash
+cd src
 go test ./...
 go vet ./...
 go build ./...
