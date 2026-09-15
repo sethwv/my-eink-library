@@ -3,7 +3,6 @@ title: Home
 nav_order: 1
 description: "A self-hosted EPUB library made for e-reader browsers."
 ---
-
 <div class="hero">
   <!-- <p class="eyebrow"></p> -->
   <h1>my-eink-library</h1>
@@ -13,7 +12,6 @@ description: "A self-hosted EPUB library made for e-reader browsers."
     <a class="btn btn-secondary" href="https://github.com/sethwv/my-eink-library">View source</a>
   </div>
 </div>
-
 <div class="feature-grid">
   <section class="feature-card">
     <!-- <span class="feature-mark">01</span> -->
@@ -28,10 +26,9 @@ description: "A self-hosted EPUB library made for e-reader browsers."
   <section class="feature-card">
     <!-- <span class="feature-mark">03</span> -->
     <h2>Written in GO</h2>
-    <p>Run one container or binary, GO keeps things snappy and compatible however or wherever you want to run it.</p>
+    <p>Run one container (or binary, work in progress), GO keeps things snappy and compatible however or wherever you want to run it.</p>
   </section>
 </div>
-
 - Complatible with web-browser equipped Kobo devices
 - Reads book metadata and covers directly from EPUB files
 - Watches one or more library directories as read-only
@@ -39,10 +36,11 @@ description: "A self-hosted EPUB library made for e-reader browsers."
 - Converts EPUBs to KEPUB on demand
 - Supports Hardcover & Chaptarr Integrations
 {% include screenshot-pair.html id="library-grid" %}
-{% include screenshot-pair.html id="book-modal" %}
 {% include screenshot-pair.html id="library-dark" %}
 [More screenshots](screenshots)
 
-## What's Next?
-
-Start with [Getting started](getting-started.md), then use [Deployment](deployment.md) when you are ready to run it beyond a local machine.
+## Explore
+- [Project vision](vision.md)
+- [Roadmap](roadmap.md)
+- [Known limitations](limitations.md)
+- [Contributing](contributing.md)

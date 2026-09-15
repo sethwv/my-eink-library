@@ -6,7 +6,9 @@ on:
     paths:
       - ".github/workflows/docs.yml"
       - "docs/**"
+      - "CONTRIBUTING.md"
       - "src/internal/**"
+      - "scripts/docs/**"
       - "scripts/screenshots/**"
   workflow_dispatch:
 
@@ -74,10 +76,11 @@ jobs:
           LIBRARY_USER: admin
           LIBRARY_PASS: fixture-password
           SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
+      - run: node scripts/docs/prepare-source.mjs docs "$RUNNER_TEMP/docs-source" CONTRIBUTING.md
       - uses: actions/configure-pages@v5
       - uses: actions/jekyll-build-pages@v1
         with:
-          source: docs
+          source: ${{ runner.temp }}/docs-source
           destination: _site
       - uses: actions/upload-pages-artifact@v4
         with:

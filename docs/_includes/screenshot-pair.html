@@ -6,11 +6,11 @@
     <span>{{ screenshot.description }}</span>
   </figcaption>
   <div class="screenshot-pair-images">
-    <a href="{{ image_base | append: '-desktop.png' | relative_url }}">
+    <a class="screenshot-lightbox-trigger" href="{{ image_base | append: '-desktop.png' | relative_url }}" data-screenshot-src="{{ image_base | append: '-desktop.png' | relative_url }}" data-screenshot-alt="{{ screenshot.title }} on a desktop browser">
       <img src="{{ image_base | append: '-desktop.png' | relative_url }}" alt="{{ screenshot.title }} on a desktop browser">
       <span>Desktop, 1440 x 810</span>
     </a>
-    <a href="{{ image_base | append: '-ereader.png' | relative_url }}">
+    <a class="screenshot-lightbox-trigger" href="{{ image_base | append: '-ereader.png' | relative_url }}" data-screenshot-src="{{ image_base | append: '-ereader.png' | relative_url }}" data-screenshot-alt="{{ screenshot.title }} on a portrait device">
       <img src="{{ image_base | append: '-ereader.png' | relative_url }}" alt="{{ screenshot.title }} on a 4:3 e-reader browser">
       <span>Portrait Device, 768 x 1024</span>
     </a>
