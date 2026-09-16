@@ -156,10 +156,10 @@ func TestMergeDuplicateISBN(t *testing.T) {
 	idA := insert("/lib/a", "one.epub", "Translated Title One")
 	idB := insert("/lib/b", "two.epub", "Different Title Two")
 
-	if err := db.ApplyEnrichment(idA, HardcoverFields{ISBN: "9781234567897"}, SourceHardcover); err != nil {
+	if err := db.ApplyEnrichment(idA, MetadataPatch{ISBN: "9781234567897"}, SourceHardcover); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.ApplyEnrichment(idB, HardcoverFields{ISBN: "9781234567897"}, SourceHardcover); err != nil {
+	if err := db.ApplyEnrichment(idB, MetadataPatch{ISBN: "9781234567897"}, SourceHardcover); err != nil {
 		t.Fatal(err)
 	}
 

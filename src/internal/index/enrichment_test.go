@@ -70,7 +70,7 @@ func TestBooksNeedingEnrichment_ChaptarrClaimIsNeverRevisitedByHardcover(t *test
 		t.Fatalf("got %d candidates before any enrichment, want 1", len(candidates))
 	}
 
-	if err := db.ApplyEnrichment(id, HardcoverFields{Title: "Claimed By Chaptarr"}, SourceChaptarr); err != nil {
+	if err := db.ApplyEnrichment(id, MetadataPatch{Title: "Claimed By Chaptarr"}, SourceChaptarr); err != nil {
 		t.Fatal(err)
 	}
 
@@ -142,7 +142,7 @@ func TestApplyEnrichment_OverwritesTitleSeriesAndAlwaysFillableFields(t *testing
 	}
 	id := books[0].ID
 
-	if err := db.ApplyEnrichment(id, HardcoverFields{
+	if err := db.ApplyEnrichment(id, MetadataPatch{
 		Title:         "Hardcover Title",
 		Series:        "New Series",
 		SeriesIndex:   9,
@@ -206,7 +206,7 @@ func TestApplyEnrichment_RecordsChaptarrSource(t *testing.T) {
 	}
 	id := books[0].ID
 
-	if err := db.ApplyEnrichment(id, HardcoverFields{Title: "Chaptarr Sourced Book"}, SourceChaptarr); err != nil {
+	if err := db.ApplyEnrichment(id, MetadataPatch{Title: "Chaptarr Sourced Book"}, SourceChaptarr); err != nil {
 		t.Fatal(err)
 	}
 
@@ -233,7 +233,7 @@ func TestSaveMetadata_RecordsManualSource(t *testing.T) {
 	}
 	id := books[0].ID
 
-	if err := db.SaveMetadata(id, MetadataFields{Title: "Edited"}); err != nil {
+	if err := db.SaveMetadata(id, MetadataPatch{Title: "Edited"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,7 +282,7 @@ func TestApplyEnrichment_KeepsMatchingSeriesUnchanged(t *testing.T) {
 	}
 	id := books[0].ID
 
-	if err := db.ApplyEnrichment(id, HardcoverFields{
+	if err := db.ApplyEnrichment(id, MetadataPatch{
 		Title:       "Same Series Book",
 		Series:      "Existing Saga",
 		SeriesIndex: 2,
@@ -314,11 +314,11 @@ func TestApplyEnrichment_DescriptionKeptWhenSubstantial(t *testing.T) {
 	id := books[0].ID
 
 	longDescription := "This is a substantial, real description of the book that is definitely longer than the placeholder threshold."
-	if err := db.SaveMetadata(id, MetadataFields{Description: longDescription}); err != nil {
+	if err := db.SaveMetadata(id, MetadataPatch{Description: longDescription}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := db.ApplyEnrichment(id, HardcoverFields{
+	if err := db.ApplyEnrichment(id, MetadataPatch{
 		Title:       "Book With A Real Description",
 		Description: "Hardcover's alternate description",
 	}, SourceHardcover); err != nil {
@@ -348,11 +348,11 @@ func TestApplyEnrichment_DescriptionReplacedWhenPlaceholder(t *testing.T) {
 	}
 	id := books[0].ID
 
-	if err := db.SaveMetadata(id, MetadataFields{Description: "Too short"}); err != nil {
+	if err := db.SaveMetadata(id, MetadataPatch{Description: "Too short"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := db.ApplyEnrichment(id, HardcoverFields{
+	if err := db.ApplyEnrichment(id, MetadataPatch{
 		Title:       "Book With A Stub Description",
 		Description: "Hardcover's real, much longer description of the book",
 	}, SourceHardcover); err != nil {
@@ -382,7 +382,7 @@ func TestSaveMetadata_OverwritesExisting(t *testing.T) {
 	}
 	id := books[0].ID
 
-	if err := db.SaveMetadata(id, MetadataFields{
+	if err := db.SaveMetadata(id, MetadataPatch{
 		Title:         "New Title",
 		Series:        "New Saga",
 		SeriesIndex:   5,
@@ -426,7 +426,7 @@ func TestSaveMetadata_BlankFieldsLeftAlone(t *testing.T) {
 	id := books[0].ID
 
 	// Zero values mean "the admin didn't choose to override this field".
-	if err := db.SaveMetadata(id, MetadataFields{PublishedDate: "2022-03-01"}); err != nil {
+	if err := db.SaveMetadata(id, MetadataPatch{PublishedDate: "2022-03-01"}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -30,13 +30,12 @@ const (
 	SourceManual    = "manual"
 )
 
-// HardcoverFields is everything a Hardcover or Chaptarr match can
-// contribute to a book, passed to ApplyEnrichment. Blank/zero fields mean
-// "the source didn't have this", not "clear the existing value" — see
-// ApplyEnrichment for how each field is merged. Named for Hardcover (the
-// original and richer of the two sources) but reused for Chaptarr too,
-// since both integrations contribute to the same merged field set.
-type HardcoverFields struct {
+// MetadataPatch is every metadata field an integration or an admin edit can
+// contribute to a book. Blank/zero fields mean "leave the existing value
+// alone", not "clear it". ApplyEnrichment and SaveMetadata deliberately use
+// different merge policies for the same patch: provider data is conservative
+// while an explicit admin edit always wins.
+type MetadataPatch struct {
 	Title         string
 	Series        string
 	SeriesIndex   float64
@@ -150,24 +149,11 @@ func (d *DB) GetEnrichmentStats() (EnrichmentStats, error) {
 	return s, err
 }
 
-// mergedFields is the book's current merged (book_enrichment-over-books)
-// values for every field ApplyEnrichment/SaveMetadata can touch — the
-// same values a listing read would see.
-type mergedFields struct {
-	title         string
-	series        string
-	seriesIndex   float64
-	publishedDate string
-	description   string
-	genres        string // raw CSV, as stored
-	publisher     string
-	pages         int64
-	isbn          string
-	rating        float64
-}
-
-func (d *DB) currentEnrichmentMerged(bookID int64) (mergedFields, error) {
-	var m mergedFields
+// currentEnrichmentMerged returns the book_enrichment-over-books values a
+// listing currently exposes. It uses the same MetadataPatch representation
+// accepted by both write paths, so adding a field has one definition.
+func (d *DB) currentEnrichmentMerged(bookID int64) (MetadataPatch, error) {
+	var m MetadataPatch
 	var title, series, publishedDate, description, genres, publisher, isbn sql.NullString
 	var seriesIndex, rating sql.NullFloat64
 	var pages sql.NullInt64
@@ -179,16 +165,16 @@ func (d *DB) currentEnrichmentMerged(bookID int64) (mergedFields, error) {
 	if err != nil {
 		return m, err
 	}
-	m.title = title.String
-	m.series = series.String
-	m.seriesIndex = seriesIndex.Float64
-	m.publishedDate = publishedDate.String
-	m.description = description.String
-	m.genres = genres.String
-	m.publisher = publisher.String
-	m.pages = pages.Int64
-	m.isbn = isbn.String
-	m.rating = rating.Float64
+	m.Title = title.String
+	m.Series = series.String
+	m.SeriesIndex = seriesIndex.Float64
+	m.PublishedDate = publishedDate.String
+	m.Description = description.String
+	m.Genres = splitCSV(genres.String)
+	m.Publisher = publisher.String
+	m.Pages = int(pages.Int64)
+	m.ISBN = isbn.String
+	m.Rating = rating.Float64
 	return m, nil
 }
 
@@ -208,7 +194,7 @@ func (d *DB) GetEnrichmentSource(bookID int64) (string, error) {
 	return source.String, nil
 }
 
-func (d *DB) upsertEnrichment(bookID int64, f mergedFields, status, source string) error {
+func (d *DB) upsertEnrichment(bookID int64, f MetadataPatch, status, source string) error {
 	_, err := d.sql.Exec(`
 		INSERT INTO book_enrichment (book_id, title, series, series_index, published_date, description, genres, publisher, pages, isbn, rating, status, source, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
@@ -226,9 +212,9 @@ func (d *DB) upsertEnrichment(bookID int64, f mergedFields, status, source strin
 			status = excluded.status,
 			source = excluded.source,
 			updated_at = excluded.updated_at`,
-		bookID, nullIfEmpty(f.title), nullIfEmpty(f.series), f.seriesIndex, nullIfEmpty(f.publishedDate),
-		nullIfEmpty(f.description), nullIfEmpty(f.genres), nullIfEmpty(f.publisher),
-		nullIfZeroInt(f.pages), nullIfEmpty(f.isbn), nullIfZeroFloat(f.rating), status, source)
+		bookID, nullIfEmpty(f.Title), nullIfEmpty(f.Series), f.SeriesIndex, nullIfEmpty(f.PublishedDate),
+		nullIfEmpty(f.Description), nullIfEmpty(joinCSV(f.Genres)), nullIfEmpty(f.Publisher),
+		nullIfZeroInt(int64(f.Pages)), nullIfEmpty(f.ISBN), nullIfZeroFloat(f.Rating), status, source)
 	return err
 }
 
@@ -273,39 +259,39 @@ func descriptionIsPlaceholder(cur, title string) bool {
 //
 // Also marks the book "done" with the given source (SourceHardcover or
 // SourceChaptarr — whichever integration produced hc).
-func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields, source string) error {
+func (d *DB) ApplyEnrichment(bookID int64, patch MetadataPatch, source string) error {
 	cur, err := d.currentEnrichmentMerged(bookID)
 	if err != nil {
 		return err
 	}
 
 	final := cur
-	if hc.Title != "" {
-		final.title = hc.Title
+	if patch.Title != "" {
+		final.Title = patch.Title
 	}
-	if hc.Series != "" && (cur.series == "" || !strings.EqualFold(cur.series, hc.Series)) {
-		final.series, final.seriesIndex = hc.Series, hc.SeriesIndex
+	if patch.Series != "" && (cur.Series == "" || !strings.EqualFold(cur.Series, patch.Series)) {
+		final.Series, final.SeriesIndex = patch.Series, patch.SeriesIndex
 	}
-	if cur.publishedDate == "" {
-		final.publishedDate = hc.PublishedDate
+	if cur.PublishedDate == "" {
+		final.PublishedDate = patch.PublishedDate
 	}
-	if hc.Description != "" && descriptionIsPlaceholder(cur.description, final.title) {
-		final.description = hc.Description
+	if patch.Description != "" && descriptionIsPlaceholder(cur.Description, final.Title) {
+		final.Description = patch.Description
 	}
-	if len(hc.Genres) > 0 {
-		final.genres = joinCSV(hc.Genres)
+	if len(patch.Genres) > 0 {
+		final.Genres = patch.Genres
 	}
-	if hc.Publisher != "" {
-		final.publisher = hc.Publisher
+	if patch.Publisher != "" {
+		final.Publisher = patch.Publisher
 	}
-	if hc.Pages != 0 {
-		final.pages = int64(hc.Pages)
+	if patch.Pages != 0 {
+		final.Pages = patch.Pages
 	}
-	if hc.ISBN != "" {
-		final.isbn = hc.ISBN
+	if patch.ISBN != "" {
+		final.ISBN = patch.ISBN
 	}
-	if hc.Rating != 0 {
-		final.rating = hc.Rating
+	if patch.Rating != 0 {
+		final.Rating = patch.Rating
 	}
 
 	if err := d.upsertEnrichment(bookID, final, "done", source); err != nil {
@@ -320,23 +306,6 @@ func (d *DB) ApplyEnrichment(bookID int64, hc HardcoverFields, source string) er
 	return nil
 }
 
-// MetadataFields is every field the Edit Metadata page can write to
-// book_enrichment. A blank string, zero float, or zero int means "leave this
-// field alone" — the same convention ApplyEnrichment/SaveMetadata used
-// before it — not "clear it".
-type MetadataFields struct {
-	Title         string
-	Series        string
-	SeriesIndex   float64
-	PublishedDate string
-	Description   string
-	Genres        []string
-	Publisher     string
-	Pages         int
-	ISBN          string
-	Rating        float64
-}
-
 // SaveMetadata unconditionally sets whichever non-blank/non-zero fields are
 // present in f into book_enrichment — the manual, human-edited path (the
 // Edit Metadata page), so unlike ApplyEnrichment there's no "only if
@@ -344,39 +313,39 @@ type MetadataFields struct {
 // always wins. Title/series/etc. are written into book_enrichment (not
 // directly to books) so they survive a later rescan, the same as
 // ApplyEnrichment's automatic path. Also marks the book "done".
-func (d *DB) SaveMetadata(bookID int64, f MetadataFields) error {
+func (d *DB) SaveMetadata(bookID int64, patch MetadataPatch) error {
 	cur, err := d.currentEnrichmentMerged(bookID)
 	if err != nil {
 		return err
 	}
 
 	final := cur
-	if f.Title != "" {
-		final.title = f.Title
+	if patch.Title != "" {
+		final.Title = patch.Title
 	}
-	if f.Series != "" {
-		final.series, final.seriesIndex = f.Series, f.SeriesIndex
+	if patch.Series != "" {
+		final.Series, final.SeriesIndex = patch.Series, patch.SeriesIndex
 	}
-	if f.PublishedDate != "" {
-		final.publishedDate = f.PublishedDate
+	if patch.PublishedDate != "" {
+		final.PublishedDate = patch.PublishedDate
 	}
-	if f.Description != "" {
-		final.description = f.Description
+	if patch.Description != "" {
+		final.Description = patch.Description
 	}
-	if len(f.Genres) > 0 {
-		final.genres = joinCSV(f.Genres)
+	if len(patch.Genres) > 0 {
+		final.Genres = patch.Genres
 	}
-	if f.Publisher != "" {
-		final.publisher = f.Publisher
+	if patch.Publisher != "" {
+		final.Publisher = patch.Publisher
 	}
-	if f.Pages != 0 {
-		final.pages = int64(f.Pages)
+	if patch.Pages != 0 {
+		final.Pages = patch.Pages
 	}
-	if f.ISBN != "" {
-		final.isbn = f.ISBN
+	if patch.ISBN != "" {
+		final.ISBN = patch.ISBN
 	}
-	if f.Rating != 0 {
-		final.rating = f.Rating
+	if patch.Rating != 0 {
+		final.Rating = patch.Rating
 	}
 
 	return d.upsertEnrichment(bookID, final, "done", SourceManual)

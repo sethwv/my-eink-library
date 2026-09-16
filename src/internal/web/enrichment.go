@@ -290,7 +290,7 @@ func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCa
 		detail = d
 	}
 
-	fields := index.HardcoverFields{
+	fields := index.MetadataPatch{
 		Title:         best.Title,
 		Series:        best.Series,
 		SeriesIndex:   best.SeriesIndex,
@@ -337,14 +337,14 @@ func (s *Server) processHardcoverMatch(ctx context.Context, c index.EnrichmentCa
 
 // mergeChaptarrFields combines a Chaptarr path match's own (thinner) fields
 // with an optional daisy-chained Hardcover lookup's (richer) fields into
-// one HardcoverFields for ApplyEnrichment. Chaptarr's value wins wherever
+// one MetadataPatch for ApplyEnrichment. Chaptarr's value wins wherever
 // it has one (it's the higher-precedence source and the one that actually
 // matched this book) — Hardcover only fills in what Chaptarr left blank.
 // hc/hcDetail may be zero values (Hardcover disabled, no HardcoverID, or
 // the lookup failed) — every Hardcover-sourced field then stays blank,
 // same as if this were a Chaptarr-only match.
-func mergeChaptarrFields(match chaptarr.Book, hc hardcover.Match, hcDetail hardcover.Detail) index.HardcoverFields {
-	f := index.HardcoverFields{
+func mergeChaptarrFields(match chaptarr.Book, hc hardcover.Match, hcDetail hardcover.Detail) index.MetadataPatch {
+	f := index.MetadataPatch{
 		Title:       match.Title,
 		Series:      match.Series,
 		SeriesIndex: match.SeriesIndex,
@@ -687,7 +687,7 @@ func (s *Server) runChaptarrSearch(ctx context.Context, data map[string]any, id 
 // convention ApplyEnrichment/SaveMetadata use, so a book's existing value
 // for a field neither Chaptarr nor a daisy-chained Hardcover lookup had
 // isn't blanked out in the form.
-func applyMergedFieldsAsDefaults(data map[string]any, f index.HardcoverFields, coverURL string) {
+func applyMergedFieldsAsDefaults(data map[string]any, f index.MetadataPatch, coverURL string) {
 	if f.Title != "" {
 		data["FormTitle"] = f.Title
 	}
@@ -801,7 +801,7 @@ func (s *Server) BookEditMetadataSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields := index.MetadataFields{
+	fields := index.MetadataPatch{
 		Title:         r.FormValue("title"),
 		Series:        r.FormValue("series"),
 		PublishedDate: r.FormValue("published_date"),
