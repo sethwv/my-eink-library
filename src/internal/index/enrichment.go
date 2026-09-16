@@ -160,10 +160,6 @@ func (d *DB) GetEnrichmentStats() (EnrichmentStats, error) {
 // currentEnrichmentMerged returns the book_enrichment-over-books values a
 // listing currently exposes. It uses the same MetadataPatch representation
 // accepted by both write paths, so adding a field has one definition.
-func (d *DB) currentEnrichmentMerged(bookID int64) (MetadataPatch, error) {
-	return currentEnrichmentMerged(d.sql, bookID)
-}
-
 func currentEnrichmentMerged(q rowQuerier, bookID int64) (MetadataPatch, error) {
 	var m MetadataPatch
 	var title, series, publishedDate, description, genres, publisher, isbn sql.NullString
@@ -204,10 +200,6 @@ func (d *DB) GetEnrichmentSource(bookID int64) (string, error) {
 		return "", err
 	}
 	return source.String, nil
-}
-
-func (d *DB) upsertEnrichment(bookID int64, f MetadataPatch, status, source string) error {
-	return upsertEnrichment(d.sql, bookID, f, status, source)
 }
 
 func upsertEnrichment(exec sqlExecer, bookID int64, f MetadataPatch, status, source string) error {
