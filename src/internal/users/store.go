@@ -224,6 +224,42 @@ func (s *Store) List() ([]User, error) {
 	return out, rows.Err()
 }
 
+// UserByID returns one user, or nil when the id does not exist.
+func (s *Store) UserByID(id int64) (*User, error) {
+	return s.userBy(`id = ?`, id)
+}
+
+// UserByUsername returns one user, or nil when the username does not exist.
+func (s *Store) UserByUsername(username string) (*User, error) {
+	return s.userBy(`username = ?`, username)
+}
+
+func (s *Store) userBy(where string, arg any) (*User, error) {
+	var u User
+	var canBookmark, digestSubscribed, invitePending int
+	var email sql.NullString
+	err := s.sql.QueryRow(`
+		SELECT id, username, role, can_bookmark, email, digest_subscribed,
+		       invite_token_hash IS NOT NULL AND invite_token_hash != ''
+		FROM users WHERE `+where,
+		arg,
+	).Scan(&u.ID, &u.Username, &u.Role, &canBookmark, &email, &digestSubscribed, &invitePending)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	u.IsAdmin = u.Role == RoleAdmin
+	u.CanManageUsers = u.Role == RoleAdmin || u.Role == RoleUserManager
+	u.CanManageServer = u.Role == RoleAdmin || u.Role == RoleServerManager
+	u.CanBookmark = canBookmark != 0
+	u.Email = email.String
+	u.DigestSubscribed = digestSubscribed != 0
+	u.InvitePending = invitePending != 0
+	return &u, nil
+}
+
 // Create adds a new user with a bcrypt-hashed password. email may be empty,
 // only needed if the user should be reachable by the forgot-password flow.
 func (s *Store) Create(username, password, role string, canBookmark bool, email string) error {

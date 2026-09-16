@@ -73,6 +73,29 @@ func TestCreateAndCheckPassword(t *testing.T) {
 	}
 }
 
+func TestUserLookups(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.Create("reader", "password", RoleUserManager, true, "reader@example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	byName, err := s.UserByUsername("reader")
+	if err != nil || byName == nil {
+		t.Fatalf("UserByUsername() = (%+v, %v)", byName, err)
+	}
+	if !byName.CanManageUsers || byName.CanManageServer || byName.Email != "reader@example.com" {
+		t.Errorf("UserByUsername() = %+v", byName)
+	}
+	byID, err := s.UserByID(byName.ID)
+	if err != nil || byID == nil || byID.Username != "reader" {
+		t.Errorf("UserByID() = (%+v, %v)", byID, err)
+	}
+	missing, err := s.UserByUsername("missing")
+	if err != nil || missing != nil {
+		t.Errorf("missing user = (%+v, %v), want (nil, nil)", missing, err)
+	}
+}
+
 func TestDelete_RefusesLastAdmin(t *testing.T) {
 	s := openTestStore(t)
 	if err := s.Create("admin", "hunter2", RoleAdmin, true, ""); err != nil {

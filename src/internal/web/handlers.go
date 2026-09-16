@@ -660,18 +660,12 @@ func (s *Server) AdminUsersResendInvite(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	list, err := s.Users.List()
+	user, err := s.Users.UserByID(id)
 	if err != nil {
 		http.Error(w, "failed to load users", http.StatusInternalServerError)
 		return
 	}
-	var email string
-	for _, u := range list {
-		if u.ID == id {
-			email = u.Email
-		}
-	}
-	if email == "" {
+	if user == nil || user.Email == "" {
 		s.renderAdminUsersError(w, r, "user has no email on file")
 		return
 	}
@@ -681,8 +675,8 @@ func (s *Server) AdminUsersResendInvite(w http.ResponseWriter, r *http.Request) 
 		s.renderAdminUsersError(w, r, err.Error())
 		return
 	}
-	if err := s.sendInviteEmail(r, email, token); err != nil {
-		log.Printf("resend invite email to %s: %v", email, err)
+	if err := s.sendInviteEmail(r, user.Email, token); err != nil {
+		log.Printf("resend invite email to %s: %v", user.Email, err)
 		s.renderAdminUsersError(w, r, "invite reissued, but the email failed to send: "+err.Error())
 		return
 	}
@@ -1279,18 +1273,16 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := s.Users.List()
+	user, err := s.Users.UserByUsername(username)
 	if err != nil {
 		http.Error(w, "failed to load account", http.StatusInternalServerError)
 		return
 	}
-	var id int64
-	for _, u := range list {
-		if u.Username == username {
-			id = u.ID
-		}
+	if user == nil {
+		http.Error(w, "failed to load account", http.StatusInternalServerError)
+		return
 	}
-	if err := s.Users.ResetPassword(id, newPassword); err != nil {
+	if err := s.Users.ResetPassword(user.ID, newPassword); err != nil {
 		renderErr(err.Error())
 		return
 	}
