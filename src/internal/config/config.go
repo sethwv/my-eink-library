@@ -30,11 +30,9 @@ type Config struct {
 	HardcoverToken string
 	// PublicURL is the trusted base URL (e.g. "https://library.example.com")
 	// used to build links emailed to users (password reset, invites). Left
-	// empty, those links fall back to the request's Host header, which is
-	// client-controlled and not safe to trust for anything sent externally
-	// (a spoofed Host on a /forgot-password request would otherwise put an
-	// attacker-chosen domain into the victim's reset email). Set this in
-	// any deployment that sends email.
+	// empty, password-reset and invite emails are not sent because the app
+	// refuses to construct externally delivered links from a request Host
+	// header. Set this in any deployment that sends email.
 	PublicURL string
 }
 

@@ -106,6 +106,24 @@ func TestWithQueryParam_InvalidURLReturnsUnchanged(t *testing.T) {
 	}
 }
 
+func TestSafeNext(t *testing.T) {
+	for _, tt := range []struct {
+		next string
+		want string
+	}{
+		{"/authors?name=Octavia+Butler", "/authors?name=Octavia+Butler"},
+		{"", "/"},
+		{"https://attacker.example", "/"},
+		{"//attacker.example", "/"},
+		{"/\\attacker.example", "/"},
+		{"\\\\attacker.example", "/"},
+	} {
+		if got := safeNext(tt.next); got != tt.want {
+			t.Errorf("safeNext(%q) = %q, want %q", tt.next, got, tt.want)
+		}
+	}
+}
+
 func TestRenderLibraryPager(t *testing.T) {
 	tests := []struct {
 		name            string

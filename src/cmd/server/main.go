@@ -163,7 +163,7 @@ func main() {
 	// later still works without a restart.
 	go srv.RunEnrichmentQueue(ctx)
 	if generalSettings.PublicURL == "" {
-		log.Printf("warning: Public URL is not set; password-reset and invite emails will build their links from the request's Host header, which is not safe to trust in production")
+		log.Printf("warning: Public URL is not set; password-reset and invite emails are disabled")
 	}
 	if smtpSettings, err := userStore.GetSMTPSettings(); err != nil {
 		log.Printf("load smtp settings: %v", err)

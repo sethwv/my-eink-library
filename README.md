@@ -43,7 +43,7 @@ Then start the published image:
 docker compose up -d
 ```
 
-Visit `http://localhost:8080`. The supplied Compose file persists application data in a named volume and intentionally contains placeholder credentials.
+Put the service behind an HTTPS reverse proxy before signing in. Session cookies require HTTPS, while the supplied Compose file exposes the internal HTTP port for that proxy. The supplied Compose file persists application data in a named volume and intentionally contains placeholder credentials.
 
 For local development, configuration details, and validation commands, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

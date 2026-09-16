@@ -28,7 +28,7 @@ services:
 docker compose up -d
 ```
 
-Open `http://localhost:8080` and sign in with the bootstrap credentials from the override file.
+Put the service behind an HTTPS reverse proxy, then open its HTTPS URL and sign in with the bootstrap credentials from the override file. The container's port 8080 is HTTP for the reverse proxy only; session cookies require HTTPS.
 
 ## 3. Add more library folders
 

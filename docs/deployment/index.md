@@ -16,6 +16,10 @@ Keep `DATA_DIR` on persistent storage. It contains the SQLite index, user databa
 
 Set `PUBLIC_URL` to the externally reachable HTTPS URL when password-reset or invitation email is enabled. This prevents emailed links from being constructed from a client-controlled request host.
 
+## HTTPS
+
+Serve the application through an HTTPS reverse proxy. The application listens on HTTP at `PORT` for the proxy, but all session cookies are marked `Secure` and browsers will only send them to the HTTPS public endpoint.
+
 ## Configuration
 
 | Variable | Default | Purpose |

@@ -1,11 +1,55 @@
 package web
 
 import (
+	"net"
 	"testing"
 
 	"github.com/sethwv/my-eink-library/internal/chaptarr"
 	"github.com/sethwv/my-eink-library/internal/hardcover"
 )
+
+func TestResolveCoverURLPinsPublicAddress(t *testing.T) {
+	originalLookupIP := lookupIP
+	t.Cleanup(func() { lookupIP = originalLookupIP })
+	lookupIP = func(host string) ([]net.IP, error) {
+		if host != "covers.example" {
+			t.Fatalf("resolved unexpected host %q", host)
+		}
+		return []net.IP{net.ParseIP("203.0.113.10")}, nil
+	}
+
+	u, requestHost, serverName, err := resolveCoverURL("https://covers.example:8443/book.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := u.Host, "203.0.113.10:8443"; got != want {
+		t.Errorf("dial host = %q, want %q", got, want)
+	}
+	if requestHost != "covers.example:8443" {
+		t.Errorf("request host = %q", requestHost)
+	}
+	if serverName != "covers.example" {
+		t.Errorf("TLS server name = %q", serverName)
+	}
+}
+
+func TestResolveCoverURLRejectsUnsafeTargets(t *testing.T) {
+	originalLookupIP := lookupIP
+	t.Cleanup(func() { lookupIP = originalLookupIP })
+	lookupIP = func(string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil
+	}
+
+	for _, rawURL := range []string{
+		"http://covers.example/book.jpg",
+		"https://user@covers.example/book.jpg",
+		"https://covers.example/book.jpg",
+	} {
+		if _, _, _, err := resolveCoverURL(rawURL); err == nil {
+			t.Errorf("resolveCoverURL(%q) succeeded", rawURL)
+		}
+	}
+}
 
 func TestMergeChaptarrFields_ChaptarrWinsWhenBothHaveAField(t *testing.T) {
 	match := chaptarr.Book{

@@ -88,7 +88,7 @@ func (a *Authenticator) issueSession(w http.ResponseWriter, r *http.Request, use
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  expires,
 	})
@@ -101,6 +101,7 @@ func (a *Authenticator) ClearSession(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})

@@ -19,6 +19,6 @@ $env:PORT = "8080"
 & "C:\eink-library\eink-library_<version>_windows_amd64.exe"
 ```
 
-Open `http://localhost:8080` after it starts. The process must remain running, so use Task Scheduler or a Windows service wrapper for an always-on installation.
+Put the process behind an HTTPS reverse proxy, then open its HTTPS URL. Port 8080 is HTTP for the reverse proxy only because session cookies require HTTPS. The process must remain running, so use Task Scheduler or a Windows service wrapper for an always-on installation.
 
 The executable does not load `.env` files itself. For repeatable local launches, save the environment assignments and final command above in a private PowerShell script, such as `run-eink-library.ps1`, and keep that script out of source control.

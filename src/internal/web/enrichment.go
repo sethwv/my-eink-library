@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -397,36 +398,37 @@ func sleepOrDone(ctx context.Context, d time.Duration) {
 // a misbehaving or malicious URL can't exhaust memory.
 const maxCoverBytes = 20 << 20 // 20MB
 
-// applyCoverFromURL downloads the image at url, resizes/caches it through
-// the same thumbnail store the EPUB scanner uses, and points the book's
-// cover_path at it.
-// coverFetchClient rejects redirects outright rather than following them —
-// validateCoverURL only checks the URL the caller gave us, so a redirect
-// (e.g. to an internal address) would otherwise bypass that check entirely.
-var coverFetchClient = &http.Client{
-	Timeout: 15 * time.Second,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	},
-}
+var lookupIP = net.LookupIP
 
 // applyCoverFromURL downloads the image at rawURL, resizes/caches it through
 // the same thumbnail store the EPUB scanner uses, and points the book's
 // cover_path at it. rawURL ultimately comes from a value round-tripped
 // through the Edit Metadata form's hidden field, so it's untrusted input —
-// validateCoverURL guards against it being used to make the server fetch an
-// internal/private address (SSRF) even though only admins can reach this
-// path.
+// resolveCoverURL pins the request to a vetted public address before it is
+// sent, including if the hostname changes DNS records after validation.
 func (s *Server) applyCoverFromURL(ctx context.Context, bookID int64, rawURL string) error {
-	if err := validateCoverURL(rawURL); err != nil {
+	u, requestHost, serverName, err := resolveCoverURL(rawURL)
+	if err != nil {
 		return fmt.Errorf("refusing to fetch cover url: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := coverFetchClient.Do(req)
+	// Preserve the provider hostname for TLS and HTTP virtual-host routing,
+	// while the transport connects only to the vetted IP address in u.Host.
+	req.Host = requestHost
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{ServerName: serverName},
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -447,36 +449,41 @@ func (s *Server) applyCoverFromURL(ctx context.Context, bookID int64, rawURL str
 	return s.DB.SetCover(bookID, path)
 }
 
-// validateCoverURL requires an https URL whose host resolves only to public
-// (non-loopback, non-link-local, non-private-range) addresses, so a
-// tampered hardcover_cover_url form value can't be used to make the server
-// fetch an internal service, cloud metadata endpoint, or localhost port.
-func validateCoverURL(rawURL string) error {
+// resolveCoverURL returns a request URL whose host is a vetted public IP.
+func resolveCoverURL(rawURL string) (*url.URL, string, string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return err
+		return nil, "", "", err
 	}
-	if u.Scheme != "https" {
-		return fmt.Errorf("scheme must be https, got %q", u.Scheme)
+	if u.Scheme != "https" || u.User != nil {
+		return nil, "", "", fmt.Errorf("URL must be an https URL without credentials")
 	}
 	host := u.Hostname()
 	if host == "" {
-		return fmt.Errorf("missing host")
+		return nil, "", "", fmt.Errorf("missing host")
 	}
+	requestHost := u.Host
 
-	addrs, err := net.LookupIP(host)
+	addrs, err := lookupIP(host)
 	if err != nil {
-		return fmt.Errorf("resolve host: %w", err)
+		return nil, "", "", fmt.Errorf("resolve host: %w", err)
 	}
 	if len(addrs) == 0 {
-		return fmt.Errorf("host %q did not resolve to any address", host)
+		return nil, "", "", fmt.Errorf("host %q did not resolve to any address", host)
 	}
 	for _, ip := range addrs {
 		if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return fmt.Errorf("host %q resolves to a non-public address (%s)", host, ip)
+			return nil, "", "", fmt.Errorf("host %q resolves to a non-public address (%s)", host, ip)
 		}
 	}
-	return nil
+
+	ip := addrs[0]
+	if port := u.Port(); port != "" {
+		u.Host = net.JoinHostPort(ip.String(), port)
+	} else {
+		u.Host = ip.String()
+	}
+	return u, requestHost, host, nil
 }
 
 type httpStatusError struct{ code int }

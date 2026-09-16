@@ -66,6 +66,23 @@ func TestSessionRoundTrip(t *testing.T) {
 	if restricted {
 		t.Error("expected a password-issued session to be full, not restricted")
 	}
+	if !cookies[0].Secure {
+		t.Error("expected session cookie to require HTTPS")
+	}
+}
+
+func TestClearSessionRequiresHTTPS(t *testing.T) {
+	a := testAuthenticator(t)
+	w := httptest.NewRecorder()
+	a.ClearSession(w)
+
+	cookie := w.Result().Cookies()[0]
+	if !cookie.Secure {
+		t.Error("expected cleared session cookie to require HTTPS")
+	}
+	if cookie.MaxAge != -1 {
+		t.Errorf("MaxAge = %d, want -1", cookie.MaxAge)
+	}
 }
 
 func TestSessionExpired(t *testing.T) {
@@ -208,6 +225,9 @@ func TestRequireAuth_AllowsValidBookmarkToken(t *testing.T) {
 	}
 	if len(w.Result().Cookies()) != 1 {
 		t.Error("expected a session cookie to be issued alongside a valid token, so cookie-capable navigation doesn't need the token on every link")
+	}
+	if !w.Result().Cookies()[0].Secure {
+		t.Error("expected restricted session cookie to require HTTPS")
 	}
 }
 

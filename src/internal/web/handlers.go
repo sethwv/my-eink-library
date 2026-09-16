@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -92,13 +93,16 @@ func mergeInto(dst, src map[string]any) {
 	}
 }
 
-// safeNext restricts post-login redirect targets to same-site relative paths,
-// rejecting absolute and protocol-relative ("//host/...") URLs to prevent open redirects.
+// safeNext restricts post-login redirect targets to same-site relative paths.
 func safeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+	// Browsers treat backslashes as path separators in URLs, so normalize them
+	// before checking for protocol-relative URLs such as /\example.com.
+	next = strings.ReplaceAll(next, "\\", "/")
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || !strings.HasPrefix(u.Path, "/") {
 		return "/"
 	}
-	return next
+	return u.String()
 }
 
 func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
