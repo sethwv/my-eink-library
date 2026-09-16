@@ -335,11 +335,16 @@ func mergeProviderMetadata(cur, patch MetadataPatch) MetadataPatch {
 // directly to books) so they survive a later rescan, the same as
 // ApplyEnrichment's automatic path. Also marks the book "done".
 func (d *DB) SaveMetadata(bookID int64, patch MetadataPatch) error {
-	cur, err := d.currentEnrichmentMerged(bookID)
-	if err != nil {
-		return err
-	}
+	return d.withTx(func(tx *sql.Tx) error {
+		cur, err := currentEnrichmentMerged(tx, bookID)
+		if err != nil {
+			return err
+		}
+		return upsertEnrichment(tx, bookID, mergeManualMetadata(cur, patch), "done", SourceManual)
+	})
+}
 
+func mergeManualMetadata(cur, patch MetadataPatch) MetadataPatch {
 	final := cur
 	if patch.Title != "" {
 		final.Title = patch.Title
@@ -368,8 +373,7 @@ func (d *DB) SaveMetadata(bookID int64, patch MetadataPatch) error {
 	if patch.Rating != 0 {
 		final.Rating = patch.Rating
 	}
-
-	return d.upsertEnrichment(bookID, final, "done", SourceManual)
+	return final
 }
 
 // SetCover updates a book's cover image path directly on the books table
