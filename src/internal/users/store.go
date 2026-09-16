@@ -12,6 +12,7 @@ import (
 
 	"github.com/pressly/goose/v3"
 	"github.com/sethwv/my-eink-library/internal/mail"
+	"github.com/sethwv/my-eink-library/internal/sqlite"
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 )
@@ -99,47 +100,24 @@ func Open(dbPath string) (*Store, error) {
 // that first adds them, so every existing admin keeps full admin (both
 // capabilities) and every existing user keeps bookmark-link access.
 func (s *Store) migrateColumns() error {
-	rows, err := s.sql.Query(`PRAGMA table_info(users)`)
+	existing, err := sqlite.Columns(s.sql, "users")
 	if err != nil {
 		return err
 	}
-	existing := map[string]bool{}
-	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull, pk int
-		var dflt sql.NullString
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
-			rows.Close()
-			return err
-		}
-		existing[name] = true
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	rows.Close()
-
-	newColumns := []struct{ name, ddl string }{
-		{"bookmark_token_hash", "TEXT"},
-		{"bookmark_token_created_at", "INTEGER"},
-		{"role", "TEXT NOT NULL DEFAULT 'member'"},
-		{"can_bookmark", "INTEGER NOT NULL DEFAULT 1"},
-		{"email", "TEXT"},
-		{"reset_token_hash", "TEXT"},
-		{"reset_token_created_at", "INTEGER"},
-		{"invite_token_hash", "TEXT"},
-		{"invite_token_created_at", "INTEGER"},
-		{"digest_subscribed", "INTEGER NOT NULL DEFAULT 0"},
-	}
 	roleColumnIsNew := !existing["role"]
-	for _, c := range newColumns {
-		if existing[c.name] {
-			continue
-		}
-		if _, err := s.sql.Exec(fmt.Sprintf(`ALTER TABLE users ADD COLUMN %s %s`, c.name, c.ddl)); err != nil {
-			return err
-		}
+	if _, err := sqlite.EnsureColumns(s.sql, "users", []sqlite.Column{
+		{Name: "bookmark_token_hash", DDL: "TEXT"},
+		{Name: "bookmark_token_created_at", DDL: "INTEGER"},
+		{Name: "role", DDL: "TEXT NOT NULL DEFAULT 'member'"},
+		{Name: "can_bookmark", DDL: "INTEGER NOT NULL DEFAULT 1"},
+		{Name: "email", DDL: "TEXT"},
+		{Name: "reset_token_hash", DDL: "TEXT"},
+		{Name: "reset_token_created_at", DDL: "INTEGER"},
+		{Name: "invite_token_hash", DDL: "TEXT"},
+		{Name: "invite_token_created_at", DDL: "INTEGER"},
+		{Name: "digest_subscribed", DDL: "INTEGER NOT NULL DEFAULT 0"},
+	}); err != nil {
+		return err
 	}
 	if roleColumnIsNew {
 		if _, err := s.sql.Exec(`UPDATE users SET role = 'admin' WHERE is_admin = 1`); err != nil {

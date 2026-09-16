@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/pressly/goose/v3"
+	"github.com/sethwv/my-eink-library/internal/sqlite"
 	_ "modernc.org/sqlite"
 )
 
@@ -87,30 +88,11 @@ func Open(dbPath string) (*DB, error) {
 // place — there's no migration framework here, just an additive,
 // idempotent ALTER TABLE guarded by checking what columns already exist.
 func (d *DB) migrateEnrichmentStatusColumn() error {
-	rows, err := d.sql.Query(`PRAGMA table_info(books)`)
+	columns, err := sqlite.Columns(d.sql, "books")
 	if err != nil {
 		return err
 	}
-	hasColumn := false
-	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull, pk int
-		var dflt sql.NullString
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
-			rows.Close()
-			return err
-		}
-		if name == "enrichment_status" {
-			hasColumn = true
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	rows.Close()
-
-	if !hasColumn {
+	if !columns["enrichment_status"] {
 		if _, err := d.sql.Exec(`ALTER TABLE books ADD COLUMN enrichment_status TEXT NOT NULL DEFAULT ''`); err != nil {
 			return err
 		}
@@ -156,45 +138,16 @@ func (d *DB) migrateBookEnrichmentTable() error {
 // schema won't automatically re-queue to pick these up; an admin "reset
 // enrichment" is the documented way to force a full re-pass after upgrading.
 func (d *DB) migrateBookEnrichmentColumns() error {
-	rows, err := d.sql.Query(`PRAGMA table_info(book_enrichment)`)
-	if err != nil {
-		return err
-	}
-	existing := map[string]bool{}
-	for rows.Next() {
-		var cid int
-		var name, colType string
-		var notNull, pk int
-		var dflt sql.NullString
-		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
-			rows.Close()
-			return err
-		}
-		existing[name] = true
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	rows.Close()
-
-	newColumns := []struct{ name, ddl string }{
-		{"title", "TEXT"},
-		{"description", "TEXT"},
-		{"genres", "TEXT"},
-		{"publisher", "TEXT"},
-		{"pages", "INTEGER"},
-		{"isbn", "TEXT"},
-		{"rating", "REAL"},
-	}
-	for _, c := range newColumns {
-		if existing[c.name] {
-			continue
-		}
-		if _, err := d.sql.Exec(fmt.Sprintf(`ALTER TABLE book_enrichment ADD COLUMN %s %s`, c.name, c.ddl)); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := sqlite.EnsureColumns(d.sql, "book_enrichment", []sqlite.Column{
+		{Name: "title", DDL: "TEXT"},
+		{Name: "description", DDL: "TEXT"},
+		{Name: "genres", DDL: "TEXT"},
+		{Name: "publisher", DDL: "TEXT"},
+		{Name: "pages", DDL: "INTEGER"},
+		{Name: "isbn", DDL: "TEXT"},
+		{Name: "rating", DDL: "REAL"},
+	})
+	return err
 }
 
 func (d *DB) Close() error {
