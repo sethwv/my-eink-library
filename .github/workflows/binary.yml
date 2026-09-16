@@ -65,7 +65,7 @@ jobs:
             dpkg-deb --root-owner-group --build "$package" "../dist/eink-library_${VERSION}_linux_${arch}.deb"
           done
           rm -rf ../dist/package-amd64 ../dist/package-arm64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: standalone-binaries
           path: dist/
