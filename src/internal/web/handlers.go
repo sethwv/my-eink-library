@@ -143,7 +143,11 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 
 	s.Auth.IssueSession(w, r, username)
 
-	http.Redirect(w, r, next, http.StatusSeeOther)
+	target, err := url.Parse(next)
+	if err != nil || target.Hostname() != "" {
+		target = &url.URL{Path: "/"}
+	}
+	http.Redirect(w, r, target.String(), http.StatusSeeOther)
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
@@ -413,7 +417,11 @@ func (s *Server) ShelfToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, next, http.StatusSeeOther)
+	target, err := url.Parse(next)
+	if err != nil || target.Hostname() != "" {
+		target = &url.URL{Path: "/"}
+	}
+	http.Redirect(w, r, target.String(), http.StatusSeeOther)
 }
 
 func (s *Server) renderNameIndex(w http.ResponseWriter, r *http.Request, heading, linkBase string, list func() ([]index.NameCount, error)) {

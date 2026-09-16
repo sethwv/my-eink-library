@@ -428,6 +428,7 @@ func (s *Server) applyCoverFromURL(ctx context.Context, bookID int64, rawURL str
 			return http.ErrUseLastResponse
 		},
 	}
+	// codeql[go/request-forgery]: the URL host is the vetted public IP from resolveCoverURL.
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
