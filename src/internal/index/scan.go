@@ -335,13 +335,15 @@ func (d *DB) removeCanonicalFile(bookID int64, seen map[seenKey]bool) error {
 	}
 
 	p := locs[promote]
-	if _, err := d.sql.Exec(`
-		UPDATE books SET library_root=?, file_path=?, file_size=?, file_mtime=?, updated_at=strftime('%s','now')
-		WHERE id=?`, p.root, p.path, p.size, p.mtime, bookID); err != nil {
+	return d.withTx(func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`
+			UPDATE books SET library_root=?, file_path=?, file_size=?, file_mtime=?, updated_at=strftime('%s','now')
+			WHERE id=?`, p.root, p.path, p.size, p.mtime, bookID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`DELETE FROM book_locations WHERE library_root = ? AND file_path = ?`, p.root, p.path)
 		return err
-	}
-	_, err = d.sql.Exec(`DELETE FROM book_locations WHERE library_root = ? AND file_path = ?`, p.root, p.path)
-	return err
+	})
 }
 
 // DeleteByPath removes the indexed row for a single file path within root,

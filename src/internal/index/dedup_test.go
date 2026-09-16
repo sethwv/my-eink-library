@@ -187,6 +187,47 @@ func TestMergeBooks_RollsBackWhenDeleteFails(t *testing.T) {
 	}
 }
 
+func TestRemoveCanonicalFile_RollsBackWhenLocationDeleteFails(t *testing.T) {
+	db := openTestDB(t)
+	res, err := db.sql.Exec(`
+		INSERT INTO books (library_root, file_path, file_size, file_mtime, title, sort_title, author, sort_author, added_at, updated_at)
+		VALUES ('/lib', 'canonical.epub', 1, 1, 'Book', 'book', 'Author', 'author', 0, 0)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bookID, _ := res.LastInsertId()
+	if _, err := db.sql.Exec(`
+		INSERT INTO book_locations (book_id, library_root, file_path, file_size, file_mtime, added_at)
+		VALUES (?, '/lib', 'alternate.epub', 2, 2, 0)`, bookID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.sql.Exec(`
+		CREATE TRIGGER reject_location_delete BEFORE DELETE ON book_locations
+		WHEN OLD.book_id = ` + strconv.FormatInt(bookID, 10) + `
+		BEGIN SELECT RAISE(ABORT, 'forced promotion failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.removeCanonicalFile(bookID, nil); err == nil {
+		t.Fatal("removeCanonicalFile succeeded despite forced location delete failure")
+	}
+
+	book, err := db.Get(bookID)
+	if err != nil || book == nil {
+		t.Fatalf("book = (%+v, %v), want original book", book, err)
+	}
+	if book.FilePath != "canonical.epub" {
+		t.Errorf("canonical path = %q, want canonical.epub after rollback", book.FilePath)
+	}
+	locations, err := db.LocationsForBooks([]int64{bookID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(locations[bookID]) != 1 || locations[bookID][0].FilePath != "alternate.epub" {
+		t.Errorf("locations = %v, want alternate location preserved", locations)
+	}
+}
+
 func TestMergeDuplicateISBN(t *testing.T) {
 	db := openTestDB(t)
 
