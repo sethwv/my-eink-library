@@ -19,6 +19,21 @@ type DB struct {
 	sql *sql.DB
 }
 
+// withTx runs fn atomically. Multi-table index changes use this instead of
+// leaving locations, shelves, and canonical book rows partially updated when
+// a later statement fails.
+func (d *DB) withTx(fn func(*sql.Tx) error) error {
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 // Open opens (creating if necessary) the SQLite index at dbPath and applies
 // the schema via goose (migrations/*.sql, embedded in the binary —
 // 0001_baseline.sql is a byte-for-byte copy of the CREATE TABLE IF NOT

@@ -3,6 +3,7 @@ package index
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -136,6 +137,53 @@ func TestConsolidateDuplicateTitles_MergesPreexistingRows(t *testing.T) {
 	}
 	if !ids[idLow] {
 		t.Errorf("shelf membership was not carried over to the surviving book")
+	}
+}
+
+func TestMergeBooks_RollsBackWhenDeleteFails(t *testing.T) {
+	db := openTestDB(t)
+
+	insert := func(path string) int64 {
+		res, err := db.sql.Exec(`
+			INSERT INTO books (library_root, file_path, file_size, file_mtime, title, sort_title, author, sort_author, added_at, updated_at)
+			VALUES ('/lib', ?, 0, 0, 'Dup Book', 'dup book', 'Dup Author', 'dup author', 0, 0)`, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := res.LastInsertId()
+		return id
+	}
+	keepID := insert("keep.epub")
+	dropID := insert("drop.epub")
+	if _, err := db.sql.Exec(`INSERT INTO shelves (username, slug, name, created_at) VALUES ('u', 'favourites', 'Favourites', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.sql.Exec(`INSERT INTO shelf_books (shelf_id, book_id, added_at) VALUES (1, ?, 0)`, dropID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.sql.Exec(`
+		CREATE TRIGGER reject_merge_delete BEFORE DELETE ON books
+		WHEN OLD.id = ` + strconv.FormatInt(dropID, 10) + `
+		BEGIN SELECT RAISE(ABORT, 'forced merge failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.MergeBooks(keepID, dropID); err == nil {
+		t.Fatal("MergeBooks succeeded despite forced delete failure")
+	}
+
+	if book, err := db.Get(dropID); err != nil || book == nil {
+		t.Errorf("dropped book = (%+v, %v), want it preserved", book, err)
+	}
+	if locations, err := db.LocationsForBooks([]int64{keepID}); err != nil || len(locations[keepID]) != 0 {
+		t.Errorf("keep locations = (%v, %v), want no promoted location", locations, err)
+	}
+	ids, err := db.ShelfBookIDs(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ids[dropID] || ids[keepID] {
+		t.Errorf("shelf memberships = %v, want only dropped book %d", ids, dropID)
 	}
 }
 

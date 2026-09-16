@@ -101,39 +101,41 @@ func (d *DB) MergeBooks(keepID, dropID int64) error {
 		return nil
 	}
 
-	var root, path string
-	var size, mtime int64
-	err := d.sql.QueryRow(`SELECT library_root, file_path, file_size, file_mtime FROM books WHERE id = ?`, dropID).
-		Scan(&root, &path, &size, &mtime)
-	if err == sql.ErrNoRows {
-		return nil // already merged away by an earlier pass
-	}
-	if err != nil {
-		return err
-	}
+	return d.withTx(func(tx *sql.Tx) error {
+		var root, path string
+		var size, mtime int64
+		err := tx.QueryRow(`SELECT library_root, file_path, file_size, file_mtime FROM books WHERE id = ?`, dropID).
+			Scan(&root, &path, &size, &mtime)
+		if err == sql.ErrNoRows {
+			return nil // already merged away by an earlier pass
+		}
+		if err != nil {
+			return err
+		}
 
-	if _, err := d.sql.Exec(`
+		if _, err := tx.Exec(`
 		INSERT OR IGNORE INTO book_locations (book_id, library_root, file_path, file_size, file_mtime, added_at)
 		VALUES (?, ?, ?, ?, ?, strftime('%s','now'))`,
-		keepID, root, path, size, mtime); err != nil {
-		return err
-	}
+			keepID, root, path, size, mtime); err != nil {
+			return err
+		}
 
-	if _, err := d.sql.Exec(`UPDATE book_locations SET book_id = ? WHERE book_id = ?`, keepID, dropID); err != nil {
-		return err
-	}
+		if _, err := tx.Exec(`UPDATE book_locations SET book_id = ? WHERE book_id = ?`, keepID, dropID); err != nil {
+			return err
+		}
 
-	if _, err := d.sql.Exec(`
+		if _, err := tx.Exec(`
 		INSERT OR IGNORE INTO shelf_books (shelf_id, book_id, added_at)
 		SELECT shelf_id, ?, added_at FROM shelf_books WHERE book_id = ?`, keepID, dropID); err != nil {
-		return err
-	}
-	if _, err := d.sql.Exec(`DELETE FROM shelf_books WHERE book_id = ?`, dropID); err != nil {
-		return err
-	}
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM shelf_books WHERE book_id = ?`, dropID); err != nil {
+			return err
+		}
 
-	_, err = d.sql.Exec(`DELETE FROM books WHERE id = ?`, dropID)
-	return err
+		_, err = tx.Exec(`DELETE FROM books WHERE id = ?`, dropID)
+		return err
+	})
 }
 
 // findBookByTitleAuthor looks up an existing books row with the same
