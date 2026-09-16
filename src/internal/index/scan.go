@@ -28,14 +28,7 @@ type CoverSaver interface {
 // table on success. Files whose size/mtime haven't changed since the last
 // scan are skipped without re-parsing; use Reimport to force a full re-parse.
 func (d *DB) Scan(libraryRoots []string, saver CoverSaver) error {
-	start := time.Now()
-	if err := d.scan(libraryRoots, saver, false); err != nil {
-		return err
-	}
-
-	_ = d.SetMeta("last_scan_at", strconv.FormatInt(time.Now().Unix(), 10))
-	_ = d.SetMeta("last_scan_duration_ms", strconv.FormatInt(time.Since(start).Milliseconds(), 10))
-	return nil
+	return d.scanAndRecord(libraryRoots, saver, false)
 }
 
 // Reimport is like Scan but re-parses every EPUB regardless of whether its
@@ -44,8 +37,12 @@ func (d *DB) Scan(libraryRoots []string, saver CoverSaver) error {
 // book's added_at is preserved: the UPDATE path used for existing files
 // never touches that column, only the INSERT path (new files) does.
 func (d *DB) Reimport(libraryRoots []string, saver CoverSaver) error {
+	return d.scanAndRecord(libraryRoots, saver, true)
+}
+
+func (d *DB) scanAndRecord(libraryRoots []string, saver CoverSaver, force bool) error {
 	start := time.Now()
-	if err := d.scan(libraryRoots, saver, true); err != nil {
+	if err := d.scan(libraryRoots, saver, force); err != nil {
 		return err
 	}
 
