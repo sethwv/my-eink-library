@@ -219,6 +219,46 @@ func TestApplyEnrichment_RecordsChaptarrSource(t *testing.T) {
 	}
 }
 
+func TestApplyEnrichment_RollsBackWhenProviderStatusFails(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Original Title", "Amy Zed")
+
+	db := openTestDB(t)
+	if err := db.Scan([]string{libDir}, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(SortTitle, false, 1, 10, Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := books[0].ID
+	if _, err := db.sql.Exec(`
+		CREATE TRIGGER reject_chaptarr_status BEFORE UPDATE ON book_enrichment
+		WHEN NEW.chaptarr_status = 'done'
+		BEGIN SELECT RAISE(ABORT, 'forced provider status failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.ApplyEnrichment(id, MetadataPatch{Title: "Provider Title"}, SourceChaptarr); err == nil {
+		t.Fatal("ApplyEnrichment succeeded despite forced provider status failure")
+	}
+
+	book, err := db.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Title != "Original Title" {
+		t.Errorf("title = %q, want original title after rollback", book.Title)
+	}
+	source, err := db.GetEnrichmentSource(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != "" {
+		t.Errorf("source = %q, want no enrichment row after rollback", source)
+	}
+}
+
 func TestSaveMetadata_RecordsManualSource(t *testing.T) {
 	libDir := t.TempDir()
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Manually Edited Book", "Amy Zed")

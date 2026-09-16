@@ -48,6 +48,14 @@ type MetadataPatch struct {
 	Rating        float64
 }
 
+type rowQuerier interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+type sqlExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 // needsEnrichmentWhere gates both BooksNeedingEnrichment and
 // GetEnrichmentStats: a book is still a candidate if it hasn't been checked
 // yet (status = ”) and is missing any field Hardcover can contribute —
@@ -99,32 +107,32 @@ func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 // book, so it isn't retried every scan/queue pass. Valid statuses: "done",
 // "no_match", "error".
 func (d *DB) SetEnrichmentStatus(bookID int64, status string) error {
-	_, err := d.sql.Exec(`
-		INSERT INTO book_enrichment (book_id, status, updated_at) VALUES (?, ?, strftime('%s','now'))
-		ON CONFLICT(book_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`,
-		bookID, status)
-	return err
+	return setProviderStatus(d.sql, "status", bookID, status)
 }
 
 // SetChaptarrStatus records Chaptarr's own outcome for a book, independent
 // of the combined status/source columns -- used by the admin "hide no
 // Chaptarr match" filter. Valid statuses: "done", "no_match", "error".
 func (d *DB) SetChaptarrStatus(bookID int64, status string) error {
-	_, err := d.sql.Exec(`
-		INSERT INTO book_enrichment (book_id, chaptarr_status, updated_at) VALUES (?, ?, strftime('%s','now'))
-		ON CONFLICT(book_id) DO UPDATE SET chaptarr_status = excluded.chaptarr_status, updated_at = excluded.updated_at`,
-		bookID, status)
-	return err
+	return setProviderStatus(d.sql, "chaptarr_status", bookID, status)
 }
 
 // SetHardcoverStatus records Hardcover's own outcome for a book, independent
 // of the combined status/source columns -- used by the admin "hide no
 // Hardcover match" filter. Valid statuses: "done", "no_match", "error".
 func (d *DB) SetHardcoverStatus(bookID int64, status string) error {
-	_, err := d.sql.Exec(`
-		INSERT INTO book_enrichment (book_id, hardcover_status, updated_at) VALUES (?, ?, strftime('%s','now'))
-		ON CONFLICT(book_id) DO UPDATE SET hardcover_status = excluded.hardcover_status, updated_at = excluded.updated_at`,
-		bookID, status)
+	return setProviderStatus(d.sql, "hardcover_status", bookID, status)
+}
+
+func setProviderStatus(exec sqlExecer, column string, bookID int64, status string) error {
+	switch column {
+	case "status", "chaptarr_status", "hardcover_status":
+	default:
+		return fmt.Errorf("invalid enrichment status column %q", column)
+	}
+	_, err := exec.Exec(fmt.Sprintf(`
+		INSERT INTO book_enrichment (book_id, %s, updated_at) VALUES (?, ?, strftime('%%s','now'))
+		ON CONFLICT(book_id) DO UPDATE SET %s = excluded.%s, updated_at = excluded.updated_at`, column, column, column), bookID, status)
 	return err
 }
 
@@ -153,11 +161,15 @@ func (d *DB) GetEnrichmentStats() (EnrichmentStats, error) {
 // listing currently exposes. It uses the same MetadataPatch representation
 // accepted by both write paths, so adding a field has one definition.
 func (d *DB) currentEnrichmentMerged(bookID int64) (MetadataPatch, error) {
+	return currentEnrichmentMerged(d.sql, bookID)
+}
+
+func currentEnrichmentMerged(q rowQuerier, bookID int64) (MetadataPatch, error) {
 	var m MetadataPatch
 	var title, series, publishedDate, description, genres, publisher, isbn sql.NullString
 	var seriesIndex, rating sql.NullFloat64
 	var pages sql.NullInt64
-	err := d.sql.QueryRow(`
+	err := q.QueryRow(`
 		SELECT `+effectiveTitle+`, `+effectiveSeries+`, `+effectiveSeriesIndex+`, `+effectivePublishedDate+`,
 			`+effectiveDescription+`, be.genres, `+effectivePublisher+`, be.pages, be.isbn, be.rating
 		FROM books b LEFT JOIN book_enrichment be ON be.book_id = b.id
@@ -195,7 +207,11 @@ func (d *DB) GetEnrichmentSource(bookID int64) (string, error) {
 }
 
 func (d *DB) upsertEnrichment(bookID int64, f MetadataPatch, status, source string) error {
-	_, err := d.sql.Exec(`
+	return upsertEnrichment(d.sql, bookID, f, status, source)
+}
+
+func upsertEnrichment(exec sqlExecer, bookID int64, f MetadataPatch, status, source string) error {
+	_, err := exec.Exec(`
 		INSERT INTO book_enrichment (book_id, title, series, series_index, published_date, description, genres, publisher, pages, isbn, rating, status, source, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))
 		ON CONFLICT(book_id) DO UPDATE SET
@@ -260,11 +276,26 @@ func descriptionIsPlaceholder(cur, title string) bool {
 // Also marks the book "done" with the given source (SourceHardcover or
 // SourceChaptarr — whichever integration produced hc).
 func (d *DB) ApplyEnrichment(bookID int64, patch MetadataPatch, source string) error {
-	cur, err := d.currentEnrichmentMerged(bookID)
-	if err != nil {
-		return err
-	}
+	return d.withTx(func(tx *sql.Tx) error {
+		cur, err := currentEnrichmentMerged(tx, bookID)
+		if err != nil {
+			return err
+		}
+		final := mergeProviderMetadata(cur, patch)
+		if err := upsertEnrichment(tx, bookID, final, "done", source); err != nil {
+			return err
+		}
+		switch source {
+		case SourceChaptarr:
+			return setProviderStatus(tx, "chaptarr_status", bookID, "done")
+		case SourceHardcover:
+			return setProviderStatus(tx, "hardcover_status", bookID, "done")
+		}
+		return nil
+	})
+}
 
+func mergeProviderMetadata(cur, patch MetadataPatch) MetadataPatch {
 	final := cur
 	if patch.Title != "" {
 		final.Title = patch.Title
@@ -293,17 +324,7 @@ func (d *DB) ApplyEnrichment(bookID int64, patch MetadataPatch, source string) e
 	if patch.Rating != 0 {
 		final.Rating = patch.Rating
 	}
-
-	if err := d.upsertEnrichment(bookID, final, "done", source); err != nil {
-		return err
-	}
-	switch source {
-	case SourceChaptarr:
-		return d.SetChaptarrStatus(bookID, "done")
-	case SourceHardcover:
-		return d.SetHardcoverStatus(bookID, "done")
-	}
-	return nil
+	return final
 }
 
 // SaveMetadata unconditionally sets whichever non-blank/non-zero fields are
