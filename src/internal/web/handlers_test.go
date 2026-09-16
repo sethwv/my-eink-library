@@ -1,9 +1,11 @@
 package web
 
 import (
+	"archive/zip"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -29,6 +31,47 @@ func newTestServer(t *testing.T) *Server {
 		Users:    store,
 		SiteName: "Test Library",
 	}
+}
+
+func addTestBook(t *testing.T, db *index.DB) int64 {
+	t.Helper()
+
+	library := t.TempDir()
+	path := filepath.Join(library, "book.epub")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for name, content := range map[string]string{
+		"META-INF/container.xml": `<?xml version="1.0"?><container><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>`,
+		"content.opf":            `<?xml version="1.0"?><package><metadata><title>Test Book</title><creator>Test Author</creator></metadata></package>`,
+	} {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Scan([]string{library}, nil); err != nil {
+		t.Fatal(err)
+	}
+	books, err := db.List(index.SortTitle, false, 1, 1, index.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(books) != 1 {
+		t.Fatalf("indexed books = %d, want 1", len(books))
+	}
+	return books[0].ID
 }
 
 func TestLoginSubmit(t *testing.T) {
@@ -267,6 +310,106 @@ func TestShelfToggleRejectsAnotherUsersShelf(t *testing.T) {
 
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}
+
+func TestShelfToggleAddsBookAndRedirects(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	server.DB = db
+	bookID := addTestBook(t, db)
+	shelfID, err := db.EnsureSystemShelf("reader", "favourites", "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionRecorder := httptest.NewRecorder()
+	server.Auth.IssueSession(sessionRecorder, httptest.NewRequest(http.MethodPost, "/login", nil), "reader")
+	cookies := sessionRecorder.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("issued cookies = %d, want 1", len(cookies))
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/books/1/shelves/1", strings.NewReader("next=%2Fauthors"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookies[0])
+	req.SetPathValue("id", strconv.FormatInt(bookID, 10))
+	req.SetPathValue("shelfID", strconv.FormatInt(shelfID, 10))
+	recorder := httptest.NewRecorder()
+
+	server.Auth.RequireAuth(http.HandlerFunc(server.ShelfToggle)).ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/authors" {
+		t.Errorf("response = (%d, %q), want (%d, %q)", recorder.Code, recorder.Header().Get("Location"), http.StatusSeeOther, "/authors")
+	}
+	onShelf, err := db.IsBookOnShelf(shelfID, bookID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !onShelf {
+		t.Error("book was not added to the requested shelf")
+	}
+}
+
+func TestBookEditMetadataSavePersistsSubmittedFields(t *testing.T) {
+	server := newTestServer(t)
+	db, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	server.DB = db
+	bookID := addTestBook(t, db)
+
+	form := url.Values{
+		"title":          {"Edited Book"},
+		"series":         {"Test Series"},
+		"series_index":   {"2.5"},
+		"published_date": {"2024-01-02"},
+		"description":    {"A complete test description."},
+		"genres":         {"Fantasy, Science Fiction"},
+		"publisher":      {"Test Publisher"},
+		"pages":          {"321"},
+		"isbn":           {"9781234567897"},
+		"rating":         {"4.5"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/books/1/edit-metadata", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetPathValue("id", strconv.FormatInt(bookID, 10))
+	recorder := httptest.NewRecorder()
+
+	server.BookEditMetadataSave(recorder, req)
+
+	wantLocation := "/books/" + strconv.FormatInt(bookID, 10) + "/edit-metadata"
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != wantLocation {
+		t.Errorf("response = (%d, %q), want (%d, %q)", recorder.Code, recorder.Header().Get("Location"), http.StatusSeeOther, wantLocation)
+	}
+	book, err := db.Get(bookID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book == nil {
+		t.Fatal("saved book was not found")
+	}
+	if book.Title != "Edited Book" || book.Series != "Test Series" || book.SeriesIndex != 2.5 {
+		t.Errorf("saved title/series = (%q, %q, %v)", book.Title, book.Series, book.SeriesIndex)
+	}
+	if book.PublishedAt != "2024-01-02" || book.Description != "A complete test description." || book.Publisher != "Test Publisher" {
+		t.Errorf("saved metadata = (%q, %q, %q)", book.PublishedAt, book.Description, book.Publisher)
+	}
+	if got, want := strings.Join(book.Genres, ","), "Fantasy,Science Fiction"; got != want {
+		t.Errorf("genres = %q, want %q", got, want)
+	}
+	if book.Pages != 321 || book.ISBN != "9781234567897" || book.Rating != 4.5 {
+		t.Errorf("saved numeric metadata = (%d, %q, %v)", book.Pages, book.ISBN, book.Rating)
 	}
 }
 
