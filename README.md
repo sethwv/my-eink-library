@@ -1,6 +1,7 @@
 # my-eink-library
 
 A self-hosted EPUB library for e-readers. Browse a read-only library, download original EPUBs or Kobo-optimized KEPUBs, and manage access through a small authenticated web UI built for older e-reader browsers.
+[Refer to the docs](https://sethwv.github.io/my-eink-library/) for complete setup and deployment guides.
 
 ## Support
 
@@ -17,10 +18,10 @@ If this project has been useful, tips are appreciated.
 - Supports multiple users, admin controls, favourites
 - Converts EPUBs to KEPUB on demand
 - Supports Hardcover & Chaptarr Integrations
-
-## Documentation
-
-[See the docs site](https://sethwv.github.io/my-eink-library/) for setup and deployment guidance.
+  
+| <img width="889" height="500" alt="image" src="https://github.com/user-attachments/assets/bbbb81ff-5e40-4899-bf60-474c03f4a312" /> | <img width="375" height="500" alt="image" src="https://github.com/user-attachments/assets/d00115e0-a15c-41a5-9d3d-765a3df47942" /> |
+| -- | -- |
+| <img width="889" height="500" alt="image" src="https://github.com/user-attachments/assets/41a5248a-210b-4e16-8c3b-0582b488f5e6" /> | <img width="375" height="500" alt="image" src="https://github.com/user-attachments/assets/3f9f6986-847a-4972-95b2-d13f90cf0777" /> |
 
 ## Run It
 
