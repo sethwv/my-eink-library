@@ -37,7 +37,7 @@ jobs:
           cache-dependency-path: scripts/screenshots/package-lock.json
       - run: npm ci --prefix scripts/screenshots
       - id: playwright-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('scripts/screenshots/package-lock.json') }}
