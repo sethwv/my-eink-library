@@ -48,6 +48,9 @@ jobs:
           fetch-depth: 0
       - id: versions
         env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
           PUBLISH_LATEST: ${{ inputs.publish_latest || 'false' }}
           REGENERATE_ALL: ${{ inputs.regenerate_all_versions || 'false' }}
         run: |
@@ -58,7 +61,19 @@ jobs:
           if (tags.length === 0) throw new Error("at least one vX.Y.Z release tag is required");
           const latest = tags[0];
           const allVersions = [...tags, "main"];
-          const selected = process.env.REGENERATE_ALL === "true"
+          const presentationPaths = [
+            ".github/workflows/docs.yml",
+            "docs/_config.yml",
+            "docs/_includes/head_custom.html",
+            "docs/assets/css/",
+            "docs/assets/js/",
+            "scripts/docs/",
+          ];
+          const changedPaths = process.env.EVENT_NAME === "push" && process.env.BEFORE && !/^0+$/.test(process.env.BEFORE) && process.env.AFTER
+            ? execFileSync("git", ["diff", "--name-only", process.env.BEFORE, process.env.AFTER], { encoding: "utf8" }).trim().split("\n").filter(Boolean)
+            : [];
+          const presentationChanged = changedPaths.some((path) => presentationPaths.some((prefix) => path === prefix || path.startsWith(prefix)));
+          const selected = process.env.REGENERATE_ALL === "true" || presentationChanged
             ? allVersions
             : process.env.PUBLISH_LATEST === "true" ? [latest, "main"] : ["main"];
           const label = (ref) => ref === "main" ? "Development (main)" : ref;
