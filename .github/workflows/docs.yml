@@ -111,7 +111,15 @@ jobs:
       - run: npm run fixtures --prefix version/scripts/screenshots -- --output "$RUNNER_TEMP/library"
       - id: build-info
         run: |
-          printf 'version=%s\n' "$(git -C version describe --tags --always)" >> "$GITHUB_OUTPUT"
+          tag=$(git -C version describe --exact-match --tags --match 'v[0-9]*' HEAD 2>/dev/null || true)
+          if test -n "$tag"; then
+            version="$tag"
+          else
+            branch=$(git -C version branch --show-current)
+            branch=${branch:-detached}
+            version="${branch//\//-}-$(git -C version rev-parse --short HEAD)"
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           printf 'date=%s\n' "$(git -C version log -1 --format=%as)" >> "$GITHUB_OUTPUT"
       - run: go build -ldflags="-X main.buildVersion=${{ steps.build-info.outputs.version }} -X main.buildDate=${{ steps.build-info.outputs.date }}" -o "$RUNNER_TEMP/server" ./cmd/server
         working-directory: version/src
