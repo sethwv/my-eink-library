@@ -30,6 +30,71 @@ async function assertBuildTag(page) {
   if (buildTag) await page.locator(".footer", { hasText: buildTag }).waitFor();
 }
 
+async function applyAnnotations(page, annotations = []) {
+  const targets = [];
+  for (const annotation of annotations) {
+    const target = page.locator(annotation.selector).first();
+    await target.waitFor();
+    const box = await target.boundingBox();
+    if (!box) throw new Error(`Annotation target is not visible: ${annotation.selector}`);
+    targets.push({ ...annotation, box });
+  }
+
+  if (!targets.length) return;
+  await page.evaluate((items) => {
+    for (const item of items) {
+      const highlight = document.createElement("div");
+      highlight.setAttribute("data-screenshot-annotation", "highlight");
+      Object.assign(highlight.style, {
+        position: "fixed",
+        zIndex: "2147483646",
+        pointerEvents: "none",
+        boxSizing: "border-box",
+        left: `${Math.max(0, item.box.x)}px`,
+        top: `${Math.max(0, item.box.y)}px`,
+        width: `${Math.max(0, item.box.width)}px`,
+        height: `${Math.max(0, item.box.height)}px`,
+        border: "3px solid #e8b24d",
+        borderRadius: "4px",
+        background: "rgba(232, 178, 77, 0.16)",
+        boxShadow: "0 0 0 2px rgba(18, 24, 22, 0.8)",
+      });
+
+      const label = document.createElement("div");
+      label.setAttribute("data-screenshot-annotation", "label");
+      label.textContent = item.label;
+      Object.assign(label.style, {
+        position: "fixed",
+        zIndex: "2147483647",
+        pointerEvents: "none",
+        boxSizing: "border-box",
+        maxWidth: "min(280px, calc(100vw - 16px))",
+        padding: "5px 8px",
+        border: "2px solid #121816",
+        borderRadius: "4px",
+        background: "#e8b24d",
+        color: "#121816",
+        font: "700 14px/1.2 system-ui, sans-serif",
+      });
+
+      document.body.append(highlight, label);
+      const gap = 6;
+      const labelTop = item.placement === "bottom" ? item.box.y + item.box.height + gap : item.box.y - label.offsetHeight - gap;
+      label.style.left = `${Math.min(Math.max(8, item.box.x), window.innerWidth - label.offsetWidth - 8)}px`;
+      label.style.top = `${Math.min(Math.max(8, labelTop), window.innerHeight - label.offsetHeight - 8)}px`;
+    }
+  }, targets);
+}
+
+async function openBookModal(page) {
+  await login(page);
+  await page.goto(`${baseURL}/?q=${encodeURIComponent("Pride and Prejudice")}`, { waitUntil: "networkidle" });
+  const card = page.locator(".card", { hasText: "Pride and Prejudice" });
+  const modalID = (await card.getAttribute("id")).replace("card-", "book-");
+  await page.evaluate((id) => openModal(id), modalID);
+  await page.locator(".modal-overlay:visible .modal-box-wide").waitFor();
+}
+
 const scenarios = [
   { name: "login", prepare: (page) => page.goto(`${baseURL}/login`, { waitUntil: "networkidle" }) },
   { name: "library-grid", prepare: login },
@@ -42,14 +107,23 @@ const scenarios = [
   },
   {
     name: "book-modal",
+    prepare: openBookModal,
+  },
+  {
+    name: "book-shelves",
+    prepare: openBookModal,
+    annotations: [{ selector: ".modal-section-label", label: "Save this book to Favourites", placement: "top" }],
+  },
+  {
+    name: "account-preferences",
     async prepare(page) {
       await login(page);
-      await page.goto(`${baseURL}/?q=${encodeURIComponent("Pride and Prejudice")}`, { waitUntil: "networkidle" });
-      const card = page.locator('.card', { hasText: "Pride and Prejudice" });
-      const modalID = (await card.getAttribute("id")).replace("card-", "book-");
-      await page.evaluate((id) => openModal(id), modalID);
-      await page.locator('.modal-overlay:visible .modal-box-wide').waitFor();
+      await page.goto(`${baseURL}/account/password`, { waitUntil: "networkidle" });
     },
+    annotations: [
+      { selector: 'input[name="new_password"]', label: "Choose a new password", placement: "bottom" },
+      { selector: "h2", label: "Optional weekly new-book digest", placement: "bottom" },
+    ],
   },
   {
     name: "admin-settings",
@@ -57,6 +131,14 @@ const scenarios = [
       await login(page);
       await page.goto(`${baseURL}/admin/settings`, { waitUntil: "networkidle" });
     },
+  },
+  {
+    name: "admin-configuration",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/settings`, { waitUntil: "networkidle" });
+    },
+    annotations: [{ selector: 'input[name="public_url"]', label: "Public HTTPS URL for email links", placement: "bottom" }],
   },
   {
     name: "authors",
@@ -89,6 +171,7 @@ try {
       await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
       await scenario.prepare(page);
       await page.evaluate(() => document.fonts.ready);
+      await applyAnnotations(page, scenario.annotations);
       await page.screenshot({ path: path.join(output, `${scenario.name}-${viewport.name}.png`), type: "png" });
       await page.close();
     }

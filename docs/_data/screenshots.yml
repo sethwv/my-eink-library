@@ -14,10 +14,22 @@
   title: Book details
   description: A book's download, author, series, and shelf actions in the detail modal.
   scenario: book-modal
+- id: book-shelves
+  title: Save a favourite
+  description: The shelf control in a book's details, highlighted for adding a book to Favourites.
+  scenario: book-shelves
+- id: account-preferences
+  title: Account preferences
+  description: Password and new-book digest controls, with the relevant fields highlighted.
+  scenario: account-preferences
 - id: admin-settings
   title: Server settings
   description: Admin controls for the server's general and SMTP settings.
   scenario: admin-settings
+- id: admin-configuration
+  title: Public URL setting
+  description: The public HTTPS URL used when the library sends invitation and password-reset links.
+  scenario: admin-configuration
 - id: authors
   title: Authors
   description: The author index groups the generated library by creator.
