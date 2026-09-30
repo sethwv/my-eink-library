@@ -11,12 +11,3 @@ Use this guide after the library is running. It covers the application itself: f
 Start with the smallest workflow that solves your immediate need. Each guide page then covers advanced configuration, security considerations, and recovery steps where they apply.
 
 Deployment, persistent storage, HTTPS, and environment variables remain in [Deployment](../deployment/). Device and browser constraints are covered in [Technical](../technical/).
-
-## Guide topics
-
-- [Browse](browse-and-download/)
-- [Favourites](favourites-and-bookmarks/)
-- [Account](account-and-appearance/)
-- [Admin](administrator-access/)
-- [Server](server-settings-and-email/)
-- [Metadata](metadata-and-integrations/)

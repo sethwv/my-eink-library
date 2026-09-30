@@ -66,6 +66,7 @@ jobs:
             ".github/workflows/docs.yml",
             "docs/_config.yml",
             "docs/_includes/head_custom.html",
+            "docs/assets/brand/",
             "docs/assets/css/",
             "docs/assets/js/",
             "scripts/docs/",

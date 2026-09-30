@@ -149,6 +149,12 @@ a:hover {
   margin: 0;
 }
 
+.hero-lockup {
+  display: block;
+  width: min(100%, 40rem);
+  height: auto;
+}
+
 .eyebrow,
 .feature-mark {
   color: #e5b98b;
