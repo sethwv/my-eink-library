@@ -820,28 +820,32 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 	}, nil
 }
 
-// adminSettingsData builds the template data for the admin Settings page:
-// general site settings (site name, public URL, cover width, page size,
-// session TTL) plus SMTP configuration, both DB-backed.
 func (s *Server) adminSettingsData() (map[string]any, error) {
 	general, err := s.Users.GetGeneralSettings()
 	if err != nil {
 		return nil, err
 	}
+
+	return map[string]any{
+		"Title":      "Configuration",
+		"AdminTab":   "settings",
+		"SiteName":   general.SiteName,
+		"PublicURL":  general.PublicURL,
+		"CoverWidth": general.CoverWidth,
+		"PageSize":   general.PageSize,
+		"SessionTTL": general.SessionTTL.String(),
+	}, nil
+}
+
+func (s *Server) adminSMTPData() (map[string]any, error) {
 	smtp, err := s.Users.GetSMTPSettings()
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]any{
-		"Title":           "Settings",
-		"AdminTab":        "settings",
-		"SiteName":        general.SiteName,
-		"PublicURL":       general.PublicURL,
-		"CoverWidth":      general.CoverWidth,
-		"PageSize":        general.PageSize,
-		"SessionTTL":      general.SessionTTL.String(),
-		"SMTPConfigured":  smtp.Enabled(),
+		"Title":           "SMTP",
+		"AdminTab":        "smtp",
 		"SMTPHost":        smtp.Host,
 		"SMTPPort":        smtp.Port,
 		"SMTPEncryption":  smtp.Encryption,
@@ -851,11 +855,7 @@ func (s *Server) adminSettingsData() (map[string]any, error) {
 	}, nil
 }
 
-// serverIntegrationsData builds the template data for the admin
-// Integrations page (Hardcover + Chaptarr): current DB-backed settings,
-// live Enabled() state from the running clients, and Hardcover's
-// enrichment progress stats (moved here from admin_server.html).
-func (s *Server) serverIntegrationsData() (map[string]any, error) {
+func (s *Server) serverIntegrationsData(provider string) (map[string]any, error) {
 	settings, err := s.Users.GetIntegrationSettings()
 	if err != nil {
 		return nil, err
@@ -866,8 +866,9 @@ func (s *Server) serverIntegrationsData() (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"Title":                   "Integrations",
+		"Title":                   "Enrichment",
 		"AdminTab":                "integrations",
+		"EnrichmentTab":           provider,
 		"HardcoverEnabled":        settings.HardcoverEnabled,
 		"HardcoverActive":         s.Hardcover.Enabled(),
 		"HardcoverConfigured":     settings.HardcoverToken != "",
@@ -915,6 +916,21 @@ func (s *Server) AdminSettings(w http.ResponseWriter, r *http.Request) {
 	render(w, "admin_settings.html", data)
 }
 
+func (s *Server) AdminSMTP(w http.ResponseWriter, r *http.Request) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data, err := s.adminSMTPData()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	mergeInto(data, base)
+	render(w, "admin_smtp.html", data)
+}
+
 func (s *Server) renderAdminSettingsError(w http.ResponseWriter, r *http.Request, errMsg, statusMsg string) {
 	base, _, err := s.baseData(r)
 	if err != nil {
@@ -936,11 +952,27 @@ func (s *Server) renderAdminSettingsError(w http.ResponseWriter, r *http.Request
 	render(w, "admin_settings.html", data)
 }
 
-// AdminSettingsGeneralSave saves site name/public URL/cover width/page
-// size/session TTL, then applies the change to the running server
-// immediately (Covers.SetWidth, Auth.SetTTL, and the Server struct's own
-// SiteName/PublicURL/PageSize fields) so it takes effect without a restart
-// — the same live-apply pattern used by the Hardcover/Chaptarr settings.
+func (s *Server) renderAdminSMTPError(w http.ResponseWriter, r *http.Request, errMsg, statusMsg string) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data, err := s.adminSMTPData()
+	if err != nil {
+		http.Error(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	if errMsg != "" {
+		data["Error"] = errMsg
+	}
+	if statusMsg != "" {
+		data["Status"] = statusMsg
+	}
+	mergeInto(data, base)
+	render(w, "admin_smtp.html", data)
+}
+
 func (s *Server) AdminSettingsGeneralSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -984,9 +1016,6 @@ func (s *Server) AdminSettingsGeneralSave(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)
 }
 
-// ServerSMTPSave saves the admin-configured SMTP settings. An empty
-// submitted password means "keep the existing password" rather than
-// clearing it, since the form never echoes the real password back.
 func (s *Server) ServerSMTPSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -1016,15 +1045,13 @@ func (s *Server) ServerSMTPSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Users.SaveSMTPSettings(settings); err != nil {
-		s.renderAdminSettingsError(w, r, "failed to save SMTP settings: "+err.Error(), "")
+		s.renderAdminSMTPError(w, r, "failed to save SMTP settings: "+err.Error(), "")
 		return
 	}
 
-	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/smtp", http.StatusSeeOther)
 }
 
-// ServerSMTPTest sends a test email to an admin-supplied address using the
-// currently saved SMTP settings.
 func (s *Server) ServerSMTPTest(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -1038,20 +1065,19 @@ func (s *Server) ServerSMTPTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !settings.Enabled() {
-		s.renderAdminSettingsError(w, r, "SMTP is not configured yet. Save settings first.", "")
+		s.renderAdminSMTPError(w, r, "SMTP is not configured yet. Save settings first.", "")
 		return
 	}
 
 	body := fmt.Sprintf("This is a test email from %s, confirming your SMTP settings work.", s.SiteName)
 	if err := mail.Send(settings, to, "Test email from "+s.SiteName, body); err != nil {
-		s.renderAdminSettingsError(w, r, "test email failed: "+err.Error(), "")
+		s.renderAdminSMTPError(w, r, "test email failed: "+err.Error(), "")
 		return
 	}
 
-	s.renderAdminSettingsError(w, r, "", "Test email sent to "+to+".")
+	s.renderAdminSMTPError(w, r, "", "Test email sent to "+to+".")
 }
 
-// ServerRescan triggers a synchronous full library rescan, then returns to the server info page.
 func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
 	if err := s.DB.Scan(s.LibraryPaths, s.Covers); err != nil {
 		http.Error(w, "rescan failed: "+err.Error(), http.StatusInternalServerError)
@@ -1060,10 +1086,6 @@ func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }
 
-// ServerReimport triggers a synchronous full library reimport, re-parsing
-// every EPUB regardless of whether its file has changed (unlike a normal
-// rescan, which skips unchanged files) — used to pick up EPUB metadata
-// parsing fixes on books that are already indexed.
 func (s *Server) ServerReimport(w http.ResponseWriter, r *http.Request) {
 	if err := s.DB.Reimport(s.LibraryPaths, s.Covers); err != nil {
 		http.Error(w, "reimport failed: "+err.Error(), http.StatusInternalServerError)
@@ -1072,8 +1094,6 @@ func (s *Server) ServerReimport(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }
 
-// ServerEnrichmentReset clears all Hardcover/Chaptarr-derived enrichment
-// data so the background queues re-process every book from scratch.
 func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
 	if err := s.DB.ResetEnrichment(); err != nil {
 		http.Error(w, "enrichment reset failed: "+err.Error(), http.StatusInternalServerError)
@@ -1082,15 +1102,17 @@ func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/integrations", http.StatusSeeOther)
 }
 
-// ServerIntegrations shows the admin Integrations page: Hardcover and
-// Chaptarr toggle/credential settings plus Hardcover's enrichment progress.
 func (s *Server) ServerIntegrations(w http.ResponseWriter, r *http.Request) {
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
-	data, err := s.serverIntegrationsData()
+	provider := r.URL.Query().Get("provider")
+	if provider != "chaptarr" {
+		provider = "hardcover"
+	}
+	data, err := s.serverIntegrationsData(provider)
 	if err != nil {
 		http.Error(w, "failed to load settings", http.StatusInternalServerError)
 		return
@@ -1099,13 +1121,13 @@ func (s *Server) ServerIntegrations(w http.ResponseWriter, r *http.Request) {
 	render(w, "admin_integrations.html", data)
 }
 
-func (s *Server) renderAdminIntegrationsError(w http.ResponseWriter, r *http.Request, errMsg, statusMsg string) {
+func (s *Server) renderAdminIntegrationsError(w http.ResponseWriter, r *http.Request, provider, errMsg, statusMsg string) {
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
-	data, err := s.serverIntegrationsData()
+	data, err := s.serverIntegrationsData(provider)
 	if err != nil {
 		http.Error(w, "failed to load settings", http.StatusInternalServerError)
 		return
@@ -1120,11 +1142,6 @@ func (s *Server) renderAdminIntegrationsError(w http.ResponseWriter, r *http.Req
 	render(w, "admin_integrations.html", data)
 }
 
-// ServerIntegrationsHardcoverSave saves the Hardcover enable toggle and API
-// token, then applies the change to the running client immediately (see
-// hardcover.Client.SetConfig) so RunEnrichmentQueue picks it up on its next
-// loop iteration without a restart. An empty submitted token means "keep
-// the existing token" — the form never echoes the real token back.
 func (s *Server) ServerIntegrationsHardcoverSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -1147,19 +1164,14 @@ func (s *Server) ServerIntegrationsHardcoverSave(w http.ResponseWriter, r *http.
 	current.HardcoverOverwriteCover = r.FormValue("hardcover_overwrite_cover") == "on"
 
 	if err := s.Users.SaveIntegrationSettings(current); err != nil {
-		s.renderAdminIntegrationsError(w, r, "failed to save Hardcover settings: "+err.Error(), "")
+		s.renderAdminIntegrationsError(w, r, "hardcover", "failed to save Hardcover settings: "+err.Error(), "")
 		return
 	}
 	s.Hardcover.SetConfig(current.HardcoverEnabled, current.HardcoverToken)
 
-	http.Redirect(w, r, "/admin/integrations", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/integrations?provider=hardcover", http.StatusSeeOther)
 }
 
-// ServerIntegrationsChaptarrSave saves the Chaptarr enable toggle, base
-// URL, and API key, then applies the change to the running client
-// immediately (see chaptarr.Client.SetConfig) so RunEnrichmentQueue picks
-// it up on its next loop iteration without a restart. An empty submitted
-// key means "keep the existing key" — the form never echoes the real key back.
 func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -1182,12 +1194,12 @@ func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.R
 	current.HideNoChaptarrMatch = r.FormValue("hide_no_chaptarr_match") == "on"
 
 	if err := s.Users.SaveIntegrationSettings(current); err != nil {
-		s.renderAdminIntegrationsError(w, r, "failed to save Chaptarr settings: "+err.Error(), "")
+		s.renderAdminIntegrationsError(w, r, "chaptarr", "failed to save Chaptarr settings: "+err.Error(), "")
 		return
 	}
 	s.Chaptarr.SetConfig(current.ChaptarrEnabled, current.ChaptarrURL, current.ChaptarrAPIKey)
 
-	http.Redirect(w, r, "/admin/integrations", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/integrations?provider=chaptarr", http.StatusSeeOther)
 }
 
 // AccountBookmark shows the current bookmark-token status and a button to

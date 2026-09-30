@@ -137,9 +137,10 @@
 
 {{define "admintabs"}}
 <nav class="admin-tabs">
-  {{if .CanManageUsers}}<a href="/admin/users" class="{{if eq .AdminTab "users"}}is-active{{end}}">Users</a>{{end}}
   {{if .CanManageServer}}<a href="/admin/server" class="{{if eq .AdminTab "server"}}is-active{{end}}">Server</a>{{end}}
-  {{if .CanManageServer}}<a href="/admin/settings" class="{{if eq .AdminTab "settings"}}is-active{{end}}">Settings</a>{{end}}
-  {{if .CanManageServer}}<a href="/admin/integrations" class="{{if eq .AdminTab "integrations"}}is-active{{end}}">Integrations</a>{{end}}
+  {{if .CanManageUsers}}<a href="/admin/users" class="{{if eq .AdminTab "users"}}is-active{{end}}">Users</a>{{end}}
+  {{if .CanManageServer}}<a href="/admin/settings" class="{{if eq .AdminTab "settings"}}is-active{{end}}">Configuration</a>{{end}}
+  {{if .CanManageServer}}<a href="/admin/smtp" class="{{if eq .AdminTab "smtp"}}is-active{{end}}">SMTP</a>{{end}}
+  {{if .CanManageServer}}<a href="/admin/integrations" class="{{if eq .AdminTab "integrations"}}is-active{{end}}">Enrichment</a>{{end}}
 </nav>
 {{end}}

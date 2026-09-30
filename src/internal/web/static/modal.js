@@ -1,5 +1,5 @@
 // Plain ES5, loaded on every page. Shows/hides modals via direct inline
-// style, not CSS :target — :target proved unreliable on the actual target
+// style, not CSS :target because :target proved unreliable on the actual target
 // device (Kobo's QtWebKit) even though it's a very old, otherwise-safe CSS
 // selector. No fetch, no arrow functions, no let/const: just
 // getElementById and style.display, the most basic DOM API there is.
@@ -68,12 +68,12 @@ document.onclick = function (e) {
 };
 
 // Shelf toggle, instant, no page reload. Uses XMLHttpRequest rather than
-// fetch() — fetch is almost certainly absent on this engine and throws
+// fetch(), which is almost certainly absent on this engine and throws
 // synchronously before a .catch() can run (confirmed by an earlier version
 // of this shelf-toggle interaction silently breaking on-device);
 // XMLHttpRequest is a much older, more broadly supported API. isViewing is
 // true only for the shelf currently being browsed (e.g. tapping "Favourites"
-// while on the Favourites page) — since every book on that page is
+// while on the Favourites page). Since every book on that page is
 // guaranteed already on that shelf, tapping it always means "remove," so on
 // success the whole card and its modal are dropped from the page instead of
 // just flipping the checkmark.
@@ -90,7 +90,7 @@ function toggleShelf(bookId, shelfId, btn, isViewing) {
     if (isViewing) {
       var overlay = document.getElementById("book-" + bookId);
       var card = document.getElementById("card-" + bookId);
-      // The backdrop is shared/global now, not part of this overlay — removing
+      // The backdrop is shared/global now, not part of this overlay. Removing
       // just the overlay would leave the backdrop up with nothing on top of it.
       closeModal("book-" + bookId);
       if (overlay && overlay.parentNode) {
@@ -114,7 +114,7 @@ function toggleShelf(bookId, shelfId, btn, isViewing) {
 // Direct-link support: a book card's cover-link href always includes
 // ?book=<id> (see library.html/render.go's withQueryParam), so sharing or
 // bookmarking that URL reopens the same modal. window.onload (not
-// addEventListener/DOMContentLoaded — the plainest, oldest-engine-safe
+// addEventListener/DOMContentLoaded, the plainest, oldest-engine-safe
 // hook) checks for that param on page load and opens the matching modal.
 // No URLSearchParams (not assumed present on this engine, same reasoning
 // as avoiding fetch() elsewhere in this file): parsed by hand instead.

@@ -207,6 +207,7 @@ func main() {
 	mux.Handle("POST /admin/server/reimport", authn.RequireManageServer(http.HandlerFunc(srv.ServerReimport)))
 	mux.Handle("GET /admin/settings", authn.RequireManageServer(http.HandlerFunc(srv.AdminSettings)))
 	mux.Handle("POST /admin/settings/general", authn.RequireManageServer(http.HandlerFunc(srv.AdminSettingsGeneralSave)))
+	mux.Handle("GET /admin/smtp", authn.RequireManageServer(http.HandlerFunc(srv.AdminSMTP)))
 	mux.Handle("POST /admin/settings/smtp", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPSave)))
 	mux.Handle("POST /admin/settings/smtp/test", authn.RequireManageServer(http.HandlerFunc(srv.ServerSMTPTest)))
 	mux.Handle("GET /admin/integrations", authn.RequireManageServer(http.HandlerFunc(srv.ServerIntegrations)))

@@ -2,13 +2,12 @@
 {{template "topbar" .}}
 {{template "admintabs" .}}
 
-<h1>Integrations</h1>
+<h1>Enrichment</h1>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 {{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
 
 {{if or .HardcoverConfigured .ChaptarrConfigured}}
-<h1>Enrichment queue</h1>
-<p class="muted">One background queue serves both integrations &mdash; for each pending book, Chaptarr is checked first (if enabled) and always wins when it has a match; Hardcover only runs as a fallback for books Chaptarr didn't claim.</p>
+<h2>Queue</h2>
 <div class="table-wrap">
 <table>
 <tr><th>Status</th><th>Books</th></tr>
@@ -20,53 +19,59 @@
 </div>
 
 <form method="POST" action="/admin/integrations/enrichment-reset" style="margin-top:1em;">
-  <button type="submit">Clear all enrichment data &amp; requeue</button>
-  <p class="muted">Clears every book's Hardcover/Chaptarr-derived series/date and status, without touching EPUB-scanned data. The background queue picks all books back up automatically.</p>
+  <button type="submit">Reset enrichment</button>
 </form>
 {{end}}
 
-<h1>Hardcover</h1>
+<nav class="admin-subtabs">
+  <a href="/admin/integrations?provider=hardcover" class="{{if eq .EnrichmentTab "hardcover"}}is-active{{end}}">Hardcover</a>
+  <a href="/admin/integrations?provider=chaptarr" class="{{if eq .EnrichmentTab "chaptarr"}}is-active{{end}}">Chaptarr</a>
+</nav>
+
+{{if eq .EnrichmentTab "hardcover"}}
+<h2>Hardcover</h2>
 {{if .HardcoverActive}}
-<p class="muted">Enabled and configured &mdash; auto-fills book metadata from hardcover.app in the background.</p>
+<p class="muted">Enabled</p>
 {{else if .HardcoverConfigured}}
-<p class="muted">Configured but disabled &mdash; check "Enable" below to turn it on.</p>
+<p class="muted">Disabled</p>
 {{else}}
-<p class="muted">Not configured yet. Get an API token from <a href="https://hardcover.app/settings" target="_blank" rel="noopener">hardcover.app/settings</a>.</p>
+<p class="muted"><a href="https://hardcover.app/settings" target="_blank" rel="noopener">Get an API token</a></p>
 {{end}}
 
 <div class="table-wrap">
 <form method="POST" action="/admin/integrations/hardcover">
 <table>
-<tr><th>Enable</th><td><label><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable Hardcover enrichment</label></td></tr>
+<tr><th>Enable</th><td><label><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable</label></td></tr>
 <tr><th>API Token</th><td><input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></td></tr>
-<tr><th>Hide unmatched</th><td><label><input type="checkbox" name="hide_no_hardcover_match" {{if .HideNoHardcoverMatch}}checked{{end}}> Hide books with no Hardcover match from the library, author, series, and favourites views</label></td></tr>
-<tr><th>Overwrite covers</th><td><label><input type="checkbox" name="hardcover_overwrite_cover" {{if .HardcoverOverwriteCover}}checked{{end}}> Always use Hardcover's cover, even if the book already has one</label><p class="muted">Only applies going forward &mdash; use "Reset enrichment" below to make it re-fetch covers for books already processed.</p></td></tr>
+<tr><th>Hide unmatched</th><td><label><input type="checkbox" name="hide_no_hardcover_match" {{if .HideNoHardcoverMatch}}checked{{end}}> Hide unmatched books</label></td></tr>
+<tr><th>Overwrite covers</th><td><label><input type="checkbox" name="hardcover_overwrite_cover" {{if .HardcoverOverwriteCover}}checked{{end}}> Use Hardcover covers</label></td></tr>
 <tr><td colspan="2"><button type="submit">Save Hardcover settings</button></td></tr>
 </table>
 </form>
 </div>
 
-<h1>Chaptarr</h1>
-{{if .ChaptarrActive}}
-<p class="muted">Enabled and configured &mdash; matches books to a Chaptarr library by file path and fills in metadata Chaptarr already has. Takes precedence over Hardcover when both are enabled and a book matches.</p>
-{{else if .ChaptarrConfigured}}
-<p class="muted">Configured but disabled &mdash; check "Enable" below to turn it on.</p>
 {{else}}
-<p class="muted">Not configured yet. Point this at a self-hosted <a href="https://github.com/Chaptarr/chaptarr" target="_blank" rel="noopener">Chaptarr</a> instance's API.</p>
+<h2>Chaptarr</h2>
+{{if .ChaptarrActive}}
+<p class="muted">Enabled</p>
+{{else if .ChaptarrConfigured}}
+<p class="muted">Disabled</p>
+{{else}}
+<p class="muted"><a href="https://github.com/Chaptarr/chaptarr" target="_blank" rel="noopener">Chaptarr</a> is not configured.</p>
 {{end}}
-<p class="muted">Matching is by relative file path, not exact path &mdash; Chaptarr's own library root doesn't need to match this app's. If a book isn't matching, check that the trailing folder/filename structure Chaptarr reports for it looks the same as this library's.</p>
 
 <div class="table-wrap">
 <form method="POST" action="/admin/integrations/chaptarr">
 <table>
-<tr><th>Enable</th><td><label><input type="checkbox" name="chaptarr_enabled" {{if .ChaptarrEnabled}}checked{{end}}> Enable Chaptarr matching</label></td></tr>
+<tr><th>Enable</th><td><label><input type="checkbox" name="chaptarr_enabled" {{if .ChaptarrEnabled}}checked{{end}}> Enable</label></td></tr>
 <tr><th>Base URL</th><td><input type="text" name="chaptarr_url" value="{{.ChaptarrURL}}" placeholder="http://chaptarr.local:8978"></td></tr>
 <tr><th>API Key</th><td><input type="password" name="chaptarr_api_key" placeholder="{{if .ChaptarrConfigured}}(unchanged){{else}}paste your Chaptarr API key{{end}}"></td></tr>
-<tr><th>Hide unmatched</th><td><label><input type="checkbox" name="hide_no_chaptarr_match" {{if .HideNoChaptarrMatch}}checked{{end}}> Hide books with no Chaptarr match from the library, author, series, and favourites views</label></td></tr>
+<tr><th>Hide unmatched</th><td><label><input type="checkbox" name="hide_no_chaptarr_match" {{if .HideNoChaptarrMatch}}checked{{end}}> Hide unmatched books</label></td></tr>
 <tr><td colspan="2"><button type="submit">Save Chaptarr settings</button></td></tr>
 </table>
 </form>
 </div>
+{{end}}
 
 <p><a href="/">&laquo; Back to library</a></p>
 {{end}}

@@ -7,7 +7,7 @@
    full constraint list before adding anything fancier.
 
    Colors/spacing below are hardcoded literals, not CSS custom properties
-   (var()) — custom properties are a ~2016-2017 CSS feature and this engine
+   (var()) because custom properties are a ~2016-2017 CSS feature and this engine
    silently drops any declaration that references one, which was the root
    cause of modals rendering with no background on-device. Reference values:
    fg #111, fg-muted #444, bg #fff, bg-subtle #f7f7f7, border #ddd,
@@ -64,7 +64,7 @@ a:hover { text-decoration: none; }
   padding: 0.5em 0.75em;
   margin: 0.75em 0;
 }
-/* Buttons and inline forms — generous, matching padding throughout, both
+/* Buttons and inline forms use generous, matching padding throughout, both
    for touch targets and so a text input, a <select>, and a button sitting
    in the same row (the toolbar) line up at the same height without
    needing a hardcoded pixel height anywhere. */
@@ -111,7 +111,7 @@ label { display: block; margin: 0.6em 0; }
 
 /* Site header, shared across authenticated pages. No flexbox: title and nav
    sit in a two-cell table row (the same known-safe alignment primitive used
-   for the book modal's cover+actions layout — see .modal-layout below) so
+   for the book modal's cover+actions layout (see .modal-layout below) so
    both cells share one vertical-align:middle line, keeping the title and
    nav icons/labels centered against each other regardless of their
    different font-sizes/padding. Floats (the previous approach) don't share
@@ -157,7 +157,7 @@ label { display: block; margin: 0.6em 0; }
   .nav-icon { margin-right: 0; width: 1.3em; height: 1.3em; }
 }
 
-/* Admin section tab strip (Users/Server/Settings/Integrations) — same
+/* Admin section tab strip (Users/Server/Configuration/SMTP/Enrichment). Same
    inline-block-links-in-a-row technique as .topnav above, kept as a
    separate class since it sits inside the page body, not the topbar, and
    needs an .is-active state the topnav doesn't. */
@@ -165,6 +165,18 @@ label { display: block; margin: 0.6em 0; }
   margin: 0 0 1.2em;
   padding: 0;
   border-bottom: 1px solid #ddd;
+}
+
+.admin-subtabs {
+  margin: 1.5em 0 1em;
+}
+.admin-subtabs a {
+  display: inline-block;
+  margin-right: 0.75em;
+}
+.admin-subtabs a.is-active {
+  font-weight: 600;
+  color: #111;
 }
 .admin-tabs a {
   display: inline-block;
@@ -187,7 +199,7 @@ label { display: block; margin: 0.6em 0; }
 
 /* Search/sort toolbar: a simple two-row table pairing each row's control
    (search input / sort select) with that row's action button (tables are
-   a known-safe layout primitive on this engine) — every row is
+   a known-safe layout primitive on this engine). Every row is
    self-contained instead of collecting actions in a separate block below.
    Two columns, not three: there's no label column (removed in favor of
    the placeholder text/visible options carrying the same information). */
@@ -363,14 +375,14 @@ label { display: block; margin: 0.6em 0; }
 .name-list a { display: inline-block; padding: 0.3em 0.2em; }
 
 /* Modal (download / account / shelves-nav): shown/hidden by plain ES5 JS
-   (modal.js) toggling inline style.display directly — CSS :target proved
+   (modal.js) toggling inline style.display directly because CSS :target proved
    unreliable on the actual target device.
 
    Two separate elements, deliberately not one: a book with a long
    description can make .modal-box taller than one viewport, and this
    engine's inner-element scrollbars are known-buggy (see the constraints
    note at the top of this file), so the box can't have its own scroll
-   region — it needs to be an ordinary part of the page that scrolls with
+   region. It needs to be an ordinary part of the page that scrolls with
    everything else. But the dark backdrop needs to cover the full screen
    at all times regardless of scroll position, which a normal-flow element
    can't do on its own. So:
@@ -434,7 +446,7 @@ label { display: block; margin: 0.6em 0; }
 .modal-box h3 { margin-top: 0; text-align: center;}
 /* Manage-user modal: role/email/password are three separate <form>s (each
    posts to a different endpoint) but read as one flat settings sheet, not
-   three boxed tables — plain stacked label+input, no borders, grouped
+   three boxed tables: plain stacked label+input, no borders, grouped
    under .modal-section-label headings. Delete sits below a divider since
    it's the one destructive action here. */
 .modal-field-form { margin: 0 0 1.2em; }
@@ -635,7 +647,7 @@ th { background: #f7f7f7; }
 }
 .match-card .btn-hardcover { margin-top: 0.6em; }
 
-/* Section-heading rows inside the manual edit form's field table — plain
+/* Section-heading rows inside the manual edit form's field table use plain
    <th colspan="2"> rows, not <h2>, since margin has no effect on table
    cells (padding does) and this keeps the whole form one table instead of
    several, avoiding extra spacing/border quirks between adjacent tables. */

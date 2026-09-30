@@ -13,7 +13,7 @@
 </td>
 <td class="edit-actions-cell">
   {{if not .Enabled}}
-  <p class="muted">Hardcover enrichment isn't configured &mdash; you can still edit fields by hand below, or enable it from <a href="/admin/integrations">Manage Integrations</a>.</p>
+  <p class="muted">Hardcover enrichment isn't configured. You can still edit fields by hand, or enable it from <a href="/admin/integrations">Enrichment</a>.</p>
   {{else}}
   <a class="btn-hardcover" href="/books/{{.BookID}}/edit-metadata?mode=check">Check Hardcover</a>
   <p class="muted" style="margin-top:0.3em;">Searches using this book's current title/author.</p>
@@ -48,7 +48,7 @@
     {{if .ReleaseDate}} &middot; {{.ReleaseDate}}{{end}}
   </div>
   {{if .Snippet}}<div class="match-card-snippet">{{.Snippet}}</div>{{end}}
-  <a class="btn-hardcover" href="/books/{{$.BookID}}/edit-metadata?mode={{$.Mode}}&q={{$.ManualQuery}}&selected={{.ID}}">{{if .Selected}}Selected &mdash; using these defaults{{else}}Use this match{{end}}</a>
+  <a class="btn-hardcover" href="/books/{{$.BookID}}/edit-metadata?mode={{$.Mode}}&q={{$.ManualQuery}}&selected={{.ID}}">{{if .Selected}}Selected: using these defaults{{else}}Use this match{{end}}</a>
 </div>
 {{end}}
 {{else if .Mode}}
@@ -85,7 +85,7 @@
 <tr><th>Description</th><td><textarea name="description" rows="5">{{.FormDesc}}</textarea></td></tr>
 </table>
 </div>
-<p class="muted">Blank fields are left unchanged &mdash; nothing here is cleared by leaving it blank.</p>
+<p class="muted">Blank fields are left unchanged.</p>
 <button type="submit">Save</button>
 </form>
 
