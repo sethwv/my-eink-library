@@ -33,7 +33,17 @@ await writeFile(path.join(destination, "contributing.md"), frontMatter + contrib
 
 const changelogFrontMatter = "---\ntitle: Changelog\nnav_order: 9\nsearch_exclude: true\ngh_edit_link: false\n---\n\n";
 const changelogContents = await readFile(changelog, "utf8");
-await writeFile(path.join(destination, "changelog.md"), changelogFrontMatter + changelogContents);
+const changelogWithTOC = changelogContents.replace(/^# Changelog\r?\n/, `# Changelog
+{: .no_toc }
+
+## Contents
+{: .no_toc }
+
+1. TOC
+{:toc}
+
+`);
+await writeFile(path.join(destination, "changelog.md"), changelogFrontMatter + changelogWithTOC);
 
 const configPath = path.join(destination, "_config.yml");
 const config = await readFile(configPath, "utf8");
