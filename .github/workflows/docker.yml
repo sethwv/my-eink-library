@@ -38,6 +38,18 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: echo "major_minor=${VERSION%.*}" >> "$GITHUB_OUTPUT"
+      - name: Compute build version
+        id: build-version
+        env:
+          VERSION: ${{ inputs.version }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${BRANCH}-${SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -48,7 +60,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ inputs.version != '' }}
             type=raw,value=latest,enable=${{ inputs.version != '' }}
             type=ref,event=branch,enable=${{ github.event_name == 'push' && inputs.version == '' }}
-            type=sha,prefix=sha-,format=short,enable=${{ github.event_name == 'push' && inputs.version == '' }}
+            type=sha,prefix={{branch}}-,format=short,enable=${{ github.event_name == 'push' && inputs.version == '' }}
           labels: |
             org.opencontainers.image.title=my-eink-library
             org.opencontainers.image.description=Self-hosted EPUB library for e-readers
@@ -70,6 +82,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BUILD_VERSION=${{ inputs.version || github.sha }}
+            BUILD_VERSION=${{ steps.build-version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
