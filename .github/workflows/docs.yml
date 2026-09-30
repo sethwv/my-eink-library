@@ -157,10 +157,14 @@ jobs:
         with:
           source: .docs-source
           destination: _site
+      - name: Stage version site
+        run: >-
+          mkdir -p "artifact/${{ matrix.slug }}"
+          && rsync -a --delete _site/ "artifact/${{ matrix.slug }}/"
       - uses: actions/upload-artifact@v4
         with:
           name: docs-${{ matrix.slug }}
-          path: _site
+          path: artifact
       - name: Prepare latest release at the root
         if: matrix.ref == needs.discover.outputs.latest
         run: >-
@@ -175,12 +179,17 @@ jobs:
         with:
           source: .docs-root
           destination: _site-root
+      - name: Stage latest release root site
+        if: matrix.ref == needs.discover.outputs.latest
+        run: >-
+          mkdir -p root-artifact/root
+          && rsync -a --delete _site-root/ root-artifact/root/
       - name: Upload latest release root site
         if: matrix.ref == needs.discover.outputs.latest
         uses: actions/upload-artifact@v4
         with:
           name: docs-root
-          path: _site-root
+          path: root-artifact
 
   publish:
     needs: [discover, build]
@@ -197,6 +206,7 @@ jobs:
         with:
           pattern: docs-*
           path: incoming
+          merge-multiple: true
       - name: Assemble published sites
         env:
           REGENERATE_ALL: ${{ inputs.regenerate_all_versions || 'false' }}
