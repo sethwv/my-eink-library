@@ -1,0 +1,49 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Changed
+
+- Reorganized administrator configuration into dedicated server, email, and integration pages.
+
+## [v0.0.2] - 2026-09-16
+
+### Fixed
+
+- Made duplicate-book consolidation and canonical-record promotion atomic to prevent interrupted scans from leaving inconsistent library data.
+
+### Security
+
+- Hardened redirects, sessions, SMTP delivery, and remote cover fetching.
+- Replaced a vulnerable image-processing dependency.
+
+## [v0.0.1] - 2026-09-15 (Initial Release, Not Exhaustive)
+
+### Added
+
+- Added a self-hosted EPUB library with indexing, browsing, search, EPUB downloads, and on-demand KEPUB conversion.
+- Added author and series browsing, release-date sorting, book details, and shareable book links.
+- Added per-user shelves, favorites, and configurable appearance modes.
+- Added multi-user accounts, role-based administration, invitations, password resets, and bookmarkable e-reader login links.
+- Added optional Hardcover and Chaptarr metadata enrichment, including cover replacement and manual metadata editing.
+- Added Docker images and standalone Windows and Debian binary releases.
+
+### Changed
+
+- Allowed multiple library directories to be indexed as one library.
+- Improved navigation, pagination, and touch-friendly layouts for Kobo e-reader browsers.
+
+### Fixed
+
+- Improved modal behavior, toolbar layout, and card rendering on Kobo browsers.
+- Made metadata enrichment precedence deterministic and improved chained Chaptarr and Hardcover matching.
+
+### Security
+
+- Restricted bookmarkable login sessions to library viewing and shelves.
+- Required an explicit public URL before sending password reset and invitation emails.

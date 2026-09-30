@@ -1,9 +1,9 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const [source, destination, contributing, brandingSource, sitePath, activeSlug, ref, siteBasePath, manifestJSON] = process.argv.slice(2);
-if (!source || !destination || !contributing || !brandingSource || sitePath === undefined || !activeSlug || !ref || !siteBasePath || !manifestJSON) {
-  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <main-docs-source> <site-path> <active-slug> <git-ref> <site-base-path> <version-manifest-json>");
+const [source, destination, contributing, changelog, brandingSource, sitePath, activeSlug, ref, siteBasePath, manifestJSON] = process.argv.slice(2);
+if (!source || !destination || !contributing || !changelog || !brandingSource || sitePath === undefined || !activeSlug || !ref || !siteBasePath || !manifestJSON) {
+  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <changelog-source> <main-docs-source> <site-path> <active-slug> <git-ref> <site-base-path> <version-manifest-json>");
 }
 
 const versions = JSON.parse(manifestJSON);
@@ -26,9 +26,13 @@ await cp(path.join(brandingSource, "_includes", "head_custom.html"), path.join(d
 await cp(path.join(brandingSource, "assets", "css"), path.join(destination, "assets", "css"), { force: true, recursive: true });
 await cp(path.join(brandingSource, "assets", "js"), path.join(destination, "assets", "js"), { force: true, recursive: true });
 
-const frontMatter = "---\ntitle: Contributing\nnav_order: 8\ngh_edit_link: false\n---\n\n";
+const frontMatter = "---\ntitle: Contributing\nnav_order: 8\nsearch_exclude: true\ngh_edit_link: false\n---\n\n";
 const contributionGuide = await readFile(contributing, "utf8");
 await writeFile(path.join(destination, "contributing.md"), frontMatter + contributionGuide);
+
+const changelogFrontMatter = "---\ntitle: Changelog\nnav_order: 9\nsearch_exclude: true\ngh_edit_link: false\n---\n\n";
+const changelogContents = await readFile(changelog, "utf8");
+await writeFile(path.join(destination, "changelog.md"), changelogFrontMatter + changelogContents);
 
 const configPath = path.join(destination, "_config.yml");
 const config = await readFile(configPath, "utf8");

@@ -47,6 +47,18 @@ body {
   color: var(--moss-dark);
 }
 
+.icon,
+.search-icon,
+.anchor-heading,
+.nav-list .nav-list-item .nav-list-expander {
+  color: var(--moss);
+}
+
+.nav-list .nav-list-item .nav-list-link:hover,
+.nav-list .nav-list-item .nav-list-link.active {
+  color: var(--moss-dark);
+}
+
 .site-title {
   font-family: Fraunces, Georgia, serif;
   font-size: 1.35rem;
