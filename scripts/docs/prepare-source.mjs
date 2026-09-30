@@ -50,15 +50,39 @@ const options = [
 const selector = `\n<div class="docs-version-switcher">\n  <label for="docs-version">Version</label>\n  <select id="docs-version" data-docs-version>\n${options}\n  </select>\n</div>\n`;
 
 const includes = path.join(destination, "_includes");
-const footerPath = path.join(includes, "nav_footer_custom.html");
-let footer = "";
-try {
-  footer = await readFile(footerPath, "utf8");
-} catch (error) {
-  if (error.code !== "ENOENT") throw error;
-}
 await mkdir(includes, { recursive: true });
-await writeFile(footerPath, footer + selector);
+await writeFile(path.join(includes, "docs_version_switcher.html"), selector);
+
+const sidebar = `{%- comment -%}
+  Keep the version selector inside the navigation so it is available in the
+  expanded mobile menu, rather than in the page footer.
+{%- endcomment -%}
+<header class="side-bar">
+  <div class="site-header">
+    <a href="{{ '/' | relative_url }}" class="site-title lh-tight">{% include title.html %}</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  {% include_cached components/site_nav.html %}
+  {% include docs_version_switcher.html %}
+
+  <div class="d-md-block d-none site-footer">
+  {% capture nav_footer_custom %}
+    {%- include nav_footer_custom.html -%}
+  {% endcapture %}
+  {% if nav_footer_custom != "" %}
+    {{ nav_footer_custom }}
+  {% else %}
+    This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+  {% endif %}
+  </div>
+</header>
+`;
+const components = path.join(includes, "components");
+await mkdir(components, { recursive: true });
+await writeFile(path.join(components, "sidebar.html"), sidebar);
 
 const assets = path.join(destination, "assets", "docs-version");
 await mkdir(assets, { recursive: true });
