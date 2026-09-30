@@ -19,6 +19,7 @@ await cp(source, destination, { recursive: true });
 // The current docs shell intentionally applies to every version. Content,
 // screenshot data, and generated screenshots remain in the tag source.
 await cp(path.join(brandingSource, "_config.yml"), path.join(destination, "_config.yml"));
+await cp(path.join(brandingSource, "CNAME"), path.join(destination, "CNAME"));
 await cp(path.join(brandingSource, "_includes", "head_custom.html"), path.join(destination, "_includes", "head_custom.html"));
 await cp(path.join(brandingSource, "assets", "css"), path.join(destination, "assets", "css"), { force: true, recursive: true });
 await cp(path.join(brandingSource, "assets", "js"), path.join(destination, "assets", "js"), { force: true, recursive: true });
