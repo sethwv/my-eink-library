@@ -88,6 +88,7 @@ jobs:
     needs: release
     uses: ./.github/workflows/docs.yml
     with:
+      publish_latest: true
       regenerate_all_versions: false
     permissions:
       contents: write

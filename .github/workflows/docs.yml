@@ -19,6 +19,10 @@ on:
         type: boolean
   workflow_call:
     inputs:
+      publish_latest:
+        required: false
+        default: false
+        type: boolean
       regenerate_all_versions:
         required: false
         default: false
@@ -44,6 +48,7 @@ jobs:
           fetch-depth: 0
       - id: versions
         env:
+          PUBLISH_LATEST: ${{ inputs.publish_latest || 'false' }}
           REGENERATE_ALL: ${{ inputs.regenerate_all_versions || 'false' }}
         run: |
           node <<'NODE' >> "$GITHUB_OUTPUT"
@@ -53,7 +58,9 @@ jobs:
           if (tags.length === 0) throw new Error("at least one vX.Y.Z release tag is required");
           const latest = tags[0];
           const allVersions = [...tags, "main"];
-          const selected = process.env.REGENERATE_ALL === "true" ? allVersions : [latest, "main"];
+          const selected = process.env.REGENERATE_ALL === "true"
+            ? allVersions
+            : process.env.PUBLISH_LATEST === "true" ? [latest, "main"] : ["main"];
           const label = (ref) => ref === "main" ? "Development (main)" : ref;
           const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref) }));
           const manifest = [
