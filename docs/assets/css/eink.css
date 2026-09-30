@@ -83,6 +83,10 @@ body {
   color: inherit;
 }
 
+.docs-theme-credit a {
+  color: inherit;
+}
+
 .nav-list .nav-list-item .nav-list-link {
   color: var(--muted);
   font-family: "DM Mono", monospace;

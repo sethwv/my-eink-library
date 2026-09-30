@@ -68,11 +68,16 @@ const selector = `\n<div class="docs-version-switcher">\n  <label for="docs-vers
 const includes = path.join(destination, "_includes");
 await mkdir(includes, { recursive: true });
 await writeFile(path.join(includes, "docs_version_switcher.html"), selector);
-await writeFile(path.join(includes, "nav_footer_custom.html"), "<span class=\"d-none\" aria-hidden=\"true\"></span>\n");
+await writeFile(path.join(includes, "nav_footer_custom.html"), `
+{% include docs_version_switcher.html %}
+<div class="docs-theme-credit">This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a></div>
+<div class="docs-sidebar-license">my-eink-library is licensed under <a href="https://github.com/sethwv/my-eink-library/blob/main/LICENSE">AGPL-3.0-only</a></div>
+<div class="docs-sidebar-copyright">&copy; <script>document.write(new Date().getFullYear());</script> swvn.io</div>
+`);
 
 const sidebar = `{%- comment -%}
-  Keep the version selector inside the navigation so it is available in the
-  expanded mobile menu, rather than in the page footer.
+  nav_footer_custom appears in the sidebar on desktop and at the bottom of the
+  page on mobile.
 {%- endcomment -%}
 <header class="side-bar">
   <div class="site-header">
@@ -84,11 +89,15 @@ const sidebar = `{%- comment -%}
 
   {% include_cached components/site_nav.html %}
 
-  <div class="site-footer d-block">
-    {% include docs_version_switcher.html %}
-    <div class="docs-theme-credit">This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a></div>
-    <div class="docs-sidebar-license">my-eink-library is licensed under <a href="https://github.com/sethwv/my-eink-library/blob/main/LICENSE">AGPL-3.0-only</a></div>
-    <div class="docs-sidebar-copyright">&copy; <script>document.write(new Date().getFullYear());</script> swvn.io</div>
+  <div class="d-md-block d-none site-footer">
+  {% capture nav_footer_custom %}
+    {%- include nav_footer_custom.html -%}
+  {% endcapture %}
+  {% if nav_footer_custom != "" %}
+    {{ nav_footer_custom }}
+  {% else %}
+    This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+  {% endif %}
   </div>
 </header>
 `;
@@ -99,10 +108,9 @@ await writeFile(path.join(components, "sidebar.html"), sidebar);
 const assets = path.join(destination, "assets", "docs-version");
 await mkdir(assets, { recursive: true });
 await writeFile(path.join(assets, "switcher.css"), `
-.docs-version-switcher { margin: 0.75rem 0; padding: 0 1rem; }
+.docs-version-switcher { margin: 0.75rem 0; padding: 0; }
 .docs-version-switcher label { color: var(--muted, #5c5962); display: block; font-family: "DM Mono", monospace; font-size: 0.62rem; letter-spacing: 0.04em; margin-bottom: 0.3rem; text-transform: uppercase; }
 .docs-version-switcher select { background: var(--paper-deep, #fff); border: 1px solid var(--line, #d5d5d5); border-radius: 0; box-sizing: border-box; color: var(--ink, inherit); font-family: "DM Mono", monospace; font-size: 0.72rem; line-height: 1.2; max-width: 100%; padding: 0.4rem 0.5rem; width: auto; }
-@media (min-width: 50rem) { .docs-version-switcher { padding: 0 2rem; } }
 `);
 await writeFile(path.join(assets, "switcher.js"), `document.addEventListener("change", (event) => {
   const selector = event.target;
