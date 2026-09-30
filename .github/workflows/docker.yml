@@ -3,8 +3,20 @@ name: Docker Build
 on:
   push:
     branches: [main, dev/*]
+    paths:
+      - ".dockerignore"
+      - ".github/workflows/automated-testing.yml"
+      - ".github/workflows/docker.yml"
+      - "Dockerfile"
+      - "src/**"
   pull_request:
     branches: [main]
+    paths:
+      - ".dockerignore"
+      - ".github/workflows/automated-testing.yml"
+      - ".github/workflows/docker.yml"
+      - "Dockerfile"
+      - "src/**"
   workflow_dispatch:
   workflow_call:
     inputs:

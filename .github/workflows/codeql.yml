@@ -3,8 +3,18 @@ name: CodeQL
 on:
   push:
     branches: [main, dev]
+    paths:
+      - ".github/workflows/**"
+      - "docs/assets/js/**"
+      - "scripts/**"
+      - "src/**"
   pull_request:
     branches: [main, dev]
+    paths:
+      - ".github/workflows/**"
+      - "docs/assets/js/**"
+      - "scripts/**"
+      - "src/**"
   schedule:
     - cron: "22 8 * * 0"
   workflow_dispatch:
