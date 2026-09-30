@@ -11,47 +11,99 @@ on:
       - "scripts/docs/**"
       - "scripts/screenshots/**"
   workflow_dispatch:
+    inputs:
+      regenerate_all_versions:
+        description: Rebuild every released documentation version from its tag
+        required: true
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      regenerate_all_versions:
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: documentation-publish
   cancel-in-progress: true
 
 jobs:
-  build:
+  discover:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.versions.outputs.matrix }}
+      manifest: ${{ steps.versions.outputs.manifest }}
+      latest: ${{ steps.versions.outputs.latest }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: versions
+        env:
+          REGENERATE_ALL: ${{ inputs.regenerate_all_versions || 'false' }}
+        run: |
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const { execFileSync } = require("node:child_process");
+          const tags = execFileSync("git", ["tag", "-l", "v*", "--sort=-v:refname"], { encoding: "utf8" })
+            .trim().split("\n").filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag));
+          if (tags.length === 0) throw new Error("at least one vX.Y.Z release tag is required");
+          const latest = tags[0];
+          const allVersions = [...tags, "main"];
+          const selected = process.env.REGENERATE_ALL === "true" ? allVersions : [latest, "main"];
+          const label = (ref) => ref === "main" ? "Development (main)" : ref;
+          const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref) }));
+          const manifest = allVersions.map((ref) => ({ slug: ref, label: label(ref) }));
+          process.stdout.write(`matrix=${JSON.stringify({ include: entries })}\n`);
+          process.stdout.write(`manifest=${JSON.stringify(manifest)}\n`);
+          process.stdout.write(`latest=${latest}\n`);
+          NODE
+
+  build:
+    needs: discover
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out shared docs tooling
+        uses: actions/checkout@v7
+        with:
+          path: tooling
+      - name: Check out documentation version
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.ref }}
+          path: version
       - uses: actions/setup-go@v7
         with:
-          go-version-file: src/go.mod
-          cache-dependency-path: src/go.sum
+          go-version-file: version/src/go.mod
+          cache-dependency-path: version/src/go.sum
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: scripts/screenshots/package-lock.json
-      - run: npm ci --prefix scripts/screenshots
+          cache-dependency-path: version/scripts/screenshots/package-lock.json
+      - run: npm ci --prefix version/scripts/screenshots
       - id: playwright-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('scripts/screenshots/package-lock.json') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('version/scripts/screenshots/package-lock.json') }}
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx --prefix scripts/screenshots playwright install --with-deps chromium
+        run: npx --prefix version/scripts/screenshots playwright install --with-deps chromium
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx --prefix scripts/screenshots playwright install chromium
-      - run: npm run fixtures --prefix scripts/screenshots -- --output "$RUNNER_TEMP/library"
+        run: npx --prefix version/scripts/screenshots playwright install chromium
+      - run: npm run fixtures --prefix version/scripts/screenshots -- --output "$RUNNER_TEMP/library"
       - id: build-info
-        run: >-
-          printf 'version=%s\n' "$(git describe --tags --always)" >> "$GITHUB_OUTPUT";
-          printf 'date=%s\n' "$(git log -1 --format=%as)" >> "$GITHUB_OUTPUT"
+        run: |
+          printf 'version=%s\n' "$(git -C version describe --tags --always)" >> "$GITHUB_OUTPUT"
+          printf 'date=%s\n' "$(git -C version log -1 --format=%as)" >> "$GITHUB_OUTPUT"
       - run: go build -ldflags="-X main.buildVersion=${{ steps.build-info.outputs.version }} -X main.buildDate=${{ steps.build-info.outputs.date }}" -o "$RUNNER_TEMP/server" ./cmd/server
-        working-directory: src
+        working-directory: version/src
       - name: Start fixture server
         run: >-
           PORT=8080
@@ -71,26 +123,66 @@ jobs:
           done;
           cat "$RUNNER_TEMP/server.log";
           exit 1
-      - run: npm run capture --prefix scripts/screenshots
+      - run: npm run capture --prefix version/scripts/screenshots
         env:
           LIBRARY_USER: admin
           LIBRARY_PASS: fixture-password
           SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
-      - run: node scripts/docs/prepare-source.mjs docs .docs-source CONTRIBUTING.md
-      - uses: actions/configure-pages@v6
+      - run: >-
+          node tooling/scripts/docs/prepare-source.mjs
+          version/docs .docs-source version/CONTRIBUTING.md
+          "${{ matrix.slug }}" "${{ matrix.label }}" "${{ matrix.ref }}"
+          "/${{ github.event.repository.name }}" '${{ needs.discover.outputs.manifest }}'
       - uses: actions/jekyll-build-pages@v1
         with:
           source: .docs-source
           destination: _site
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/upload-artifact@v4
         with:
+          name: docs-${{ matrix.slug }}
           path: _site
-  deploy:
-    needs: build
+
+  publish:
+    needs: [discover, build]
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v5
+      - name: Restore previous documentation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          git clone --depth 1 --branch docs
+          "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" previous-docs
+          || true
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: docs-*
+          path: incoming
+      - name: Assemble published sites
+        env:
+          REGENERATE_ALL: ${{ inputs.regenerate_all_versions || 'false' }}
+          LATEST: ${{ needs.discover.outputs.latest }}
+        run: |
+          mkdir publish
+          if test "$REGENERATE_ALL" != "true" && test -d previous-docs; then rsync -a --exclude=.git previous-docs/ publish/; fi
+          for artifact in incoming/*; do
+            slug="${artifact##*/docs-}"
+            rm -rf "publish/$slug"
+            mkdir -p "publish/$slug"
+            rsync -a --delete "$artifact/" "publish/$slug/"
+            test -f "publish/$slug/index.html"
+          done
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=%s/"><link rel="canonical" href="%s/">\n' "$LATEST" "$LATEST" > publish/index.html
+          touch publish/.nojekyll
+      - name: Publish complete documentation tree
+        working-directory: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init
+          git checkout -b docs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "docs: publish versioned documentation"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin docs

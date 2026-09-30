@@ -83,3 +83,11 @@ jobs:
           dist/*
           --generate-notes
           --title "v${{ needs.version.outputs.version }}"
+
+  docs:
+    needs: release
+    uses: ./.github/workflows/docs.yml
+    with:
+      regenerate_all_versions: false
+    permissions:
+      contents: write
