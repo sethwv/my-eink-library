@@ -34,7 +34,7 @@ CLAUDE.md
 .dolt/
 .beads-credential-key
 .beads/proxieddb/
-
+.beads.gate.lock
 
 test
 /.docs-source/
