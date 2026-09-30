@@ -37,7 +37,7 @@ await writeFile(configPath, `${config}\nbaseurl: ${escapeYAML(versionPath)}\ngh_
 const renderOption = (version) => {
   const selected = version.slug === activeSlug ? " selected" : "";
   const destinationPath = version.path ? `${normalizedBasePath}/${version.path}/` : `${normalizedBasePath}/`;
-  return `<option value="${escapeHTML(destinationPath)}"${selected}>${escapeHTML(version.label)}</option>`;
+  return `<option value="${escapeHTML(destinationPath)}" data-version-root="${escapeHTML(destinationPath)}"${selected}>${escapeHTML(version.label)}</option>`;
 };
 const currentVersions = versions.filter((version) => version.slug === "latest" || version.slug === "main");
 const releasedVersions = versions.filter((version) => version.slug !== "latest" && version.slug !== "main");
@@ -47,7 +47,7 @@ const options = [
   ...releasedVersions.map(renderOption),
   "</optgroup>",
 ].join("\n");
-const selector = `\n<div class="docs-version-switcher">\n  <label for="docs-version">Version</label>\n  <select id="docs-version" data-docs-version>\n${options}\n  </select>\n</div>\n`;
+const selector = `\n<div class="docs-version-switcher">\n  <label for="docs-version">Version</label>\n  <select id="docs-version" data-docs-version data-page-path="{{ page.url }}">\n${options}\n  </select>\n</div>\n`;
 
 const includes = path.join(destination, "_includes");
 await mkdir(includes, { recursive: true });
@@ -91,7 +91,20 @@ await writeFile(path.join(assets, "switcher.css"), `
 .docs-version-switcher label { color: var(--muted, #5c5962); display: block; font-family: monospace; font-size: 0.7rem; letter-spacing: 0.04em; margin-bottom: 0.45rem; text-transform: uppercase; }
 .docs-version-switcher select { background: var(--paper-deep, #fff); border: 1px solid var(--line, #d5d5d5); border-radius: 0; color: var(--ink, inherit); font: inherit; max-width: 100%; padding: 0.5rem; width: 100%; }
 `);
-await writeFile(path.join(assets, "switcher.js"), `document.addEventListener("change", (event) => { if (event.target.matches("[data-docs-version]")) window.location.assign(event.target.value); });\n`);
+await writeFile(path.join(assets, "switcher.js"), `document.addEventListener("change", (event) => {
+  const selector = event.target;
+  if (!selector.matches("[data-docs-version]")) return;
+
+  const option = selector.options[selector.selectedIndex];
+  const root = option.dataset.versionRoot;
+  const pagePath = selector.dataset.pagePath || "/";
+  const destination = new URL(root.replace(/\\/$/, "") + pagePath, window.location.origin);
+
+  fetch(destination, { method: "HEAD" })
+    .then((response) => window.location.assign(response.ok ? destination : option.value))
+    .catch(() => window.location.assign(option.value));
+});
+`);
 
 const headPath = path.join(includes, "head_custom.html");
 let head = "";
