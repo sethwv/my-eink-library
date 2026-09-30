@@ -72,11 +72,18 @@ jobs:
             "CHANGELOG.md",
           ];
           const capturePaths = ["src/internal/", "scripts/screenshots/"];
-          const changedPaths = process.env.EVENT_NAME === "push" && process.env.BEFORE && !/^0+$/.test(process.env.BEFORE) && process.env.AFTER
-            ? execFileSync("git", ["diff", "--name-only", process.env.BEFORE, process.env.AFTER], { encoding: "utf8" }).trim().split("\n").filter(Boolean)
-            : [];
-          const presentationChanged = changedPaths.some((path) => presentationPaths.some((prefix) => path === prefix || path.startsWith(prefix)));
-          const captureChanged = changedPaths.some((path) => capturePaths.some((prefix) => path === prefix || path.startsWith(prefix)));
+          const shouldCompare = process.env.EVENT_NAME === "push" && process.env.BEFORE && !/^0+$/.test(process.env.BEFORE) && process.env.AFTER;
+          let comparisonUnavailable = false;
+          let changedPaths = [];
+          if (shouldCompare) {
+            try {
+              changedPaths = execFileSync("git", ["diff", "--name-only", process.env.BEFORE, process.env.AFTER], { encoding: "utf8" }).trim().split("\n").filter(Boolean);
+            } catch {
+              comparisonUnavailable = true;
+            }
+          }
+          const presentationChanged = comparisonUnavailable || changedPaths.some((path) => presentationPaths.some((prefix) => path === prefix || path.startsWith(prefix)));
+          const captureChanged = comparisonUnavailable || changedPaths.some((path) => capturePaths.some((prefix) => path === prefix || path.startsWith(prefix)));
           let hasPublishedSite = true;
           try {
             execFileSync("git", ["ls-remote", "--exit-code", "origin", "refs/heads/docs"], { stdio: "ignore" });
