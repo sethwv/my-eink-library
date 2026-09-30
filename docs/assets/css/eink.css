@@ -420,7 +420,7 @@ a:focus-visible,
 button:focus-visible,
 .search-button:focus-visible,
 .search-input:focus-visible {
-  outline: 3px solid #f3c780;
+  outline: 3px solid var(--moss);
   outline-offset: 3px;
 }
 

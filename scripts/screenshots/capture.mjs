@@ -125,6 +125,11 @@ const scenarios = [
     prepare: openBookModal,
   },
   {
+    name: "book-download",
+    prepare: openBookModal,
+    annotations: [{ selector: ".modal-overlay:visible .modal-actions-cell", label: "Download the original EPUB or Kobo KEPUB", placement: "top" }],
+  },
+  {
     name: "book-shelves",
     prepare: openBookModal,
     annotations: [{ selector: ".modal-overlay:visible button.shelf-toggle", label: "Add to Favourites", placement: "top" }],

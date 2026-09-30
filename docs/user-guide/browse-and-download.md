@@ -16,7 +16,7 @@ The Library is the home page after you sign in. It searches the books indexed fr
 
 An EPUB download is the exact source file. A KEPUB download is converted when requested, so it can take longer for a large book. If your reading application accepts ordinary EPUB files, use EPUB. Use KEPUB when you specifically want Kobo's KEPUB behavior.
 
-{% include screenshot-pair.html id="book-modal" %}
+{% include screenshot-pair.html id="book-download" %}
 
 ## Search and browse the library
 
@@ -27,11 +27,7 @@ An EPUB download is the exact source file. A KEPUB download is converted when re
 
 {% include screenshot-pair.html id="library-controls" %}
 
-## Open book details
-
-The details panel shows available downloads, author and series shortcuts, saved shelves, a description when the EPUB or enrichment data provides one, and the indexed file location. The location identifies which configured library folder supplied the book. It is informational only, not a file-browser link.
-
-{% include screenshot-pair.html id="book-modal" %}
+The details panel also has author and series shortcuts, saved shelves, a description when the EPUB or enrichment data provides one, and the indexed file location. The location identifies which configured library folder supplied the book. It is informational only, not a file-browser link.
 
 {: .note }
 Metadata and cover corrections are administrator functions. See the Metadata and integrations guide when it is available rather than editing source EPUB files from this screen.
