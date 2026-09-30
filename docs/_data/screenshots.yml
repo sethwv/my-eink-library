@@ -10,6 +10,10 @@
   title: Library grid, dark mode
   description: The same library view with the persisted dark appearance selected.
   scenario: library-dark
+- id: library-controls
+  title: Search and sorting
+  description: Search and sort controls for narrowing the library.
+  scenario: library-controls
 - id: book-modal
   title: Book details
   description: A book's download, author, series, and shelf actions in the detail modal.
@@ -18,6 +22,14 @@
   title: Save a favourite
   description: The shelf control in a book's details, highlighted for adding a book to Favourites.
   scenario: book-shelves
+- id: favourites-library
+  title: Favourite books
+  description: Books saved to the built-in Favourites shelf.
+  scenario: favourites-library
+- id: account-appearance
+  title: Appearance controls
+  description: The account menu controls for Auto, Light, and Dark appearances.
+  scenario: account-appearance
 - id: metadata-edit
   title: Edit metadata
   description: The manual metadata form, highlighted for correcting a book's details.
@@ -26,6 +38,10 @@
   title: Account preferences
   description: Password and new-book digest controls, with the relevant fields highlighted.
   scenario: account-preferences
+- id: account-bookmark
+  title: E-reader bookmark link
+  description: The account control for creating a passwordless e-reader bookmark link.
+  scenario: account-bookmark
 - id: admin-settings
   title: Server settings
   description: Admin controls for the server's general and SMTP settings.
@@ -34,6 +50,22 @@
   title: Public URL setting
   description: The public HTTPS URL used when the library sends invitation and password-reset links.
   scenario: admin-configuration
+- id: admin-server
+  title: Library maintenance
+  description: Rescan and reimport controls for maintaining the indexed library.
+  scenario: admin-server
+- id: admin-smtp
+  title: SMTP setup
+  description: Mail-provider settings and the test-email control.
+  scenario: admin-smtp
+- id: enrichment-hardcover
+  title: Hardcover enrichment
+  description: The Hardcover token and provider configuration controls.
+  scenario: enrichment-hardcover
+- id: enrichment-chaptarr
+  title: Chaptarr enrichment
+  description: Chaptarr matching and unmatched-book visibility controls.
+  scenario: enrichment-chaptarr
 - id: authors
   title: Authors
   description: The author index groups the generated library by creator.
@@ -46,3 +78,15 @@
   title: User administration
   description: The administrator view for managing library accounts.
   scenario: admin-users
+- id: admin-add-user
+  title: Add a user
+  description: The user-creation form for a new library member.
+  scenario: admin-add-user
+- id: admin-manage-user
+  title: Manage user access
+  description: Role and bookmark-link permission controls for an existing user.
+  scenario: admin-manage-user
+- id: admin-invite-user
+  title: Invite a user
+  description: The email invitation form and role selection.
+  scenario: admin-invite-user

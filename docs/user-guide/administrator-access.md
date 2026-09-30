@@ -15,7 +15,13 @@ Open the account menu and select **Admin** to manage users or server functions. 
 | Server Manager | Manage the server, settings, email, integrations, and library metadata. |
 | Admin | All user and server management functions. |
 
-## Minimum: add a member
+## Choose the right role
+
+Members read books and manage their own account. User Managers handle people, invitations, roles, and bookmark permission. Server Managers maintain the application. Admins have both sets of permissions.
+
+{% include screenshot-pair.html id="admin-manage-user" %}
+
+## Add a member
 
 1. Sign in as an Admin or User Manager and open **Admin**.
 2. Select the **Users** tab and choose **Add user**.
@@ -24,20 +30,24 @@ Open the account menu and select **Admin** to manage users or server functions. 
 
 Add an email address if the user should be able to reset their password. The email field is optional when creating a user, but self-service password reset needs both an address and working server email settings.
 
-{% include screenshot-pair.html id="admin-users" %}
+{% include screenshot-pair.html id="admin-add-user" %}
 
-## Advanced: roles, invitations, and recovery
+## Manage access
 
 Use **Manage** beside an existing user to change their role, grant or revoke bookmark-link access, update their email address, reset their password, or delete their account. Give the lowest role that allows the user to do their work. A User Manager cannot manage server configuration, while a Server Manager cannot manage users.
 
-To send an invitation, select **Invite by email**, provide the username, email address, and role, then send it. Invitations need SMTP and a public HTTPS URL. Configure and test those first in [Server maintenance, settings, and email](../server-settings-and-email/).
+{% include screenshot-pair.html id="admin-manage-user" %}
+
+## Invite a user by email
+
+To send an invitation, select **Invite by email**, provide the username, email address, and role, then send it. Invitations need SMTP and a public HTTPS URL. Configure and test those first in [Server](../server-settings-and-email/).
+
+{% include screenshot-pair.html id="admin-invite-user" %}
 
 Pending invitations can be resent from the user's Manage panel. Once a user has accepted an invitation, that panel provides an administrator password-reset action instead.
 
 {: .warning }
 Deleting a user removes their access. Check that the account is no longer needed before selecting **Delete user**.
-
-## First administrator and emergency access
 
 Current releases create the first administrator from `LIBRARY_USER` and `LIBRARY_PASS` during deployment. See [Deployment](../../deployment/) for that bootstrap configuration.
 

@@ -110,6 +110,17 @@ const scenarios = [
     },
   },
   {
+    name: "library-controls",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/?q=${encodeURIComponent("Pride and Prejudice")}&sort=title&dir=asc`, { waitUntil: "networkidle" });
+    },
+    annotations: [
+      { selector: "#q", label: "Search titles, authors, or series", placement: "bottom" },
+      { selector: "#sort", label: "Choose how results are ordered", placement: "bottom" },
+    ],
+  },
+  {
     name: "book-modal",
     prepare: openBookModal,
   },
@@ -117,6 +128,25 @@ const scenarios = [
     name: "book-shelves",
     prepare: openBookModal,
     annotations: [{ selector: ".modal-overlay:visible button.shelf-toggle", label: "Add to Favourites", placement: "top" }],
+  },
+  {
+    name: "favourites-library",
+    async prepare(page) {
+      await openBookModal(page);
+      await page.locator(".modal-overlay:visible button.shelf-toggle").click();
+      await page.locator(".modal-overlay:visible button.shelf-toggle.is-on").waitFor();
+      await page.goto(`${baseURL}/favorites`, { waitUntil: "networkidle" });
+    },
+    annotations: [{ selector: "h1:not(.site-title)", label: "Books saved to Favourites", placement: "bottom" }],
+  },
+  {
+    name: "account-appearance",
+    async prepare(page) {
+      await login(page);
+      await page.evaluate(() => openModal("account-modal"));
+      await page.locator("#account-modal:visible").waitFor();
+    },
+    annotations: [{ selector: "#account-modal:visible #theme-mode", label: "Choose Auto, Light, or Dark", placement: "bottom" }],
   },
   {
     name: "account-preferences",
@@ -128,6 +158,14 @@ const scenarios = [
       { selector: 'input[name="new_password"]', label: "Choose a new password", placement: "bottom" },
       { selector: "h2", label: "Optional weekly new-book digest", placement: "bottom" },
     ],
+  },
+  {
+    name: "account-bookmark",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/account/bookmark`, { waitUntil: "networkidle" });
+    },
+    annotations: [{ selector: 'form[action="/account/bookmark/regenerate"] button', label: "Create one e-reader bookmark link", placement: "top" }],
   },
   {
     name: "admin-settings",
@@ -143,6 +181,44 @@ const scenarios = [
       await page.goto(`${baseURL}/admin/settings`, { waitUntil: "networkidle" });
     },
     annotations: [{ selector: 'input[name="public_url"]', label: "Public HTTPS URL for email links", placement: "bottom" }],
+  },
+  {
+    name: "admin-server",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/server`, { waitUntil: "networkidle" });
+    },
+    annotations: [
+      { selector: 'form[action="/admin/server/rescan"] button', label: "Check configured folders for changes", placement: "top" },
+      { selector: 'form[action="/admin/server/reimport"] button', label: "Rebuild the index when needed", placement: "bottom" },
+    ],
+  },
+  {
+    name: "admin-smtp",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/smtp`, { waitUntil: "networkidle" });
+    },
+    annotations: [
+      { selector: 'form[action="/admin/settings/smtp"]', label: "Save your mail provider settings", placement: "top" },
+      { selector: 'form[action="/admin/settings/smtp/test"]', label: "Send a test before inviting users", placement: "bottom" },
+    ],
+  },
+  {
+    name: "enrichment-hardcover",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/integrations?provider=hardcover`, { waitUntil: "networkidle" });
+    },
+    annotations: [{ selector: 'input[name="hardcover_token"]', label: "Paste the Hardcover API token", placement: "bottom" }],
+  },
+  {
+    name: "enrichment-chaptarr",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/integrations?provider=chaptarr`, { waitUntil: "networkidle" });
+    },
+    annotations: [{ selector: 'input[name="hide_no_chaptarr_match"]', label: "Hide books without a provider match", placement: "bottom" }],
   },
   {
     name: "metadata-edit",
@@ -175,6 +251,40 @@ const scenarios = [
       await login(page);
       await page.goto(`${baseURL}/admin/users`, { waitUntil: "networkidle" });
     },
+  },
+  {
+    name: "admin-add-user",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/users`, { waitUntil: "networkidle" });
+      await page.evaluate(() => openModal("add-user-modal"));
+      await page.locator("#add-user-modal:visible").waitFor();
+    },
+    annotations: [{ selector: "#add-user-modal:visible", label: "Create a member and choose their role", placement: "top" }],
+  },
+  {
+    name: "admin-manage-user",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/users`, { waitUntil: "networkidle" });
+      const modalID = await page.locator('[id^="manage-user-"]').first().getAttribute("id");
+      await page.evaluate((id) => openModal(id), modalID);
+      await page.locator('.modal-overlay:visible [name="role"]').waitFor();
+    },
+    annotations: [
+      { selector: '.modal-overlay:visible [name="role"]', label: "Assign the least-privileged role", placement: "bottom" },
+      { selector: '.modal-overlay:visible [name="can_bookmark"]', label: "Control e-reader bookmark access", placement: "bottom" },
+    ],
+  },
+  {
+    name: "admin-invite-user",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/admin/users`, { waitUntil: "networkidle" });
+      await page.evaluate(() => openModal("invite-user-modal"));
+      await page.locator("#invite-user-modal:visible").waitFor();
+    },
+    annotations: [{ selector: "#invite-user-modal:visible", label: "Send a role-specific email invitation", placement: "top" }],
   },
 ];
 
