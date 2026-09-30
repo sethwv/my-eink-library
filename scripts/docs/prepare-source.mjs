@@ -23,6 +23,7 @@ await cp(source, destination, { recursive: true });
 // screenshot data, and generated screenshots remain in the tag source.
 await cp(path.join(brandingSource, "_config.yml"), path.join(destination, "_config.yml"));
 await cp(path.join(brandingSource, "_includes", "head_custom.html"), path.join(destination, "_includes", "head_custom.html"));
+await cp(path.join(brandingSource, "_includes", "footer_custom.html"), path.join(destination, "_includes", "footer_custom.html"));
 await cp(path.join(brandingSource, "assets", "css"), path.join(destination, "assets", "css"), { force: true, recursive: true });
 await cp(path.join(brandingSource, "assets", "js"), path.join(destination, "assets", "js"), { force: true, recursive: true });
 
@@ -79,7 +80,7 @@ const sidebar = `{%- comment -%}
   {% if nav_footer_custom != "" %}
     {{ nav_footer_custom }}
   {% else %}
-    This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    <span class="docs-theme-credit">This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.</span>
   {% endif %}
   </div>
 </header>
@@ -91,9 +92,9 @@ await writeFile(path.join(components, "sidebar.html"), sidebar);
 const assets = path.join(destination, "assets", "docs-version");
 await mkdir(assets, { recursive: true });
 await writeFile(path.join(assets, "switcher.css"), `
-.docs-version-switcher { margin: 1.5rem 1rem; }
-.docs-version-switcher label { color: var(--muted, #5c5962); display: block; font-family: monospace; font-size: 0.7rem; letter-spacing: 0.04em; margin-bottom: 0.45rem; text-transform: uppercase; }
-.docs-version-switcher select { background: var(--paper-deep, #fff); border: 1px solid var(--line, #d5d5d5); border-radius: 0; color: var(--ink, inherit); font: inherit; max-width: 100%; padding: 0.5rem; width: 100%; }
+.docs-version-switcher { margin: 0.75rem 0; padding: 0 1rem; }
+.docs-version-switcher label { color: var(--muted, #5c5962); display: block; font-family: "DM Mono", monospace; font-size: 0.62rem; letter-spacing: 0.04em; margin-bottom: 0.3rem; text-transform: uppercase; }
+.docs-version-switcher select { background: var(--paper-deep, #fff); border: 1px solid var(--line, #d5d5d5); border-radius: 0; color: var(--ink, inherit); font-family: "DM Mono", monospace; font-size: 0.72rem; line-height: 1.2; max-width: 100%; padding: 0.4rem 0.5rem; width: 100%; }
 `);
 await writeFile(path.join(assets, "switcher.js"), `document.addEventListener("change", (event) => {
   const selector = event.target;

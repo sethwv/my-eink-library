@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/docs.yml"
       - "docs/**"
+      - "CHANGELOG.md"
       - "CONTRIBUTING.md"
       - "src/internal/**"
       - "scripts/docs/**"
@@ -68,16 +69,26 @@ jobs:
             "docs/assets/css/",
             "docs/assets/js/",
             "scripts/docs/",
+            "CHANGELOG.md",
           ];
+          const capturePaths = ["src/internal/", "scripts/screenshots/"];
           const changedPaths = process.env.EVENT_NAME === "push" && process.env.BEFORE && !/^0+$/.test(process.env.BEFORE) && process.env.AFTER
             ? execFileSync("git", ["diff", "--name-only", process.env.BEFORE, process.env.AFTER], { encoding: "utf8" }).trim().split("\n").filter(Boolean)
             : [];
           const presentationChanged = changedPaths.some((path) => presentationPaths.some((prefix) => path === prefix || path.startsWith(prefix)));
+          const captureChanged = changedPaths.some((path) => capturePaths.some((prefix) => path === prefix || path.startsWith(prefix)));
+          let hasPublishedSite = true;
+          try {
+            execFileSync("git", ["ls-remote", "--exit-code", "origin", "refs/heads/docs"], { stdio: "ignore" });
+          } catch {
+            hasPublishedSite = false;
+          }
           const selected = process.env.REGENERATE_ALL === "true" || presentationChanged
             ? allVersions
             : process.env.PUBLISH_LATEST === "true" ? [latest, "main"] : ["main"];
           const label = (ref) => ref === "main" ? "Development (main)" : ref;
-          const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref) }));
+          const capture = process.env.REGENERATE_ALL === "true" || process.env.PUBLISH_LATEST === "true" || captureChanged || !hasPublishedSite;
+          const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref), capture }));
           const manifest = [
             { slug: "latest", path: "", label: `Latest (${latest})` },
             ...tags.map((ref) => ({ slug: ref, path: ref, label: ref })),
@@ -104,27 +115,46 @@ jobs:
         with:
           ref: ${{ matrix.ref }}
           path: version
-      - uses: actions/setup-go@v7
+      - name: Check out published screenshots
+        if: matrix.capture == false
+        uses: actions/checkout@v7
+        with:
+          ref: docs
+          path: published
+      - name: Restore published screenshots
+        if: matrix.capture == false
+        run: >-
+          test -d "published/${{ matrix.slug }}/assets/images/generated"
+          && rsync -a --delete
+          "published/${{ matrix.slug }}/assets/images/generated/"
+          "version/docs/assets/images/generated/"
+      - if: matrix.capture
+        uses: actions/setup-go@v7
         with:
           go-version-file: version/src/go.mod
           cache-dependency-path: version/src/go.sum
-      - uses: actions/setup-node@v7
+      - if: matrix.capture
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: version/scripts/screenshots/package-lock.json
-      - run: npm ci --prefix version/scripts/screenshots
+      - if: matrix.capture
+        run: npm ci --prefix version/scripts/screenshots
       - id: playwright-cache
+        if: matrix.capture
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('version/scripts/screenshots/package-lock.json') }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - if: matrix.capture && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx --prefix version/scripts/screenshots playwright install --with-deps chromium
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - if: matrix.capture && steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx --prefix version/scripts/screenshots playwright install chromium
-      - run: npm run fixtures --prefix version/scripts/screenshots -- --output "$RUNNER_TEMP/library"
+      - if: matrix.capture
+        run: npm run fixtures --prefix version/scripts/screenshots -- --output "$RUNNER_TEMP/library"
       - id: build-info
+        if: matrix.capture
         run: |
           tag=$(git -C version describe --exact-match --tags --match 'v[0-9]*' HEAD 2>/dev/null || true)
           if test -n "$tag"; then
@@ -136,9 +166,11 @@ jobs:
           fi
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           printf 'date=%s\n' "$(git -C version log -1 --format=%as)" >> "$GITHUB_OUTPUT"
-      - run: go build -ldflags="-X main.buildVersion=${{ steps.build-info.outputs.version }} -X main.buildDate=${{ steps.build-info.outputs.date }}" -o "$RUNNER_TEMP/server" ./cmd/server
+      - if: matrix.capture
+        run: go build -ldflags="-X main.buildVersion=${{ steps.build-info.outputs.version }} -X main.buildDate=${{ steps.build-info.outputs.date }}" -o "$RUNNER_TEMP/server" ./cmd/server
         working-directory: version/src
       - name: Start fixture server
+        if: matrix.capture
         run: >-
           PORT=8080
           LIBRARY_PATH="$RUNNER_TEMP/library"
@@ -149,6 +181,7 @@ jobs:
           SITE_NAME="my-eink-library"
           "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
       - name: Wait for fixture server
+        if: matrix.capture
         run: >-
           for attempt in {1..30}; do
           curl --fail --silent http://127.0.0.1:8080/healthz && exit 0;
@@ -157,7 +190,8 @@ jobs:
           done;
           cat "$RUNNER_TEMP/server.log";
           exit 1
-      - run: npm run capture --prefix version/scripts/screenshots
+      - if: matrix.capture
+        run: npm run capture --prefix version/scripts/screenshots
         env:
           LIBRARY_USER: admin
           LIBRARY_PASS: fixture-password

@@ -66,6 +66,21 @@ body {
   letter-spacing: -0.04em;
 }
 
+.docs-theme-credit,
+.docs-footer-content {
+  color: var(--muted);
+  font-size: 0.75rem;
+  opacity: 0.72;
+}
+
+.docs-footer-content div + div {
+  margin-top: 0.25rem;
+}
+
+.docs-footer-content a {
+  color: inherit;
+}
+
 .nav-list .nav-list-item .nav-list-link {
   color: var(--muted);
   font-family: "DM Mono", monospace;
