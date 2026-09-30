@@ -135,6 +135,7 @@ jobs:
       - run: >-
           node tooling/scripts/docs/prepare-source.mjs
           version/docs .docs-source version/CONTRIBUTING.md
+          tooling/docs
           "${{ matrix.slug }}" "${{ matrix.slug }}" "${{ matrix.ref }}"
           "/${{ github.event.repository.name }}" '${{ needs.discover.outputs.manifest }}'
       - uses: actions/jekyll-build-pages@v1
@@ -150,6 +151,7 @@ jobs:
         run: >-
           node tooling/scripts/docs/prepare-source.mjs
           version/docs .docs-root version/CONTRIBUTING.md
+          tooling/docs
           "" latest "${{ matrix.ref }}"
           "/${{ github.event.repository.name }}" '${{ needs.discover.outputs.manifest }}'
       - name: Build latest release at the root

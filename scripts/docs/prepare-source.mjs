@@ -1,9 +1,9 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const [source, destination, contributing, sitePath, activeSlug, ref, siteBasePath, manifestJSON] = process.argv.slice(2);
-if (!source || !destination || !contributing || sitePath === undefined || !activeSlug || !ref || !siteBasePath || !manifestJSON) {
-  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <site-path> <active-slug> <git-ref> <site-base-path> <version-manifest-json>");
+const [source, destination, contributing, brandingSource, sitePath, activeSlug, ref, siteBasePath, manifestJSON] = process.argv.slice(2);
+if (!source || !destination || !contributing || !brandingSource || sitePath === undefined || !activeSlug || !ref || !siteBasePath || !manifestJSON) {
+  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <main-docs-source> <site-path> <active-slug> <git-ref> <site-base-path> <version-manifest-json>");
 }
 
 const versions = JSON.parse(manifestJSON);
@@ -18,6 +18,13 @@ const versionPath = sitePath ? `${normalizedBasePath}/${sitePath}` : normalizedB
 
 await rm(destination, { force: true, recursive: true });
 await cp(source, destination, { recursive: true });
+
+// The current docs shell intentionally applies to every version. Content,
+// screenshot data, and generated screenshots remain in the tag source.
+await cp(path.join(brandingSource, "_config.yml"), path.join(destination, "_config.yml"));
+await cp(path.join(brandingSource, "_includes", "head_custom.html"), path.join(destination, "_includes", "head_custom.html"));
+await cp(path.join(brandingSource, "assets", "css"), path.join(destination, "assets", "css"), { force: true, recursive: true });
+await cp(path.join(brandingSource, "assets", "js"), path.join(destination, "assets", "js"), { force: true, recursive: true });
 
 const frontMatter = "---\ntitle: Contributing\nnav_order: 8\ngh_edit_link: false\n---\n\n";
 const contributionGuide = await readFile(contributing, "utf8");
