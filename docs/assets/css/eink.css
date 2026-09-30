@@ -67,21 +67,19 @@ body {
 }
 
 .docs-theme-credit,
-.docs-sidebar-copyright {
+.docs-sidebar-copyright,
+.docs-sidebar-license {
   color: var(--muted);
   font-size: 0.75rem;
   opacity: 0.72;
 }
 
-.docs-sidebar-copyright {
+.docs-sidebar-copyright,
+.docs-sidebar-license {
   margin-top: 0.75rem;
 }
 
-.docs-sidebar-copyright div + div {
-  margin-top: 0.25rem;
-}
-
-.docs-sidebar-copyright a {
+.docs-sidebar-license a {
   color: inherit;
 }
 
