@@ -12,7 +12,7 @@ Release images are published to:
 ghcr.io/sethwv/my-eink-library:latest
 ```
 
-Development builds use `dev` and immutable `dev-<short-sha>` tags. Versioned releases also publish exact semantic-version and major/minor tags.
+Development builds use `<branch>` and immutable `<branch>-<short-sha>` tags, such as `main-a1b2c3d`. Versioned releases also publish exact semantic-version and major/minor tags.
 
 Use the repository's `docker-compose.yml` with an ignored `docker-compose.override.yml` for credentials and the host library directory:
 
