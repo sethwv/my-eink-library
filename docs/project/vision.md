@@ -17,5 +17,3 @@ my-eink-library is a self-hosted EPUB library for people who want to read the fi
 ## What this project is *not*
 
 my-eink-library not a downloader and does not discover, acquire, source, or manage book files. It also does not replace applications that interface with indexers or other acquisition services. It is a private, browser-accessible home for an EPUB collection you already own.
-
-See [Browser limitations](../technical/browser-limitations.md) for the browser trade-offs that shape these choices and [Roadmap](roadmap.md) for current priorities.
