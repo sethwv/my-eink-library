@@ -1,9 +1,9 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const [source, destination, contributing, changelog, brandingSource, sitePath, activeSlug, ref, siteBasePath, manifestJSON] = process.argv.slice(2);
-if (!source || !destination || !contributing || !changelog || !brandingSource || sitePath === undefined || !activeSlug || !ref || !siteBasePath || !manifestJSON) {
-  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <changelog-source> <main-docs-source> <site-path> <active-slug> <git-ref> <site-base-path> <version-manifest-json>");
+const [source, destination, contributing, changelog, brandingSource, sitePath, activeSlug, ref, manifestJSON] = process.argv.slice(2);
+if (!source || !destination || !contributing || !changelog || !brandingSource || sitePath === undefined || !activeSlug || !ref || !manifestJSON) {
+  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <changelog-source> <main-docs-source> <site-path> <active-slug> <git-ref> <version-manifest-json>");
 }
 
 const versions = JSON.parse(manifestJSON);
@@ -13,9 +13,6 @@ if (!Array.isArray(versions) || !versions.every(({ slug: versionSlug, label: ver
 
 const escapeHTML = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const escapeYAML = (value) => JSON.stringify(value);
-const normalizedBasePath = siteBasePath.replace(/\/$/, "");
-const versionPath = sitePath ? `${normalizedBasePath}/${sitePath}` : normalizedBasePath;
-
 await rm(destination, { force: true, recursive: true });
 await cp(source, destination, { recursive: true });
 
@@ -48,6 +45,9 @@ await writeFile(path.join(destination, "changelog.md"), changelogFrontMatter + c
 
 const configPath = path.join(destination, "_config.yml");
 const config = await readFile(configPath, "utf8");
+const configuredBasePath = config.match(/^baseurl:\s*["']?([^"'\s#]*)/m)?.[1] ?? "";
+const normalizedBasePath = configuredBasePath.replace(/\/$/, "");
+const versionPath = sitePath ? `${normalizedBasePath}/${sitePath}` : normalizedBasePath;
 await writeFile(configPath, `${config}\nbaseurl: ${escapeYAML(versionPath)}\ngh_edit_branch: ${escapeYAML(ref)}\n`);
 
 const renderOption = (version) => {

@@ -209,7 +209,7 @@ jobs:
           tooling/CHANGELOG.md
           tooling/docs
           "${{ matrix.slug }}" "${{ matrix.slug }}" "${{ matrix.ref }}"
-          "/${{ github.event.repository.name }}" '${{ needs.discover.outputs.manifest }}'
+          '${{ needs.discover.outputs.manifest }}'
       - uses: actions/jekyll-build-pages@v1
         with:
           source: .docs-source
@@ -230,7 +230,7 @@ jobs:
           tooling/CHANGELOG.md
           tooling/docs
           "" latest "${{ matrix.ref }}"
-          "/${{ github.event.repository.name }}" '${{ needs.discover.outputs.manifest }}'
+          '${{ needs.discover.outputs.manifest }}'
       - name: Build latest release at the root
         if: matrix.ref == needs.discover.outputs.latest
         uses: actions/jekyll-build-pages@v1
