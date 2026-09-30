@@ -2,9 +2,9 @@ name: Docker Build
 
 on:
   push:
-    branches: [dev]
+    branches: [dev/*]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
   workflow_dispatch:
   workflow_call:
     inputs:
