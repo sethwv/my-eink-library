@@ -67,17 +67,21 @@ body {
 }
 
 .docs-theme-credit,
-.docs-footer-content {
+.docs-sidebar-copyright {
   color: var(--muted);
   font-size: 0.75rem;
   opacity: 0.72;
 }
 
-.docs-footer-content div + div {
+.docs-sidebar-copyright {
+  margin-top: 0.75rem;
+}
+
+.docs-sidebar-copyright div + div {
   margin-top: 0.25rem;
 }
 
-.docs-footer-content a {
+.docs-sidebar-copyright a {
   color: inherit;
 }
 
