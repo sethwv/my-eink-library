@@ -29,7 +29,7 @@ jobs:
         run: |
           version="$RELEASE_VERSION"
           if [ -z "$version" ]; then
-            version="0+dev.${GITHUB_SHA::7}"
+            version="${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "date=$(git log -1 --format=%as)" >> "$GITHUB_OUTPUT"

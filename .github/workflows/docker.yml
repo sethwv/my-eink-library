@@ -48,7 +48,7 @@ jobs:
           if [ -n "$VERSION" ]; then
             echo "value=$VERSION" >> "$GITHUB_OUTPUT"
           else
-            echo "value=${BRANCH}-${SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "value=${BRANCH//\//-}-${SHA::7}" >> "$GITHUB_OUTPUT"
           fi
       - name: Docker metadata
         id: meta
