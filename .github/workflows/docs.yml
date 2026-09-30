@@ -232,20 +232,20 @@ jobs:
           mkdir publish
           if test "$REGENERATE_ALL" != "true" && test -d previous-docs; then rsync -a --exclude=.git previous-docs/ publish/; fi
           for artifact in incoming/*; do
-            slug="${artifact##*/docs-}"
+            slug="${artifact##*/}"
             if test "$slug" = root; then continue; fi
             rm -rf "publish/$slug"
             mkdir -p "publish/$slug"
             rsync -a --delete "$artifact/" "publish/$slug/"
             test -f "publish/$slug/index.html"
           done
-          if test -d incoming/docs-root; then
+          if test -d incoming/root; then
             for entry in publish/* publish/.[!.]*; do
               test -e "$entry" || continue
               case "${entry##*/}" in v*|main) continue ;; esac
               rm -rf "$entry"
             done
-            rsync -a "incoming/docs-root/" publish/
+            rsync -a "incoming/root/" publish/
             test -f publish/index.html
           fi
           touch publish/.nojekyll
