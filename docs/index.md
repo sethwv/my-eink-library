@@ -39,10 +39,3 @@ description: "A self-hosted EPUB library made for e-reader browsers."
 {% include screenshot-pair.html id="library-grid" %}
 {% include screenshot-pair.html id="library-dark" %}
 [More screenshots](screenshots)
-
-## Explore
-- [Vision](project/vision.md)
-- [Deployment](deployment/)
-- [Roadmap](project/roadmap.md)
-- [Browser Limitations](technical/browser-limitations.md)
-- [Contributing](contributing.md)
