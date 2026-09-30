@@ -1,20 +1,20 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const [source, destination, contributing, slug, label, ref, siteBasePath, manifestJSON] = process.argv.slice(2);
-if (!source || !destination || !contributing || !slug || !label || !ref || !siteBasePath || !manifestJSON) {
-  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <slug> <label> <git-ref> <site-base-path> <version-manifest-json>");
+const [source, destination, contributing, sitePath, activeSlug, ref, siteBasePath, manifestJSON] = process.argv.slice(2);
+if (!source || !destination || !contributing || sitePath === undefined || !activeSlug || !ref || !siteBasePath || !manifestJSON) {
+  throw new Error("usage: prepare-source.mjs <docs-source> <destination> <contributing-source> <site-path> <active-slug> <git-ref> <site-base-path> <version-manifest-json>");
 }
 
 const versions = JSON.parse(manifestJSON);
-if (!Array.isArray(versions) || !versions.every(({ slug: versionSlug, label: versionLabel }) => versionSlug && versionLabel)) {
-  throw new Error("version manifest must contain slugs and labels");
+if (!Array.isArray(versions) || !versions.every(({ slug: versionSlug, label: versionLabel, path: versionPath }) => versionSlug && versionLabel && typeof versionPath === "string")) {
+  throw new Error("version manifest must contain slugs, paths, and labels");
 }
 
 const escapeHTML = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const escapeYAML = (value) => JSON.stringify(value);
 const normalizedBasePath = siteBasePath.replace(/\/$/, "");
-const versionPath = `${normalizedBasePath}/${slug}`;
+const versionPath = sitePath ? `${normalizedBasePath}/${sitePath}` : normalizedBasePath;
 
 await rm(destination, { force: true, recursive: true });
 await cp(source, destination, { recursive: true });
@@ -27,11 +27,22 @@ const configPath = path.join(destination, "_config.yml");
 const config = await readFile(configPath, "utf8");
 await writeFile(configPath, `${config}\nbaseurl: ${escapeYAML(versionPath)}\ngh_edit_branch: ${escapeYAML(ref)}\n`);
 
-const options = versions.map((version) => {
-  const selected = version.slug === slug ? " selected" : "";
-  return `<option value="${escapeHTML(`${normalizedBasePath}/${version.slug}/`)}"${selected}>${escapeHTML(version.label)}</option>`;
-}).join("\n");
-const selector = `\n<div class="docs-version-switcher">\n  <label for="docs-version">Documentation version</label>\n  <select id="docs-version" data-docs-version>\n${options}\n  </select>\n</div>\n`;
+const renderOption = (version) => {
+  const selected = version.slug === activeSlug ? " selected" : "";
+  const destinationPath = version.path ? `${normalizedBasePath}/${version.path}/` : `${normalizedBasePath}/`;
+  return `<option value="${escapeHTML(destinationPath)}"${selected}>${escapeHTML(version.label)}</option>`;
+};
+const currentVersions = versions.filter((version) => version.slug === "latest" || version.slug === "main");
+const releasedVersions = versions.filter((version) => version.slug !== "latest" && version.slug !== "main");
+const options = [
+  "<optgroup label=\"Current documentation\">",
+  ...currentVersions.map(renderOption),
+  "</optgroup>",
+  "<optgroup label=\"Explicit release versions\">",
+  ...releasedVersions.map(renderOption),
+  "</optgroup>",
+].join("\n");
+const selector = `\n<div class="docs-version-switcher">\n  <label for="docs-version">Version</label>\n  <select id="docs-version" data-docs-version>\n${options}\n  </select>\n</div>\n`;
 
 const includes = path.join(destination, "_includes");
 const footerPath = path.join(includes, "nav_footer_custom.html");

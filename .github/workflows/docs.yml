@@ -56,7 +56,11 @@ jobs:
           const selected = process.env.REGENERATE_ALL === "true" ? allVersions : [latest, "main"];
           const label = (ref) => ref === "main" ? "Development (main)" : ref;
           const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref) }));
-          const manifest = allVersions.map((ref) => ({ slug: ref, label: label(ref) }));
+          const manifest = [
+            { slug: "latest", path: "", label: `Latest release (${latest})` },
+            ...tags.map((ref) => ({ slug: ref, path: ref, label: ref })),
+            { slug: "main", path: "main", label: label("main") },
+          ];
           process.stdout.write(`matrix=${JSON.stringify({ include: entries })}\n`);
           process.stdout.write(`manifest=${JSON.stringify(manifest)}\n`);
           process.stdout.write(`latest=${latest}\n`);
@@ -131,7 +135,7 @@ jobs:
       - run: >-
           node tooling/scripts/docs/prepare-source.mjs
           version/docs .docs-source version/CONTRIBUTING.md
-          "${{ matrix.slug }}" "${{ matrix.label }}" "${{ matrix.ref }}"
+          "${{ matrix.slug }}" "${{ matrix.slug }}" "${{ matrix.ref }}"
           "/${{ github.event.repository.name }}" '${{ needs.discover.outputs.manifest }}'
       - uses: actions/jekyll-build-pages@v1
         with:
@@ -141,6 +145,25 @@ jobs:
         with:
           name: docs-${{ matrix.slug }}
           path: _site
+      - name: Prepare latest release at the root
+        if: matrix.ref == needs.discover.outputs.latest
+        run: >-
+          node tooling/scripts/docs/prepare-source.mjs
+          version/docs .docs-root version/CONTRIBUTING.md
+          "" latest "${{ matrix.ref }}"
+          "/${{ github.event.repository.name }}" '${{ needs.discover.outputs.manifest }}'
+      - name: Build latest release at the root
+        if: matrix.ref == needs.discover.outputs.latest
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: .docs-root
+          destination: _site-root
+      - name: Upload latest release root site
+        if: matrix.ref == needs.discover.outputs.latest
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-root
+          path: _site-root
 
   publish:
     needs: [discover, build]
@@ -166,12 +189,19 @@ jobs:
           if test "$REGENERATE_ALL" != "true" && test -d previous-docs; then rsync -a --exclude=.git previous-docs/ publish/; fi
           for artifact in incoming/*; do
             slug="${artifact##*/docs-}"
+            if test "$slug" = root; then continue; fi
             rm -rf "publish/$slug"
             mkdir -p "publish/$slug"
             rsync -a --delete "$artifact/" "publish/$slug/"
             test -f "publish/$slug/index.html"
           done
-          printf '<!doctype html><meta http-equiv="refresh" content="0; url=%s/"><link rel="canonical" href="%s/">\n' "$LATEST" "$LATEST" > publish/index.html
+          for entry in publish/* publish/.[!.]*; do
+            test -e "$entry" || continue
+            case "${entry##*/}" in v*|main) continue ;; esac
+            rm -rf "$entry"
+          done
+          rsync -a "incoming/docs-root/" publish/
+          test -f publish/index.html
           touch publish/.nojekyll
       - name: Publish complete documentation tree
         working-directory: publish
