@@ -42,10 +42,8 @@ const renderOption = (version) => {
 const currentVersions = versions.filter((version) => version.slug === "latest" || version.slug === "main");
 const releasedVersions = versions.filter((version) => version.slug !== "latest" && version.slug !== "main");
 const options = [
-  "<optgroup label=\"Current documentation\">",
   ...currentVersions.map(renderOption),
-  "</optgroup>",
-  "<optgroup label=\"Explicit release versions\">",
+  "<optgroup label=\"Releases\">",
   ...releasedVersions.map(renderOption),
   "</optgroup>",
 ].join("\n");

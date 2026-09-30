@@ -57,7 +57,7 @@ jobs:
           const label = (ref) => ref === "main" ? "Development (main)" : ref;
           const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref) }));
           const manifest = [
-            { slug: "latest", path: "", label: `Latest release (${latest})` },
+            { slug: "latest", path: "", label: `Latest (${latest})` },
             ...tags.map((ref) => ({ slug: ref, path: ref, label: ref })),
             { slug: "main", path: "main", label: label("main") },
           ];
