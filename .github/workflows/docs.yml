@@ -253,6 +253,10 @@ jobs:
     needs: [discover, build]
     runs-on: ubuntu-latest
     steps:
+      - name: Check out docs configuration
+        uses: actions/checkout@v7
+        with:
+          path: tooling
       - name: Restore previous documentation
         env:
           GH_TOKEN: ${{ github.token }}
@@ -288,8 +292,9 @@ jobs:
             done
             rsync -a "incoming/root/" publish/
             test -f publish/index.html
-          fi
-          touch publish/.nojekyll
+           fi
+           cp tooling/docs/CNAME publish/CNAME
+           touch publish/.nojekyll
       - name: Publish complete documentation tree
         working-directory: publish
         env:
