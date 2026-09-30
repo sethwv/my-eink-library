@@ -94,6 +94,12 @@ body {
   letter-spacing: 0.02em;
 }
 
+#site-nav > .nav-list > .nav-list-item:nth-child(6) {
+  border-top: 1px solid var(--line);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
 .main-content h1,
 .main-content h2,
 .main-content h3 {
