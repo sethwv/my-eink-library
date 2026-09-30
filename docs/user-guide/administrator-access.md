@@ -1,10 +1,10 @@
 ---
-title: Administrator access
+title: Admin
 parent: User Guide
 nav_order: 4
 ---
 
-# Administrator setup and user access
+# Admin
 
 Open the account menu and select **Admin** to manage users or server functions. What you can see depends on your role.
 

@@ -1,10 +1,10 @@
 ---
-title: Favourites and e-reader access
+title: Favourites
 parent: User Guide
 nav_order: 2
 ---
 
-# Favourites and e-reader access
+# Favourites
 
 Favourites is the built-in personal shelf. It is useful for keeping a short reading list without changing the EPUB folders on the server.
 

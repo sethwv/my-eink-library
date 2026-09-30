@@ -14,9 +14,9 @@ Deployment, persistent storage, HTTPS, and environment variables remain in [Depl
 
 ## Guide topics
 
-- [Browse, search, and download books](browse-and-download/)
-- [Favourites and e-reader access](favourites-and-bookmarks/)
-- [Account and appearance](account-and-appearance/)
-- [Administrator setup and user access](administrator-access/)
-- [Server maintenance, settings, and email](server-settings-and-email/)
-- [Metadata editing and integrations](metadata-and-integrations/)
+- [Browse](browse-and-download/)
+- [Favourites](favourites-and-bookmarks/)
+- [Account](account-and-appearance/)
+- [Admin](administrator-access/)
+- [Server](server-settings-and-email/)
+- [Metadata](metadata-and-integrations/)

@@ -1,10 +1,10 @@
 ---
-title: Browse and download
+title: Browse
 parent: User Guide
 nav_order: 1
 ---
 
-# Browse, search, and download books
+# Browse
 
 The Library is the home page after you sign in. It searches the books indexed from the EPUB folders configured during [Deployment](../../deployment/).
 

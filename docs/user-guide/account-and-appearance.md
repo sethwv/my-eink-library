@@ -1,10 +1,10 @@
 ---
-title: Account and appearance
+title: Account
 parent: User Guide
 nav_order: 3
 ---
 
-# Account and appearance
+# Account
 
 Open the account menu from the top navigation to change the reading appearance or reach account actions.
 

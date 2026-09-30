@@ -18,6 +18,10 @@
   title: Save a favourite
   description: The shelf control in a book's details, highlighted for adding a book to Favourites.
   scenario: book-shelves
+- id: metadata-edit
+  title: Edit metadata
+  description: The manual metadata form, highlighted for correcting a book's details.
+  scenario: metadata-edit
 - id: account-preferences
   title: Account preferences
   description: Password and new-book digest controls, with the relevant fields highlighted.

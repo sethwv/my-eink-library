@@ -43,6 +43,11 @@ async function applyAnnotations(page, annotations = []) {
   if (!targets.length) return;
   await page.evaluate((items) => {
     for (const item of items) {
+      const surround = 8;
+      const left = Math.max(0, item.box.x - surround);
+      const top = Math.max(0, item.box.y - surround);
+      const right = Math.min(window.innerWidth, item.box.x + item.box.width + surround);
+      const bottom = Math.min(window.innerHeight, item.box.y + item.box.height + surround);
       const highlight = document.createElement("div");
       highlight.setAttribute("data-screenshot-annotation", "highlight");
       Object.assign(highlight.style, {
@@ -50,14 +55,13 @@ async function applyAnnotations(page, annotations = []) {
         zIndex: "2147483646",
         pointerEvents: "none",
         boxSizing: "border-box",
-        left: `${Math.max(0, item.box.x)}px`,
-        top: `${Math.max(0, item.box.y)}px`,
-        width: `${Math.max(0, item.box.width)}px`,
-        height: `${Math.max(0, item.box.height)}px`,
-        border: "3px solid #e8b24d",
-        borderRadius: "4px",
-        background: "rgba(232, 178, 77, 0.16)",
-        boxShadow: "0 0 0 2px rgba(18, 24, 22, 0.8)",
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${Math.max(0, right - left)}px`,
+        height: `${Math.max(0, bottom - top)}px`,
+        border: "3px solid #ef4444",
+        borderRadius: "8px",
+        background: "transparent",
       });
 
       const label = document.createElement("div");
@@ -69,18 +73,18 @@ async function applyAnnotations(page, annotations = []) {
         pointerEvents: "none",
         boxSizing: "border-box",
         maxWidth: "min(280px, calc(100vw - 16px))",
-        padding: "5px 8px",
-        border: "2px solid #121816",
+        padding: "6px 9px",
+        border: "none",
         borderRadius: "4px",
-        background: "#e8b24d",
-        color: "#121816",
-        font: "700 14px/1.2 system-ui, sans-serif",
+        background: "rgba(0, 0, 0, 0.78)",
+        color: "#ef4444",
+        font: "600 14px/1.2 system-ui, sans-serif",
       });
 
       document.body.append(highlight, label);
-      const gap = 6;
-      const labelTop = item.placement === "bottom" ? item.box.y + item.box.height + gap : item.box.y - label.offsetHeight - gap;
-      label.style.left = `${Math.min(Math.max(8, item.box.x), window.innerWidth - label.offsetWidth - 8)}px`;
+      const gap = 8;
+      const labelTop = item.placement === "bottom" ? bottom + gap : top - label.offsetHeight - gap;
+      label.style.left = `${Math.min(Math.max(8, left), window.innerWidth - label.offsetWidth - 8)}px`;
       label.style.top = `${Math.min(Math.max(8, labelTop), window.innerHeight - label.offsetHeight - 8)}px`;
     }
   }, targets);
@@ -112,7 +116,7 @@ const scenarios = [
   {
     name: "book-shelves",
     prepare: openBookModal,
-    annotations: [{ selector: ".modal-section-label", label: "Save this book to Favourites", placement: "top" }],
+    annotations: [{ selector: ".modal-overlay:visible button.shelf-toggle", label: "Add to Favourites", placement: "top" }],
   },
   {
     name: "account-preferences",
@@ -139,6 +143,17 @@ const scenarios = [
       await page.goto(`${baseURL}/admin/settings`, { waitUntil: "networkidle" });
     },
     annotations: [{ selector: 'input[name="public_url"]', label: "Public HTTPS URL for email links", placement: "bottom" }],
+  },
+  {
+    name: "metadata-edit",
+    async prepare(page) {
+      await login(page);
+      await page.goto(`${baseURL}/?q=${encodeURIComponent("Pride and Prejudice")}`, { waitUntil: "networkidle" });
+      const card = page.locator(".card", { hasText: "Pride and Prejudice" });
+      const bookID = (await card.getAttribute("id")).replace("card-", "");
+      await page.goto(`${baseURL}/books/${bookID}/edit-metadata`, { waitUntil: "networkidle" });
+    },
+    annotations: [{ selector: 'input[name="title"]', label: "Correct metadata fields by hand", placement: "bottom" }],
   },
   {
     name: "authors",

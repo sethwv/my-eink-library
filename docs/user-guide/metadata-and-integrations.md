@@ -1,12 +1,14 @@
 ---
-title: Metadata and integrations
+title: Metadata
 parent: User Guide
 nav_order: 6
 ---
 
-# Metadata editing and integrations
+# Metadata
 
 The **Enrichment** admin tab can enrich indexed EPUB metadata with Hardcover or Chaptarr. It is optional. A library remains usable with the metadata and covers found in its EPUB files.
+
+{% include screenshot-pair.html id="metadata-edit" %}
 
 ## Minimum: configure one enrichment provider
 

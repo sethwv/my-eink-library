@@ -1,10 +1,10 @@
 ---
-title: Server settings and email
+title: Server
 parent: User Guide
 nav_order: 5
 ---
 
-# Server maintenance, settings, and email
+# Server
 
 Admins and Server Managers can open **Admin** from the account menu. The Server tab shows the running library's indexed-book counts, configured paths, data directory, uptime, and last scan.
 
