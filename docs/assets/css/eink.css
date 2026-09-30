@@ -176,6 +176,7 @@ a:hover {
   flex-wrap: wrap;
   gap: 0.8rem;
   margin-top: 2rem;
+  justify-content: center;
 }
 
 button,

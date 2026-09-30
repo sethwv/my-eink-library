@@ -6,7 +6,7 @@ description: "A self-hosted EPUB library made for e-reader browsers."
 <div class="hero">
   <!-- <p class="eyebrow"></p> -->
   <h1><img class="hero-lockup" src="{{ '/assets/brand/lockups/horizontal-ivory-transparent.png' | relative_url }}" alt="my-eink-library"></h1>
-  <p class="hero-lede">A purpose built EPUB library for Kobo e-reader web browsers.</p>
+  <!-- <p class="hero-lede">A purpose built EPUB library for Kobo e-reader web browsers.</p> -->
   <div class="hero-actions">
     <a class="btn btn-primary" href="{{ '/quick-start' | relative_url }}">Get started</a>
     <a class="btn btn-secondary" href="https://github.com/sethwv/my-eink-library/releases">Download releases</a>
