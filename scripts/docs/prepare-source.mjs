@@ -70,7 +70,7 @@ await mkdir(includes, { recursive: true });
 await writeFile(path.join(includes, "docs_version_switcher.html"), selector);
 await writeFile(path.join(includes, "nav_footer_custom.html"), `
 {% include docs_version_switcher.html %}
-<div class="docs-theme-credit">This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a></div>
+<div class="docs-theme-credit">This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.</div>
 <div class="docs-sidebar-license">my-eink-library is licensed under <a href="https://github.com/sethwv/my-eink-library/blob/main/LICENSE">AGPL-3.0-only</a></div>
 <div class="docs-sidebar-copyright">&copy; <script>document.write(new Date().getFullYear());</script> swvn.io</div>
 `);
