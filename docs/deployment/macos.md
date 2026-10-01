@@ -24,7 +24,7 @@ PORT=8080 \
 
 Replace `darwin_arm64` with `darwin_amd64` on Intel Macs. Put the process behind an HTTPS reverse proxy before signing in because session cookies require HTTPS. For an always-on installation, run the executable with a `launchd` service.
 
-macOS may block an unsigned executable that was downloaded from the internet. Review it in Finder, then choose **Open** from the context menu to approve it. The first launch prints the generated `admin` password once. To generate a replacement without starting the server, use the same data directory:
+macOS may block an unsigned executable that was downloaded from the internet. After attempting to open it, go to **System Settings > Privacy & Security**, scroll to the bottom, and choose **Open Anyway**. The first launch prints the generated `admin` password once. To generate a replacement without starting the server, use the same data directory:
 
 ```bash
 DATA_DIR="$HOME/Library/Application Support/eink-library" \
