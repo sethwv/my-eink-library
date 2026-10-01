@@ -145,6 +145,7 @@ func formatBuildDate(raw string) string {
 // sourceURL links release tags directly and development builds to their
 // commit suffix, which is injected as branch-shortSHA at build time.
 func sourceURL(version string) string {
+	version = strings.TrimSuffix(version, " (dirty)")
 	revision := version
 	if dash := strings.LastIndex(version, "-"); dash >= 0 {
 		candidate := version[dash+1:]

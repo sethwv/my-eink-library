@@ -6,8 +6,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -43,6 +45,10 @@ func runHealthcheck() {
 }
 
 func main() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		buildVersion, buildDate = developmentBuildMetadata(buildVersion, buildDate, currentBranch(), info.Settings)
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
 		runHealthcheck()
 	}
@@ -262,4 +268,39 @@ func main() {
 			log.Printf("shutdown error: %v", err)
 		}
 	}
+}
+
+func developmentBuildMetadata(version, date, branch string, settings []debug.BuildSetting) (string, string) {
+	if version != "dev" || date != "unknown" {
+		return version, date
+	}
+
+	values := make(map[string]string, len(settings))
+	for _, setting := range settings {
+		values[setting.Key] = setting.Value
+	}
+	revision, timestamp := values["vcs.revision"], values["vcs.time"]
+	if branch == "" || revision == "" || timestamp == "" {
+		return version, date
+	}
+	builtAt, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return version, date
+	}
+	if len(revision) > 7 {
+		revision = revision[:7]
+	}
+	version = branch + "-" + revision
+	if values["vcs.modified"] == "true" {
+		version += " (dirty)"
+	}
+	return version, builtAt.Format("2006-01-02")
+}
+
+func currentBranch() string {
+	output, err := exec.Command("git", "branch", "--show-current").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }

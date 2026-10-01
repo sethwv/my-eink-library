@@ -48,6 +48,9 @@ func TestSourceURL(t *testing.T) {
 	if got := sourceURL("main-8edeb01"); got != "https://github.com/sethwv/my-eink-library/tree/8edeb01" {
 		t.Errorf("sourceURL() = %q", got)
 	}
+	if got := sourceURL("main-8edeb01 (dirty)"); got != "https://github.com/sethwv/my-eink-library/tree/8edeb01" {
+		t.Errorf("sourceURL() = %q", got)
+	}
 }
 
 func TestWithQueryParam(t *testing.T) {
