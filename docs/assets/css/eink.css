@@ -289,8 +289,8 @@ button,
 }
 
 .screenshot-pair {
-  border-top: 1px solid var(--line);
-  margin: 2.5rem 0;
+  /* border-top: 1px solid var(--line); */
+  /* margin: 2.5rem 0; */
   padding-top: 1.25rem;
 }
 

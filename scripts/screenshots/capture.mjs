@@ -42,12 +42,23 @@ async function applyAnnotations(page, annotations = []) {
 
   if (!targets.length) return;
   await page.evaluate((items) => {
-    for (const item of items) {
+    const viewportPadding = 8;
+    const gap = 8;
+    const surrounds = items.map((item) => {
       const surround = 8;
       const left = Math.max(0, item.box.x - surround);
       const top = Math.max(0, item.box.y - surround);
       const right = Math.min(window.innerWidth, item.box.x + item.box.width + surround);
       const bottom = Math.min(window.innerHeight, item.box.y + item.box.height + surround);
+      return { left, top, right, bottom };
+    });
+
+    const overlaps = (first, second) => first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top;
+    const clamp = (value, min, max) => Math.min(Math.max(min, value), max);
+    const occupied = [...surrounds];
+
+    for (const [index, item] of items.entries()) {
+      const { left, top, right, bottom } = surrounds[index];
       const highlight = document.createElement("div");
       highlight.setAttribute("data-screenshot-annotation", "highlight");
       Object.assign(highlight.style, {
@@ -64,6 +75,8 @@ async function applyAnnotations(page, annotations = []) {
         background: "transparent",
       });
 
+      document.body.append(highlight);
+
       const label = document.createElement("div");
       label.setAttribute("data-screenshot-annotation", "label");
       label.textContent = item.label;
@@ -79,13 +92,47 @@ async function applyAnnotations(page, annotations = []) {
         background: "rgba(0, 0, 0, 0.78)",
         color: "#ef4444",
         font: "600 14px/1.2 system-ui, sans-serif",
+        visibility: "hidden",
       });
 
-      document.body.append(highlight, label);
-      const gap = 8;
-      const labelTop = item.placement === "bottom" ? bottom + gap : top - label.offsetHeight - gap;
-      label.style.left = `${Math.min(Math.max(8, left), window.innerWidth - label.offsetWidth - 8)}px`;
-      label.style.top = `${Math.min(Math.max(8, labelTop), window.innerHeight - label.offsetHeight - 8)}px`;
+      document.body.append(label);
+      const labelWidth = label.offsetWidth;
+      const labelHeight = label.offsetHeight;
+      const candidate = (x, y) => ({
+        left: clamp(x, viewportPadding, window.innerWidth - labelWidth - viewportPadding),
+        top: clamp(y, viewportPadding, window.innerHeight - labelHeight - viewportPadding),
+        right: 0,
+        bottom: 0,
+      });
+      const above = candidate(left, top - labelHeight - gap);
+      const below = candidate(left, bottom + gap);
+      const preferred = item.placement === "bottom" ? [below, above] : [above, below];
+      const options = [
+        ...preferred,
+        candidate(right + gap, top),
+        candidate(left - labelWidth - gap, top),
+        candidate(right - labelWidth, top - labelHeight - gap),
+        candidate(right - labelWidth, bottom + gap),
+      ].map((position) => ({ ...position, right: position.left + labelWidth, bottom: position.top + labelHeight }));
+      let position = options.find((option) => !occupied.some((area) => overlaps(option, area)));
+
+      if (!position) {
+        for (let y = viewportPadding; y <= window.innerHeight - labelHeight - viewportPadding && !position; y += gap) {
+          for (let x = viewportPadding; x <= window.innerWidth - labelWidth - viewportPadding; x += gap) {
+            const option = { left: x, top: y, right: x + labelWidth, bottom: y + labelHeight };
+            if (!occupied.some((area) => overlaps(option, area))) {
+              position = option;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!position) throw new Error(`No clear label position for annotation: ${item.label}`);
+      label.style.left = `${position.left}px`;
+      label.style.top = `${position.top}px`;
+      label.style.visibility = "visible";
+      occupied.push(position);
     }
   }, targets);
 }
