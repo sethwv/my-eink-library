@@ -1,96 +1,250 @@
 - id: login
   title: Sign in
   description: The minimal sign-in page used on desktop and e-reader browsers.
-  scenario: login
+  actions:
+    - goto: /login
+
 - id: library-grid
   title: Library grid
   description: A populated library with search, sort controls, covers, and pagination.
-  scenario: library-grid
+  actions:
+    - login
+
 - id: library-dark
   title: Library grid, dark mode
   description: The same library view with the persisted dark appearance selected.
-  scenario: library-dark
+  actions:
+    - set_theme: dark
+    - login
+
 - id: library-controls
   title: Search and sorting
   description: Search and sort controls for narrowing the library.
-  scenario: library-controls
+  actions:
+    - login
+    - goto: /?q=Pride%20and%20Prejudice&sort=title&dir=asc
+  annotations:
+    - selector: "#q"
+      label: Search titles, authors, or series
+      placement: bottom
+    - selector: "#sort"
+      label: Choose how results are ordered
+      placement: bottom
+
 - id: book-modal
   title: Book details
   description: A book's download, author, series, and shelf actions in the detail modal.
-  scenario: book-modal
+  actions:
+    - login
+    - open_book: Pride and Prejudice
+
 - id: book-download
   title: Download a book
   description: The EPUB and KEPUB download controls in a book's details.
-  scenario: book-download
+  actions:
+    - login
+    - open_book: Pride and Prejudice
+  annotations:
+    - selector: ".modal-overlay:visible .modal-actions-cell"
+      label: Download the original EPUB or Kobo KEPUB
+      placement: top
+
 - id: book-shelves
   title: Save a favourite
   description: The shelf control in a book's details, highlighted for adding a book to Favourites.
-  scenario: book-shelves
+  actions:
+    - login
+    - open_book: Pride and Prejudice
+  annotations:
+    - selector: ".modal-overlay:visible button.shelf-toggle"
+      label: Add to Favourites
+      placement: top
+
 - id: favourites-library
   title: Favourite books
   description: Books saved to the built-in Favourites shelf.
-  scenario: favourites-library
+  actions:
+    - login
+    - open_book: Pride and Prejudice
+    - toggle_shelf: Favourites
+    - goto: /favorites
+  annotations:
+    - selector: "h1:not(.site-title)"
+      label: Books saved to Favourites
+      placement: bottom
+
 - id: account-appearance
   title: Appearance controls
   description: The account menu controls for Auto, Light, and Dark appearances.
-  scenario: account-appearance
-- id: metadata-edit
-  title: Edit metadata
-  description: The manual metadata form, highlighted for correcting a book's details.
-  scenario: metadata-edit
+  actions:
+    - login
+    - open_modal: account-modal
+  annotations:
+    - selector: "#account-modal:visible #theme-mode"
+      label: Choose Auto, Light, or Dark
+      placement: bottom
+
 - id: account-preferences
   title: Account preferences
   description: Password and new-book digest controls, with the relevant fields highlighted.
-  scenario: account-preferences
+  actions:
+    - login
+    - goto: /account/password
+  annotations:
+    - selector: 'input[name="new_password"]'
+      label: Choose a new password
+      placement: bottom
+    - selector: h2
+      label: Optional weekly new-book digest
+      placement: bottom
+
 - id: account-bookmark
   title: E-reader bookmark link
   description: The account control for creating a passwordless e-reader bookmark link.
-  scenario: account-bookmark
+  actions:
+    - login
+    - goto: /account/bookmark
+  annotations:
+    - selector: 'form[action="/account/bookmark/regenerate"] button'
+      label: Create one e-reader bookmark link
+      placement: top
+
 - id: admin-settings
   title: Server settings
-  description: Admin controls for the server's general and SMTP settings.
-  scenario: admin-settings
+  description: Admin controls for the server's general settings.
+  actions:
+    - login
+    - goto: /admin/settings
+
 - id: admin-configuration
   title: Public URL setting
   description: The public HTTPS URL used when the library sends invitation and password-reset links.
-  scenario: admin-configuration
+  actions:
+    - login
+    - goto: /admin/settings
+  annotations:
+    - selector: 'input[name="public_url"]'
+      label: Public HTTPS URL for email links
+      placement: bottom
+
 - id: admin-server
   title: Library maintenance
   description: Rescan and reimport controls for maintaining the indexed library.
-  scenario: admin-server
+  actions:
+    - login
+    - goto: /admin/server
+  annotations:
+    - selector: 'form[action="/admin/server/rescan"] button'
+      label: Check configured folders for changes
+      placement: top
+    - selector: 'form[action="/admin/server/reimport"] button'
+      label: Rebuild the index when needed
+      placement: bottom
+
 - id: admin-smtp
   title: SMTP setup
   description: Mail-provider settings and the test-email control.
-  scenario: admin-smtp
+  actions:
+    - login
+    - goto: /admin/smtp
+  annotations:
+    - selector: 'form[action="/admin/settings/smtp"]'
+      label: Save your mail provider settings
+      placement: top
+    - selector: 'form[action="/admin/settings/smtp/test"]'
+      label: Send a test before inviting users
+      placement: bottom
+
 - id: enrichment-hardcover
   title: Hardcover enrichment
   description: The Hardcover token and provider configuration controls.
-  scenario: enrichment-hardcover
+  actions:
+    - login
+    - goto: /admin/integrations?provider=hardcover
+  annotations:
+    - selector: 'input[name="hardcover_token"]'
+      label: Paste the Hardcover API token
+      placement: bottom
+
 - id: enrichment-chaptarr
   title: Chaptarr enrichment
   description: Chaptarr matching and unmatched-book visibility controls.
-  scenario: enrichment-chaptarr
+  actions:
+    - login
+    - goto: /admin/integrations?provider=chaptarr
+  annotations:
+    - selector: 'input[name="hide_no_chaptarr_match"]'
+      label: Hide books without a provider match
+      placement: bottom
+
+- id: metadata-edit
+  title: Edit metadata
+  description: The manual metadata form, highlighted for correcting a book's details.
+  actions:
+    - login
+    - open_book: Pride and Prejudice
+    - goto: /books/{{bookID}}/edit-metadata
+  annotations:
+    - selector: 'input[name="title"]'
+      label: Correct metadata fields by hand
+      placement: bottom
+
 - id: authors
   title: Authors
   description: The author index groups the generated library by creator.
-  scenario: authors
+  actions:
+    - login
+    - goto: /authors
+
 - id: series
   title: Series
   description: The series index makes related books easy to browse.
-  scenario: series
+  actions:
+    - login
+    - goto: /series
+
 - id: admin-users
   title: User administration
   description: The administrator view for managing library accounts.
-  scenario: admin-users
+  actions:
+    - login
+    - goto: /admin/users
+
 - id: admin-add-user
   title: Add a user
   description: The user-creation form for a new library member.
-  scenario: admin-add-user
+  actions:
+    - login
+    - goto: /admin/users
+    - open_modal: add-user-modal
+  annotations:
+    - selector: "#add-user-modal:visible"
+      label: Create a member and choose their role
+      placement: top
+
 - id: admin-manage-user
   title: Manage user access
   description: Role and bookmark-link permission controls for an existing user.
-  scenario: admin-manage-user
+  actions:
+    - login
+    - goto: /admin/users
+    - open_first_modal: '[id^="manage-user-"]'
+  annotations:
+    - selector: '.modal-overlay:visible [name="role"]'
+      label: Assign the least-privileged role
+      placement: bottom
+    - selector: '.modal-overlay:visible [name="can_bookmark"]'
+      label: Control e-reader bookmark access
+      placement: bottom
+
 - id: admin-invite-user
   title: Invite a user
   description: The email invitation form and role selection.
-  scenario: admin-invite-user
+  actions:
+    - login
+    - goto: /admin/users
+    - open_modal: invite-user-modal
+  annotations:
+    - selector: "#invite-user-modal:visible"
+      label: Send a role-specific email invitation
+      placement: top
