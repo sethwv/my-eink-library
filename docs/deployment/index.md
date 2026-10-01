@@ -6,7 +6,7 @@ has_children: true
 
 # Deployment
 
-my-eink-library can run in Docker, directly on Windows, or from a Debian package on 64-bit x86 and ARM Linux. Choose a platform from the navigation to get started.
+my-eink-library can run in Docker, directly on macOS or Windows, or from a Debian package on 64-bit x86 and ARM Linux. Choose a platform from the navigation to get started.
 
 ## Persistent data
 

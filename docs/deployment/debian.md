@@ -1,7 +1,7 @@
 ---
 title: Debian Linux
 parent: Deployment
-nav_order: 3
+nav_order: 4
 ---
 
 # Debian Linux
