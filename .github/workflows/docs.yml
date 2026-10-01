@@ -306,11 +306,11 @@ jobs:
           RETAINED: ${{ needs.discover.outputs.retained }}
         run: |
           mkdir publish
-           if test "$REGENERATE_ALL" != "true" && test -d previous-docs; then rsync -a --exclude=.git previous-docs/ publish/; fi
-           node --input-type=module <<'NODE'
-           import { prunePublishedVersions } from './tooling/scripts/docs/version-retention.mjs';
-           await prunePublishedVersions('publish', process.env.RETAINED.split(',').filter(Boolean));
-           NODE
+          if test "$REGENERATE_ALL" != "true" && test -d previous-docs; then rsync -a --exclude=.git previous-docs/ publish/; fi
+          node --input-type=module <<'NODE'
+          import { prunePublishedVersions } from './tooling/scripts/docs/version-retention.mjs';
+          await prunePublishedVersions('publish', process.env.RETAINED.split(',').filter(Boolean));
+          NODE
           for artifact in incoming/*; do
             slug="${artifact##*/}"
             if test "$slug" = root; then continue; fi
@@ -327,9 +327,9 @@ jobs:
             done
             rsync -a "incoming/root/" publish/
             test -f publish/index.html
-           fi
-           cp tooling/docs/CNAME publish/CNAME
-           touch publish/.nojekyll
+          fi
+          cp tooling/docs/CNAME publish/CNAME
+          touch publish/.nojekyll
       - name: Publish complete documentation tree
         working-directory: publish
         env:
