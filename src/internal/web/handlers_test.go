@@ -228,6 +228,63 @@ func TestLoginSubmit(t *testing.T) {
 	}
 }
 
+func TestSetupHandlers(t *testing.T) {
+	t.Run("setup creates and signs in the first administrator", func(t *testing.T) {
+		server := newTestServer(t)
+		recorder := httptest.NewRecorder()
+		server.SetupPage(recorder, httptest.NewRequest(http.MethodGet, "/setup", nil))
+		if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `action="/setup"`) {
+			t.Fatalf("setup page = %d: %s", recorder.Code, recorder.Body.String())
+		}
+
+		form := url.Values{"username": {"admin"}, "password": {"first-password"}}
+		recorder = httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/setup", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		server.SetupSubmit(recorder, req)
+		if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/" {
+			t.Fatalf("setup submit = %d, location %q", recorder.Code, recorder.Header().Get("Location"))
+		}
+		if !server.Users.CheckPassword("admin", "first-password") || !server.Users.IsAdmin("admin") {
+			t.Error("setup did not create an administrator")
+		}
+		if len(recorder.Result().Cookies()) == 0 {
+			t.Error("setup did not issue a session")
+		}
+	})
+
+	t.Run("setup rejects invalid input and initialized stores", func(t *testing.T) {
+		server := newTestServer(t)
+		recorder := httptest.NewRecorder()
+		server.SetupSubmit(recorder, httptest.NewRequest(http.MethodPost, "/setup", strings.NewReader("username=admin")))
+		if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "username and password are required") {
+			t.Fatalf("invalid setup = %d: %s", recorder.Code, recorder.Body.String())
+		}
+		if err := server.Users.Create("reader", "password", users.RoleMember, true, ""); err != nil {
+			t.Fatal(err)
+		}
+		recorder = httptest.NewRecorder()
+		server.SetupPage(recorder, httptest.NewRequest(http.MethodGet, "/setup", nil))
+		if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/login" {
+			t.Fatalf("initialized setup page = %d, location %q", recorder.Code, recorder.Header().Get("Location"))
+		}
+		recorder = httptest.NewRecorder()
+		server.LoginPage(recorder, httptest.NewRequest(http.MethodGet, "/login", nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("initialized login page = %d", recorder.Code)
+		}
+	})
+
+	t.Run("login forwards an empty installation to setup", func(t *testing.T) {
+		server := newTestServer(t)
+		recorder := httptest.NewRecorder()
+		server.LoginPage(recorder, httptest.NewRequest(http.MethodGet, "/login", nil))
+		if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/setup" {
+			t.Fatalf("empty login page = %d, location %q", recorder.Code, recorder.Header().Get("Location"))
+		}
+	})
+}
+
 func TestResetPasswordHandlers(t *testing.T) {
 	server := newTestServer(t)
 	if err := server.Users.Create("reader", "old-password", users.RoleMember, true, "reader@example.com"); err != nil {

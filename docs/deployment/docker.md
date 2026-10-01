@@ -29,4 +29,4 @@ Start it with:
 docker compose up -d
 ```
 
-The first startup log contains the generated password for the `admin` account. Save it immediately because it is not logged again. The override file is ignored by Git. Docker Compose's project `.env` file only performs variable substitution unless the Compose configuration passes values into the container, so use the `environment` block above for application configuration when needed.
+On first startup, open the application to create the first administrator account in the one-time setup page. The override file is ignored by Git. Docker Compose's project `.env` file only performs variable substitution unless the Compose configuration passes values into the container, so use the `environment` block above for application configuration when needed.

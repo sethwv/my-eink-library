@@ -70,35 +70,21 @@ func TestSessionSecret_PersistsAndDoesNotChange(t *testing.T) {
 	}
 }
 
-func TestBootstrapPrimaryAdmin_CreatesOnlyOnce(t *testing.T) {
+func TestCreateFirstAdmin_CreatesOnlyOnce(t *testing.T) {
 	s := openTestStore(t)
-	username, password, created, err := s.BootstrapPrimaryAdmin()
+	created, err := s.CreateFirstAdmin("admin", "first-password")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !created || username != "admin" || !s.CheckPassword(username, password) {
-		t.Fatalf("BootstrapPrimaryAdmin() = %q, %q, %v", username, password, created)
+	if !created || !s.CheckPassword("admin", "first-password") || !s.IsAdmin("admin") {
+		t.Fatal("expected first administrator to be created")
 	}
-	_, _, created, err = s.BootstrapPrimaryAdmin()
+	created, err = s.CreateFirstAdmin("other", "second-password")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if created {
-		t.Error("expected subsequent bootstrap to be a no-op")
-	}
-}
-
-func TestResetUserPassword(t *testing.T) {
-	s := openTestStore(t)
-	if err := s.Create("admin", "old-password", RoleAdmin, true, ""); err != nil {
-		t.Fatal(err)
-	}
-	password, err := s.ResetUserPassword("admin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !s.CheckPassword("admin", password) || s.CheckPassword("admin", "old-password") {
-		t.Error("expected reset password to replace the user password")
+		t.Error("expected subsequent first-admin creation to be rejected")
 	}
 }
 

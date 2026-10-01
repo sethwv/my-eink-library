@@ -86,7 +86,7 @@ jobs:
             "scripts/docs/",
             "CHANGELOG.md",
           ];
-          const capturePaths = ["src/internal/", "scripts/screenshots/"];
+          const capturePaths = ["src/internal/", "scripts/screenshots/", "docs/_data/screenshots.yml"];
           const shouldCompare = process.env.EVENT_NAME === "push" && process.env.BEFORE && !/^0+$/.test(process.env.BEFORE) && process.env.AFTER;
           let comparisonUnavailable = false;
           let changedPaths = [];
@@ -197,6 +197,42 @@ jobs:
       - if: matrix.capture
         run: go build -o "$RUNNER_TEMP/fixture-admin" ./cmd/server
         working-directory: tooling/src
+      - name: Start first-run fixture server
+        if: matrix.capture
+        run: |
+          PORT=8080 \
+          LIBRARY_PATH="$RUNNER_TEMP/library" \
+          DATA_DIR="$RUNNER_TEMP/data" \
+          SESSION_SECRET=fixture-session-secret-for-documentation-captures \
+          SITE_NAME="my-eink-library" \
+          "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
+          printf '%s' "$!" >"$RUNNER_TEMP/server.pid"
+      - name: Wait for first-run fixture server
+        if: matrix.capture
+        run: |
+          ready=false;
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8080/healthz; then
+              ready=true
+              break
+            fi
+            printf 'Waiting for fixture server (%s/30)\n' "$attempt"
+            sleep 1
+          done;
+          if test "$ready" != true; then
+            cat "$RUNNER_TEMP/server.log"
+            exit 1
+          fi
+      - name: Capture first administrator setup
+        if: matrix.capture
+        run: npm run capture --prefix tooling/scripts/screenshots
+        env:
+          SCREENSHOT_ROOT: ${{ github.workspace }}/version
+          SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
+          SCREENSHOT_SCENARIOS: first-admin-setup
+      - name: Stop first-run fixture server
+        if: matrix.capture
+        run: kill "$(cat "$RUNNER_TEMP/server.pid")"
       - name: Seed fixture user
         if: matrix.capture
         run: |
@@ -233,6 +269,7 @@ jobs:
         env:
           SCREENSHOT_ROOT: ${{ github.workspace }}/version
           SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
+          SCREENSHOT_EXCLUDE_SCENARIOS: first-admin-setup
       - run: >-
           node tooling/scripts/docs/prepare-source.mjs
           version/docs .docs-source version/CONTRIBUTING.md

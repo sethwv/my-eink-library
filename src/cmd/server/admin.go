@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -16,17 +15,6 @@ func sessionSecret(store *users.Store, override string) (string, error) {
 	}
 	secret, _, err := store.SessionSecret()
 	return secret, err
-}
-
-func bootstrapAdministrator(store *users.Store) error {
-	username, password, created, err := store.BootstrapPrimaryAdmin()
-	if err != nil {
-		return err
-	}
-	if created {
-		log.Printf("generated administrator password for %s: %s", username, password)
-	}
-	return nil
 }
 
 // runAdmin executes local break-glass user administration commands.
@@ -58,15 +46,17 @@ func runAdmin(args []string) error {
 		}
 		return nil
 	case "reset-password":
-		if len(args) != 2 {
-			return fmt.Errorf("usage: eink-library admin reset-password <username>")
+		if len(args) != 3 {
+			return fmt.Errorf("usage: eink-library admin reset-password <username> <password>")
 		}
-		password, err := store.ResetUserPassword(args[1])
+		user, err := store.UserByUsername(args[1])
 		if err != nil {
 			return err
 		}
-		fmt.Printf("password reset for %s: %s\n", args[1], password)
-		return nil
+		if user == nil {
+			return fmt.Errorf("user %q does not exist", args[1])
+		}
+		return store.ResetPassword(user.ID, args[2])
 	default:
 		return fmt.Errorf("usage: eink-library admin <create-user|reset-password>")
 	}

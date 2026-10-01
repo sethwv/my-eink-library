@@ -1,0 +1,17 @@
+{{define "content"}}
+<div class="login-card">
+  <h1>{{.SiteName}}</h1>
+  <h2>Set up administrator</h2>
+  <p>Create the first administrator account for this library.</p>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  <form method="POST" action="/setup">
+    <label>Username
+      <input type="text" name="username" value="{{.Username}}" autocapitalize="off" autocorrect="off" autofocus>
+    </label>
+    <label>Password
+      <input type="password" name="password">
+    </label>
+    <button type="submit">Create administrator</button>
+  </form>
+</div>
+{{end}}

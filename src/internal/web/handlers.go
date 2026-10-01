@@ -108,6 +108,15 @@ func safeNext(next string) string {
 }
 
 func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
+	hasUsers, err := s.Users.HasUsers()
+	if err != nil {
+		http.Error(w, "failed to load users", http.StatusInternalServerError)
+		return
+	}
+	if !hasUsers {
+		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		return
+	}
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
@@ -122,6 +131,15 @@ func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
+	hasUsers, err := s.Users.HasUsers()
+	if err != nil {
+		http.Error(w, "failed to load users", http.StatusInternalServerError)
+		return
+	}
+	if !hasUsers {
+		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
@@ -150,6 +168,49 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 		target = &url.URL{Path: "/"}
 	}
 	http.Redirect(w, r, target.String(), http.StatusSeeOther)
+}
+
+func (s *Server) SetupPage(w http.ResponseWriter, r *http.Request) {
+	hasUsers, err := s.Users.HasUsers()
+	if err != nil {
+		http.Error(w, "failed to load users", http.StatusInternalServerError)
+		return
+	}
+	if hasUsers {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Set up administrator"}
+	mergeInto(data, base)
+	render(w, "setup.html", data)
+}
+
+func (s *Server) SetupSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+	created, err := s.Users.CreateFirstAdmin(username, password)
+	if err != nil {
+		base, _, _ := s.baseData(r)
+		data := map[string]any{"Title": "Set up administrator", "Error": err.Error(), "Username": username}
+		mergeInto(data, base)
+		render(w, "setup.html", data)
+		return
+	}
+	if !created {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	s.Auth.IssueSession(w, r, username)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {

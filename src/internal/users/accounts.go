@@ -11,17 +11,36 @@ import (
 const userColumns = `id, username, role, can_bookmark, email, digest_subscribed,
 	invite_token_hash IS NOT NULL AND invite_token_hash != ''`
 
+func (s *Store) HasUsers() (bool, error) {
+	var exists bool
+	err := s.sql.QueryRow(`SELECT EXISTS(SELECT 1 FROM users)`).Scan(&exists)
+	return exists, err
+}
+
+// CreateFirstAdmin creates an administrator only while the users table is
+// empty. created is false when another account already exists.
+func (s *Store) CreateFirstAdmin(username, password string) (created bool, err error) {
+	if username == "" || password == "" {
+		return false, fmt.Errorf("username and password are required")
+	}
+	hash, err := passwordHash(password)
+	if err != nil {
+		return false, err
+	}
+	result, err := s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, created_at)
+		SELECT ?, ?, 1, ?, 1, ? WHERE NOT EXISTS (SELECT 1 FROM users)`, username, hash, RoleAdmin, time.Now().Unix())
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n == 1, err
+}
+
 // Bootstrap creates the first user (as admin) from the given credentials if
 // the users table is empty.
 func (s *Store) Bootstrap(username, password string) error {
-	var n int
-	if err := s.sql.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
-		return err
-	}
-	if n > 0 {
-		return nil
-	}
-	return s.Create(username, password, RoleAdmin, true, "")
+	_, err := s.CreateFirstAdmin(username, password)
+	return err
 }
 
 // CheckPassword reports whether username/password is a valid login.

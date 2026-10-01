@@ -4,6 +4,12 @@
   actions:
     - goto: /login
 
+- id: first-admin-setup
+  title: First administrator setup
+  description: The one-time registration page shown before the library has any user accounts.
+  actions:
+    - goto: /setup
+
 - id: library-grid
   title: Library grid
   description: A populated library with search, sort controls, covers, and pagination.

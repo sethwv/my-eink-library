@@ -83,9 +83,6 @@ func main() {
 		log.Fatalf("open users store: %v", err)
 	}
 	defer userStore.Close()
-	if err := bootstrapAdministrator(userStore); err != nil {
-		log.Fatalf("bootstrap admin user: %v", err)
-	}
 	sessionSecret, err := sessionSecret(userStore, cfg.SessionSecret)
 	if err != nil {
 		log.Fatalf("load session secret: %v", err)
@@ -240,6 +237,8 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 	mux.Handle("GET /static/", web.StaticHandler())
+	mux.HandleFunc("GET /setup", srv.SetupPage)
+	mux.HandleFunc("POST /setup", srv.SetupSubmit)
 	mux.HandleFunc("GET /login", srv.LoginPage)
 	mux.HandleFunc("POST /login", srv.LoginSubmit)
 	mux.HandleFunc("GET /forgot-password", srv.ForgotPasswordPage)

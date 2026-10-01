@@ -47,10 +47,17 @@ func TestRunAdmin_CreateUserAndResetPassword(t *testing.T) {
 	if !store.CheckPassword("fixture", "password") {
 		t.Error("create-user command did not create the fixture user")
 	}
-	if err := runAdmin([]string{"reset-password", "fixture"}); err != nil {
+	if err := runAdmin([]string{"reset-password", "fixture", "new-password"}); err != nil {
 		t.Fatal(err)
 	}
-	if store.CheckPassword("fixture", "password") {
-		t.Error("reset-password command did not replace the password")
+	if store.CheckPassword("fixture", "password") || !store.CheckPassword("fixture", "new-password") {
+		t.Error("reset-password command did not set the supplied password")
+	}
+}
+
+func TestRunAdmin_ResetPasswordRequiresPassword(t *testing.T) {
+	t.Setenv("DATA_DIR", t.TempDir())
+	if err := runAdmin([]string{"reset-password", "fixture"}); err == nil {
+		t.Error("expected reset-password without a password to fail")
 	}
 }

@@ -19,9 +19,6 @@ npm ci --prefix "$root/scripts/screenshots"
 npm run fixtures --prefix "$root/scripts/screenshots" -- --output "$library_dir"
 
 cd "$root/src"
-if [ ! -f "$data_dir/users.db" ]; then
-  DATA_DIR="$data_dir" go run ./cmd/server admin create-user admin password admin
-fi
 
 if "$prepare_only"; then
   exit 0

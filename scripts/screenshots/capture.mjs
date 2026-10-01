@@ -12,7 +12,12 @@ const output = process.env.SCREENSHOT_OUTPUT || path.join(root, "docs/assets/ima
 const username = "admin";
 const password = "password";
 const buildTag = process.env.SCREENSHOT_BUILD_TAG;
-const { scenarios } = await loadCaptureSpec(root, buildTag);
+const includeScenarios = new Set((process.env.SCREENSHOT_SCENARIOS || "").split(",").filter(Boolean));
+const excludeScenarios = new Set((process.env.SCREENSHOT_EXCLUDE_SCENARIOS || "").split(",").filter(Boolean));
+const { scenarios: loadedScenarios } = await loadCaptureSpec(root, buildTag);
+const scenarios = loadedScenarios.filter((scenario) =>
+  (includeScenarios.size === 0 || includeScenarios.has(scenario.id)) && !excludeScenarios.has(scenario.id),
+);
 
 const viewports = [
   { name: "desktop", width: 1440, height: 810 },

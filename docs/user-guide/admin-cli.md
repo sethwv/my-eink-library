@@ -10,13 +10,15 @@ The local `eink-library admin` command is a break-glass tool for the server oper
 
 ## Reset a user's password
 
-Run the command with the application's `DATA_DIR` and the account username. It generates and prints a replacement password.
+Run the command with the application's `DATA_DIR`, account username, and a replacement password.
 
 ```sh
-DATA_DIR=/var/lib/eink-library eink-library admin reset-password admin
+read -rsp "Password: " password; echo
+DATA_DIR=/var/lib/eink-library eink-library admin reset-password admin "$password"
+unset password
 ```
 
-Store the printed password securely, then sign in and change it through the account menu. The command does not start the web server.
+The command does not start the web server or print the password. Use a private terminal and avoid placing passwords directly in shell history, process managers, or shared scripts.
 
 ## Create a recovery user
 

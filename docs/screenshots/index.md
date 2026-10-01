@@ -7,6 +7,8 @@ nav_order: 3
 
 {% include screenshot-pair.html id="login" %}
 
+{% include screenshot-pair.html id="first-admin-setup" %}
+
 {% include screenshot-pair.html id="library-grid" %}
 
 {% include screenshot-pair.html id="library-dark" %}

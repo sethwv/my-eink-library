@@ -42,7 +42,7 @@ Then start the published image:
 docker compose up -d
 ```
 
-Put the service behind an HTTPS reverse proxy before signing in. On first startup, the server logs the generated password for the `admin` account once. Session cookies require HTTPS, while the supplied Compose file exposes the internal HTTP port for that proxy. The supplied Compose file persists application data in a named volume.
+Put the service behind an HTTPS reverse proxy before signing in. On first startup, open the service to create the first administrator account in the one-time setup screen. Session cookies require HTTPS, while the supplied Compose file exposes the internal HTTP port for that proxy. The supplied Compose file persists application data in a named volume.
 
 For local development, configuration details, and validation commands, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

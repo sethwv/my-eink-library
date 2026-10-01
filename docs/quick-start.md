@@ -24,7 +24,7 @@ services:
 docker compose up -d
 ```
 
-Put the service behind an HTTPS reverse proxy, then open its HTTPS URL and sign in as `admin` with the generated password from the first startup log. The password is logged only once. The container's port 8080 is HTTP for the reverse proxy only; session cookies require HTTPS.
+Put the service behind an HTTPS reverse proxy, then open its HTTPS URL. The one-time setup page creates the first administrator account and signs it in automatically. The container's port 8080 is HTTP for the reverse proxy only; session cookies require HTTPS.
 
 ## 3. Add more library folders
 
@@ -43,4 +43,4 @@ services:
 The first configured folder wins when duplicate EPUBs are found.
 
 {: .note }
-If the initial password is lost, stop the service and run `docker compose run --rm eink-library admin reset-password admin`. The command prints a replacement password without starting a web server.
+To recover access, stop the service and run `docker compose run --rm eink-library admin reset-password <username> <password>`. The command sets the supplied password without starting a web server.
