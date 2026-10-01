@@ -18,6 +18,12 @@ on:
         required: true
         default: false
         type: boolean
+      docs_retention_mode:
+        description: Versioned documentation retention policy
+        required: true
+        default: minor
+        type: choice
+        options: [minor, major]
   workflow_call:
     inputs:
       publish_latest:
@@ -28,6 +34,10 @@ on:
         required: false
         default: false
         type: boolean
+      docs_retention_mode:
+        required: false
+        default: minor
+        type: string
 
 permissions:
   contents: write
@@ -43,6 +53,7 @@ jobs:
       matrix: ${{ steps.versions.outputs.matrix }}
       manifest: ${{ steps.versions.outputs.manifest }}
       latest: ${{ steps.versions.outputs.latest }}
+      retained: ${{ steps.versions.outputs.retained }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -54,14 +65,17 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PUBLISH_LATEST: ${{ inputs.publish_latest || 'false' }}
           REGENERATE_ALL: ${{ inputs.regenerate_all_versions || 'false' }}
+          RETENTION_MODE: ${{ inputs.docs_retention_mode || 'minor' }}
         run: |
-          node <<'NODE' >> "$GITHUB_OUTPUT"
-          const { execFileSync } = require("node:child_process");
+          node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
+          import { execFileSync } from "node:child_process";
+          const { retainedVersions } = await import("./scripts/docs/version-retention.mjs");
           const tags = execFileSync("git", ["tag", "-l", "v*", "--sort=-v:refname"], { encoding: "utf8" })
             .trim().split("\n").filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag));
           if (tags.length === 0) throw new Error("at least one vX.Y.Z release tag is required");
           const latest = tags[0];
-          const allVersions = [...tags, "main"];
+          const retained = retainedVersions(tags, process.env.RETENTION_MODE);
+          const allVersions = [...retained, "main"];
           const presentationPaths = [
             ".github/workflows/docs.yml",
             "docs/_config.yml",
@@ -99,12 +113,13 @@ jobs:
           const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref), capture }));
           const manifest = [
             { slug: "latest", path: "", label: `Latest (${latest})` },
-            ...tags.map((ref) => ({ slug: ref, path: ref, label: ref })),
+            ...retained.map((ref) => ({ slug: ref, path: ref, label: ref })),
             { slug: "main", path: "main", label: label("main") },
           ];
           process.stdout.write(`matrix=${JSON.stringify({ include: entries })}\n`);
           process.stdout.write(`manifest=${JSON.stringify(manifest)}\n`);
           process.stdout.write(`latest=${latest}\n`);
+          process.stdout.write(`retained=${retained.join(",")}\n`);
           NODE
 
   build:
@@ -288,9 +303,14 @@ jobs:
         env:
           REGENERATE_ALL: ${{ inputs.regenerate_all_versions || 'false' }}
           LATEST: ${{ needs.discover.outputs.latest }}
+          RETAINED: ${{ needs.discover.outputs.retained }}
         run: |
           mkdir publish
-          if test "$REGENERATE_ALL" != "true" && test -d previous-docs; then rsync -a --exclude=.git previous-docs/ publish/; fi
+           if test "$REGENERATE_ALL" != "true" && test -d previous-docs; then rsync -a --exclude=.git previous-docs/ publish/; fi
+           node --input-type=module <<'NODE'
+           import { prunePublishedVersions } from './tooling/scripts/docs/version-retention.mjs';
+           await prunePublishedVersions('publish', process.env.RETAINED.split(',').filter(Boolean));
+           NODE
           for artifact in incoming/*; do
             slug="${artifact##*/}"
             if test "$slug" = root; then continue; fi
