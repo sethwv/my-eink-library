@@ -1,7 +1,7 @@
 ---
 title: Metadata
 parent: User Guide
-nav_order: 6
+nav_order: 7
 ---
 
 # Metadata
@@ -13,6 +13,8 @@ The **Enrichment** admin tab can enrich indexed EPUB metadata with Hardcover or 
 For **Hardcover**, obtain an API token from Hardcover, open **Enrichment**, select the Hardcover tab, paste the token, enable the provider, then save. For **Chaptarr**, provide its base URL and API key, enable it, then save.
 
 After configuration, the queue reports books that are pending, completed, unmatched, or errored. Start with one provider and confirm its results before enabling additional options.
+
+When both providers are enabled, Chaptarr is matched first. If its matching record includes a Hardcover ID, the application uses that ID to retrieve Hardcover details for fields Chaptarr does not provide, while keeping Chaptarr as the enrichment source. This avoids a second title-and-author match against Hardcover.
 
 {% include screenshot-pair.html id="enrichment-hardcover" %}
 
