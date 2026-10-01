@@ -52,6 +52,56 @@ func TestBootstrap_NoOpIfUsersExist(t *testing.T) {
 	}
 }
 
+func TestSessionSecret_PersistsAndDoesNotChange(t *testing.T) {
+	s := openTestStore(t)
+	first, created, err := s.SessionSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created || len(first) < 32 {
+		t.Fatalf("first SessionSecret() = %q, %v", first, created)
+	}
+	second, created, err := s.SessionSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created || second != first {
+		t.Errorf("second SessionSecret() = %q, %v; want %q, false", second, created, first)
+	}
+}
+
+func TestBootstrapPrimaryAdmin_CreatesOnlyOnce(t *testing.T) {
+	s := openTestStore(t)
+	username, password, created, err := s.BootstrapPrimaryAdmin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created || username != "admin" || !s.CheckPassword(username, password) {
+		t.Fatalf("BootstrapPrimaryAdmin() = %q, %q, %v", username, password, created)
+	}
+	_, _, created, err = s.BootstrapPrimaryAdmin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created {
+		t.Error("expected subsequent bootstrap to be a no-op")
+	}
+}
+
+func TestResetPrimaryAdminPassword(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.Create("admin", "old-password", RoleAdmin, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	username, password, err := s.ResetPrimaryAdminPassword()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if username != "admin" || !s.CheckPassword(username, password) || s.CheckPassword(username, "old-password") {
+		t.Error("expected reset password to replace the primary administrator password")
+	}
+}
+
 func TestCreateAndCheckPassword(t *testing.T) {
 	s := openTestStore(t)
 
@@ -300,6 +350,9 @@ func TestMigration_BackfillsRoleAndBookmarkFromLegacySchema(t *testing.T) {
 	if !s.CanUseBookmark("legacyadmin") || !s.CanUseBookmark("legacyreader") {
 		t.Error("expected every pre-existing user to keep bookmark-link access after migration")
 	}
+	if secret, created, err := s.SessionSecret(); err != nil || !created || secret == "" {
+		t.Errorf("SessionSecret() after legacy migration = %q, %v, %v", secret, created, err)
+	}
 	if s.CanManageUsers("legacyreader") || s.CanManageServer("legacyreader") {
 		t.Error("expected legacy non-admin user to become a plain member")
 	}
@@ -460,6 +513,143 @@ func TestInvite_ResendIssuesNewToken(t *testing.T) {
 	}
 	if _, ok := s.VerifyInviteToken(second); !ok {
 		t.Error("expected the new invite token to verify")
+	}
+}
+
+func TestTimedTokens_Expire(t *testing.T) {
+	cases := []struct {
+		name      string
+		issue     func(*Store) (string, error)
+		verify    func(*Store, string) (string, bool)
+		consume   func(*Store, string) error
+		username  string
+		createdAt string
+		ttl       time.Duration
+	}{
+		{
+			name: "reset",
+			issue: func(s *Store) (string, error) {
+				token, _, _, err := s.RequestPasswordReset("bob@example.com")
+				return token, err
+			},
+			verify:    func(s *Store, token string) (string, bool) { return s.VerifyResetToken(token) },
+			consume:   func(s *Store, token string) error { return s.CompletePasswordReset(token, "new-pass") },
+			username:  "bob",
+			createdAt: resetTokenSpec.createdAtColumn,
+			ttl:       resetTokenSpec.ttl,
+		},
+		{
+			name: "invite",
+			issue: func(s *Store) (string, error) {
+				return s.InviteUser("bob", "bob@example.com", RoleMember, true)
+			},
+			verify:    func(s *Store, token string) (string, bool) { return s.VerifyInviteToken(token) },
+			consume:   func(s *Store, token string) error { return s.AcceptInvite(token, "new-pass") },
+			username:  "bob",
+			createdAt: inviteTokenSpec.createdAtColumn,
+			ttl:       inviteTokenSpec.ttl,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := openTestStore(t)
+			if tc.name == "reset" {
+				if err := s.Create("bob", "old-pass", RoleMember, true, "bob@example.com"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			token, err := tc.issue(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.sql.Exec(`UPDATE users SET `+tc.createdAt+` = ? WHERE username = ?`, time.Now().Add(-tc.ttl-time.Second).Unix(), tc.username); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := tc.verify(s, token); ok {
+				t.Error("expired token verified")
+			}
+			if err := tc.consume(s, token); err == nil {
+				t.Error("expired token was consumed")
+			}
+		})
+	}
+}
+
+func TestTimedTokens_ReissueConsumeAndUpdatePassword(t *testing.T) {
+	cases := []struct {
+		name    string
+		setup   func(*Store) error
+		issue   func(*Store) (string, error)
+		reissue func(*Store) (string, error)
+		verify  func(*Store, string) (string, bool)
+		consume func(*Store, string) error
+	}{
+		{
+			name:  "reset",
+			setup: func(s *Store) error { return s.Create("bob", "old-pass", RoleMember, true, "bob@example.com") },
+			issue: func(s *Store) (string, error) {
+				token, _, _, err := s.RequestPasswordReset("bob@example.com")
+				return token, err
+			},
+			reissue: func(s *Store) (string, error) {
+				token, _, _, err := s.RequestPasswordReset("bob@example.com")
+				return token, err
+			},
+			verify:  func(s *Store, token string) (string, bool) { return s.VerifyResetToken(token) },
+			consume: func(s *Store, token string) error { return s.CompletePasswordReset(token, "new-pass") },
+		},
+		{
+			name:  "invite",
+			setup: func(*Store) error { return nil },
+			issue: func(s *Store) (string, error) {
+				return s.InviteUser("bob", "bob@example.com", RoleMember, true)
+			},
+			reissue: func(s *Store) (string, error) {
+				u, err := s.UserByUsername("bob")
+				if err != nil {
+					return "", err
+				}
+				return s.ResendInvite(u.ID)
+			},
+			verify:  func(s *Store, token string) (string, bool) { return s.VerifyInviteToken(token) },
+			consume: func(s *Store, token string) error { return s.AcceptInvite(token, "new-pass") },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := openTestStore(t)
+			if err := tc.setup(s); err != nil {
+				t.Fatal(err)
+			}
+			first, err := tc.issue(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := tc.reissue(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first == second {
+				t.Fatal("reissuing returned the old token")
+			}
+			if _, ok := tc.verify(s, first); ok {
+				t.Error("reissuing did not invalidate the first token")
+			}
+			if err := tc.consume(s, second); err != nil {
+				t.Fatal(err)
+			}
+			if !s.CheckPassword("bob", "new-pass") {
+				t.Error("consuming token did not update the password")
+			}
+			if _, ok := tc.verify(s, second); ok {
+				t.Error("consumed token remained valid")
+			}
+			if err := tc.consume(s, second); err == nil {
+				t.Error("consumed token was accepted a second time")
+			}
+		})
 	}
 }
 

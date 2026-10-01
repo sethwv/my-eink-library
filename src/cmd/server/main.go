@@ -46,6 +46,12 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
 		runHealthcheck()
 	}
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		if err := runAdmin(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -70,8 +76,12 @@ func main() {
 		log.Fatalf("open users store: %v", err)
 	}
 	defer userStore.Close()
-	if err := userStore.Bootstrap(cfg.LibraryUser, cfg.LibraryPass); err != nil {
+	if err := bootstrapAdministrator(userStore); err != nil {
 		log.Fatalf("bootstrap admin user: %v", err)
+	}
+	sessionSecret, err := sessionSecret(userStore, cfg.SessionSecret)
+	if err != nil {
+		log.Fatalf("load session secret: %v", err)
 	}
 
 	// SiteName/PublicURL/CoverWidth/PageSize/SessionTTL are DB-backed (admin
@@ -136,7 +146,7 @@ func main() {
 		}
 	}
 
-	authn := auth.New(cfg.SessionSecret, generalSettings.SessionTTL, userStore)
+	authn := auth.New(sessionSecret, generalSettings.SessionTTL, userStore)
 	hc := hardcover.New(integrationSettings.HardcoverEnabled, integrationSettings.HardcoverToken)
 	ch := chaptarr.New(integrationSettings.ChaptarrEnabled, integrationSettings.ChaptarrURL, integrationSettings.ChaptarrAPIKey)
 	srv := &web.Server{

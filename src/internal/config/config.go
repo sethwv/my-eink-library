@@ -13,8 +13,6 @@ import (
 type Config struct {
 	LibraryPaths  []string
 	DataDir       string
-	LibraryUser   string
-	LibraryPass   string
 	SessionSecret string
 	Port          string
 	SiteName      string
@@ -39,9 +37,7 @@ type Config struct {
 func Load() (*Config, error) {
 	c := &Config{
 		LibraryPaths:   splitPaths(getenv("LIBRARY_PATH", "/library")),
-		DataDir:        getenv("DATA_DIR", "/data"),
-		LibraryUser:    os.Getenv("LIBRARY_USER"),
-		LibraryPass:    os.Getenv("LIBRARY_PASS"),
+		DataDir:        DataDir(),
 		SessionSecret:  os.Getenv("SESSION_SECRET"),
 		Port:           getenv("PORT", "8080"),
 		SiteName:       getenv("SITE_NAME", "eink-library"),
@@ -63,17 +59,13 @@ func Load() (*Config, error) {
 	if len(c.LibraryPaths) == 0 {
 		return nil, fmt.Errorf("LIBRARY_PATH must be set")
 	}
-	if c.LibraryUser == "" {
-		return nil, fmt.Errorf("LIBRARY_USER must be set")
-	}
-	if c.LibraryPass == "" {
-		return nil, fmt.Errorf("LIBRARY_PASS must be set")
-	}
-	if c.SessionSecret == "" {
-		return nil, fmt.Errorf("SESSION_SECRET must be set")
-	}
-
 	return c, nil
+}
+
+// DataDir returns the directory holding all persistent application state.
+// Administrative commands use it without needing the server configuration.
+func DataDir() string {
+	return getenv("DATA_DIR", "/data")
 }
 
 func getenv(key, def string) string {

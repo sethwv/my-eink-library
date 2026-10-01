@@ -8,8 +8,8 @@ const directory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(directory, "../..");
 const baseURL = process.env.SCREENSHOT_BASE_URL || "http://127.0.0.1:8080";
 const output = process.env.SCREENSHOT_OUTPUT || path.join(root, "docs/assets/images/generated");
-const username = process.env.LIBRARY_USER || "admin";
-const password = process.env.LIBRARY_PASS || "fixture-password";
+const username = process.env.SCREENSHOT_USERNAME || "admin";
+const password = process.env.SCREENSHOT_PASSWORD;
 const buildTag = process.env.SCREENSHOT_BUILD_TAG;
 const scenarios = parse(await readFile(path.join(root, "docs/_data/screenshots.yml"), "utf8"));
 
@@ -19,6 +19,7 @@ const viewports = [
 ];
 
 if (!Array.isArray(scenarios)) throw new Error("Screenshot catalog must be a YAML list");
+if (!password) throw new Error("SCREENSHOT_PASSWORD must be set");
 for (const scenario of scenarios) {
   if (!scenario?.id || !Array.isArray(scenario.actions)) throw new Error("Each screenshot requires an id and actions list");
   for (const annotation of scenario.annotations || []) {
