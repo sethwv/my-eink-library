@@ -60,6 +60,10 @@ jobs:
           VERSION: ${{ steps.metadata.outputs.version }}
           BUILD_DATE: ${{ steps.metadata.outputs.date }}
         run: |
+          case "$VERSION" in
+            [0-9]*) package_version="$VERSION" ;;
+            *) package_version="0~$VERSION" ;;
+          esac
           for arch in amd64 arm64; do
             package="../dist/package-${arch}"
             mkdir -p "$package/DEBIAN" "$package/usr/bin"
@@ -68,7 +72,7 @@ jobs:
               -o "$package/usr/bin/eink-library" ./cmd/server
             printf '%s\n' \
               'Package: eink-library' \
-              "Version: ${VERSION}" \
+              "Version: ${package_version}" \
               "Architecture: ${arch}" \
               'Maintainer: Seth WV <sethwv@users.noreply.github.com>' \
               'Description: Self-hosted EPUB library for e-readers' \
