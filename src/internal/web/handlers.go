@@ -1098,7 +1098,11 @@ func (s *Server) ServerLibraryClear(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "clear library failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.enqueueTask(w, r, "rescan")
+	if _, _, err := s.Tasks.Enqueue("rescan"); err != nil {
+		http.Error(w, "scan could not be queued", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
 }
 
 func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
