@@ -27,15 +27,11 @@ If this project has been useful, tips are appreciated.
 
 ## Run It
 
-Create an ignored `docker-compose.override.yml` with your credentials and library mount:
+Create an ignored `docker-compose.override.yml` with your library mount:
 
 ```yaml
 services:
   eink-library:
-    environment:
-      LIBRARY_USER: reader
-      LIBRARY_PASS: choose-a-password
-      SESSION_SECRET: choose-a-long-random-secret
     volumes:
       - /path/to/epubs:/library:ro
 ```
@@ -46,7 +42,7 @@ Then start the published image:
 docker compose up -d
 ```
 
-Put the service behind an HTTPS reverse proxy before signing in. Session cookies require HTTPS, while the supplied Compose file exposes the internal HTTP port for that proxy. The supplied Compose file persists application data in a named volume and intentionally contains placeholder credentials.
+Put the service behind an HTTPS reverse proxy before signing in. On first startup, the server logs the generated password for the `admin` account once. Session cookies require HTTPS, while the supplied Compose file exposes the internal HTTP port for that proxy. The supplied Compose file persists application data in a named volume.
 
 For local development, configuration details, and validation commands, see [CONTRIBUTING.md](CONTRIBUTING.md).
 

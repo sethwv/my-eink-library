@@ -26,9 +26,7 @@ Serve the application through an HTTPS reverse proxy. The application listens on
 |---|---|---|
 | `LIBRARY_PATH` | `/library` | Comma-separated EPUB directories |
 | `DATA_DIR` | `/data` | Writable application data |
-| `LIBRARY_USER` | Required | First-run administrator username |
-| `LIBRARY_PASS` | Required | First-run administrator password |
-| `SESSION_SECRET` | Required | Session-cookie signing key |
+| `SESSION_SECRET` | Empty | Runtime session-cookie signing-key override |
 | `PORT` | `8080` | HTTP listen port |
 | `SITE_NAME` | `eink-library` | Display name |
 | `COVER_WIDTH` | `300` | Cover thumbnail width in pixels |
@@ -38,3 +36,7 @@ Serve the application through an HTTPS reverse proxy. The application listens on
 | `PUBLIC_URL` | Empty | Trusted URL for emailed links |
 
 For the full development environment and contribution terms, see [CONTRIBUTING.md](https://github.com/sethwv/my-eink-library/blob/main/CONTRIBUTING.md).
+
+On first startup, the application creates an `admin` account and logs its generated password once. It also generates and persists a session signing secret in `DATA_DIR/users.db`. Set `SESSION_SECRET` only when an operational override is needed. The override is not stored, and changing it invalidates existing sessions.
+
+If the initial administrator password is lost, stop the application and run `eink-library admin reset-password` with the same `DATA_DIR`. It prints a newly generated password for the primary administrator without starting the server.

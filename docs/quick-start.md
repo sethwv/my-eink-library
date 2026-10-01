@@ -9,15 +9,11 @@ Docker is the quickest way to run my-eink-library. Your EPUB files remain mounte
 
 ## 1. Create an override file
 
-Copy this into `docker-compose.override.yml` next to the repository's Compose file. The override is ignored by Git, so it is the right place for local paths and credentials.
+Copy this into `docker-compose.override.yml` next to the repository's Compose file. The override is ignored by Git, so it is the right place for the local library path.
 
 ```yaml
 services:
   eink-library:
-    environment:
-      LIBRARY_USER: reader
-      LIBRARY_PASS: choose-a-password
-      SESSION_SECRET: choose-a-long-random-secret
     volumes:
       - /path/to/epubs:/library:ro
 ```
@@ -28,7 +24,7 @@ services:
 docker compose up -d
 ```
 
-Put the service behind an HTTPS reverse proxy, then open its HTTPS URL and sign in with the bootstrap credentials from the override file. The container's port 8080 is HTTP for the reverse proxy only; session cookies require HTTPS.
+Put the service behind an HTTPS reverse proxy, then open its HTTPS URL and sign in as `admin` with the generated password from the first startup log. The password is logged only once. The container's port 8080 is HTTP for the reverse proxy only; session cookies require HTTPS.
 
 ## 3. Add more library folders
 
@@ -47,4 +43,4 @@ services:
 The first configured folder wins when duplicate EPUBs are found.
 
 {: .note }
-`LIBRARY_USER` and `LIBRARY_PASS` create the first administrator only. Later user management happens in the web UI.
+If the initial password is lost, stop the service and run `docker compose run --rm eink-library admin reset-password`. The command prints a replacement password without starting a web server.

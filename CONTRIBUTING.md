@@ -17,18 +17,15 @@ cd src
 go mod download
 ```
 
-For a local server, set bootstrap credentials and point the app at writable data plus an EPUB directory:
+For a local server, point the app at writable data plus an EPUB directory:
 
 ```bash
-LIBRARY_USER=admin \
-LIBRARY_PASS=adminpass \
-SESSION_SECRET=dev-secret \
 LIBRARY_PATH=/path/to/epubs \
 DATA_DIR=/tmp/my-eink-library-data \
 (cd src && go run ./cmd/server)
 ```
 
-`LIBRARY_USER` and `LIBRARY_PASS` create the first admin only when the user database is empty. Subsequent account management is stored in `DATA_DIR`.
+The first run logs a generated password for the `admin` account once. Keep `DATA_DIR` if that password needs recovery: `(cd src && DATA_DIR=/tmp/my-eink-library-data go run ./cmd/server admin reset-password)` generates and prints a replacement password without starting the server.
 
 For Docker development, add local credentials and the EPUB bind mount in `docker-compose.override.yml`, then run `docker compose up --build`.
 
@@ -38,9 +35,7 @@ For Docker development, add local credentials and the EPUB bind mount in `docker
 |---|---|---|
 | `LIBRARY_PATH` | `/library` | Comma-separated read-only EPUB directories |
 | `DATA_DIR` | `/data` | Writable SQLite indexes, user database, and cover cache |
-| `LIBRARY_USER` | Required | First-run admin username |
-| `LIBRARY_PASS` | Required | First-run admin password |
-| `SESSION_SECRET` | Required | Session-cookie signing key |
+| `SESSION_SECRET` | Empty | Runtime session-cookie signing-key override |
 | `PORT` | `8080` | HTTP listen port |
 | `SITE_NAME` | `eink-library` | Displayed site name |
 | `COVER_WIDTH` | `300` | Cover thumbnail width in pixels |
@@ -49,7 +44,7 @@ For Docker development, add local credentials and the EPUB bind mount in `docker
 | `HARDCOVER_API_TOKEN` | Empty | One-time bootstrap token for the Hardcover integration |
 | `PUBLIC_URL` | Empty | Trusted public base URL for invite and reset links |
 
-`HARDCOVER_API_TOKEN`, integration settings, and server settings become database-backed after initial setup. Use the admin UI to change persisted settings later.
+`SESSION_SECRET` is generated and stored in `DATA_DIR/users.db` when unset. Setting it uses that value for the current process without changing the stored secret, so changing or removing an override invalidates active sessions. `HARDCOVER_API_TOKEN`, integration settings, and server settings become database-backed after initial setup. Use the admin UI to change persisted settings later.
 
 ## Validation
 

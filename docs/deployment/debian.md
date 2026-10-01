@@ -19,18 +19,15 @@ sudo useradd --system --create-home --home-dir /var/lib/eink-library --shell /us
 sudo install -d -o eink-library -g eink-library -m 0750 /etc/eink-library
 ```
 
-Create `/etc/eink-library/eink-library.env` with the required settings. The `eink-library` user must be able to read `LIBRARY_PATH` and write `DATA_DIR`.
+Create `/etc/eink-library/eink-library.env` with the required paths. The `eink-library` user must be able to read `LIBRARY_PATH` and write `DATA_DIR`.
 
 ```dotenv
 LIBRARY_PATH=/srv/epubs
 DATA_DIR=/var/lib/eink-library
-LIBRARY_USER=reader
-LIBRARY_PASS=choose-a-password
-SESSION_SECRET=choose-a-long-random-secret
 PORT=8080
 ```
 
-Protect the file because it holds credentials:
+Protect the file because it controls the service configuration:
 
 ```bash
 sudo chown root:eink-library /etc/eink-library/eink-library.env
@@ -65,3 +62,5 @@ sudo systemctl status eink-library
 ```
 
 `EnvironmentFile` is systemd's supported way to load the `.env`-style file. Do not pass this file directly to the executable; it only reads variables inherited from its process environment.
+
+The first service startup writes the generated `admin` password to the journal once. Retrieve it with `sudo journalctl -u eink-library` and store it safely. To recover access later, stop the service and run `sudo -u eink-library DATA_DIR=/var/lib/eink-library /usr/bin/eink-library admin reset-password`; it prints a replacement password without running the server.

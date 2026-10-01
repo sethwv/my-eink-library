@@ -49,6 +49,4 @@ Pending invitations can be resent from the user's Manage panel. Once a user has 
 {: .warning }
 Deleting a user removes their access. Check that the account is no longer needed before selecting **Delete user**.
 
-Current releases create the first administrator from `LIBRARY_USER` and `LIBRARY_PASS` during deployment. See [Deployment](../../deployment/) for that bootstrap configuration.
-
-This flow is being replaced by generated first-run credentials and a break-glass password-reset command. The guide will document that recovery procedure when the feature is released. Do not remove current bootstrap variables from a deployed configuration until its release notes say to do so.
+On first startup, the application creates the `admin` account and logs a generated password once. Store that password safely. If it is lost, stop the application and run `eink-library admin reset-password` with the same `DATA_DIR`; the break-glass command prints a replacement password without starting the server. See [Deployment](../../deployment/) for platform-specific commands.

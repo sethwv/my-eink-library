@@ -12,9 +12,6 @@ Download `eink-library_<version>_windows_amd64.exe` from the [GitHub release](ht
 New-Item -ItemType Directory -Force C:\eink-library-data
 $env:LIBRARY_PATH = "D:\Books"
 $env:DATA_DIR = "C:\eink-library-data"
-$env:LIBRARY_USER = "reader"
-$env:LIBRARY_PASS = "choose-a-password"
-$env:SESSION_SECRET = "choose-a-long-random-secret"
 $env:PORT = "8080"
 & "C:\eink-library\eink-library_<version>_windows_amd64.exe"
 ```
@@ -22,3 +19,5 @@ $env:PORT = "8080"
 Put the process behind an HTTPS reverse proxy, then open its HTTPS URL. Port 8080 is HTTP for the reverse proxy only because session cookies require HTTPS. The process must remain running, so use Task Scheduler or a Windows service wrapper for an always-on installation.
 
 The executable does not load `.env` files itself. For repeatable local launches, save the environment assignments and final command above in a private PowerShell script, such as `run-eink-library.ps1`, and keep that script out of source control.
+
+The first launch prints the generated `admin` password once. To generate a replacement without starting the server, use the same data directory: `$env:DATA_DIR = "C:\eink-library-data"; & "C:\eink-library\eink-library_<version>_windows_amd64.exe" admin reset-password`.

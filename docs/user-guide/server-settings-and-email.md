@@ -39,4 +39,4 @@ Choose the encryption mode required by your provider: **SSL/TLS**, **STARTTLS**,
 {: .note }
 The weekly new-book digest, invitations, and password resets all depend on working SMTP. A successful save alone does not confirm delivery, so always use the test message.
 
-Current releases require `SESSION_SECRET` in the deployment environment. A pending change will generate and persist a secret when it is unset while retaining an environment override for operations that require it. Follow the deployment and release documentation for the version you run; changing a signing secret invalidates existing login sessions.
+When `SESSION_SECRET` is unset, the application generates and persists a session signing secret in `DATA_DIR/users.db`. Set `SESSION_SECRET` only for a runtime override: it never overwrites the persisted value, and changing an override invalidates existing login sessions.

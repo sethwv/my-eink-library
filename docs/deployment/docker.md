@@ -14,15 +14,11 @@ ghcr.io/sethwv/my-eink-library:latest
 
 Development builds use `<branch>` and immutable `<branch>-<short-sha>` tags, such as `main-a1b2c3d`. Versioned releases also publish exact semantic-version and major/minor tags.
 
-Use the repository's `docker-compose.yml` with an ignored `docker-compose.override.yml` for credentials and the host library directory:
+Use the repository's `docker-compose.yml` with an ignored `docker-compose.override.yml` for the host library directory:
 
 ```yaml
 services:
   eink-library:
-    environment:
-      LIBRARY_USER: reader
-      LIBRARY_PASS: choose-a-password
-      SESSION_SECRET: choose-a-long-random-secret
     volumes:
       - /path/to/epubs:/library:ro
 ```
@@ -33,4 +29,4 @@ Start it with:
 docker compose up -d
 ```
 
-The override file is ignored by Git. It is preferred over committing credentials in the tracked Compose file. Docker Compose's project `.env` file only performs variable substitution unless the Compose configuration passes values into the container, so use the `environment` block above for this project.
+The first startup log contains the generated password for the `admin` account. Save it immediately because it is not logged again. The override file is ignored by Git. Docker Compose's project `.env` file only performs variable substitution unless the Compose configuration passes values into the container, so use the `environment` block above for application configuration when needed.
