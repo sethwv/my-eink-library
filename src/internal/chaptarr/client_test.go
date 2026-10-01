@@ -2,12 +2,47 @@ package chaptarr
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type memoryCacheStore struct {
+	books map[string][]Book
+	at    map[string]time.Time
+	err   error
+}
+
+func (s *memoryCacheStore) LoadChaptarrCache(scope string) ([]Book, time.Time, error) {
+	if s.err != nil {
+		return nil, time.Time{}, s.err
+	}
+	return s.books[scope], s.at[scope], nil
+}
+
+func (s *memoryCacheStore) SaveChaptarrCache(scope string, books []Book, refreshedAt time.Time) error {
+	if s.err != nil {
+		return s.err
+	}
+	if s.books == nil {
+		s.books = map[string][]Book{}
+		s.at = map[string]time.Time{}
+	}
+	s.books[scope], s.at[scope] = books, refreshedAt
+	return nil
+}
+
+func (s *memoryCacheStore) ClearChaptarrCache(scope string) error {
+	if s.err != nil {
+		return s.err
+	}
+	delete(s.books, scope)
+	delete(s.at, scope)
+	return nil
+}
 
 func TestClient_Enabled(t *testing.T) {
 	if (&Client{}).Enabled() {
@@ -217,6 +252,54 @@ func TestSetConfig_InvalidatesCache(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(bookRequests); got != 2 {
 		t.Errorf("got %d /api/v1/book requests, want 2 (SetConfig must drop the old cache)", got)
+	}
+}
+
+func TestClient_RestoresPersistentCache(t *testing.T) {
+	srv, bookRequests := countingChaptarrServer(t)
+	store := &memoryCacheStore{}
+	first := New(true, srv.URL, "test-key")
+	if err := first.SetCacheStore(store); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.RefreshBooks(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := New(true, srv.URL, "test-key")
+	if err := restarted.SetCacheStore(store); err != nil {
+		t.Fatal(err)
+	}
+	books, fromCache, err := restarted.ListBooksCached(context.Background(), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fromCache || len(books) != 1 {
+		t.Fatalf("restored cache = (%+v, fromCache=%t), want one cache hit", books, fromCache)
+	}
+	if got := atomic.LoadInt32(bookRequests); got != 1 {
+		t.Errorf("got %d crawls, want only the initial crawl", got)
+	}
+}
+
+func TestRefreshBooks_DoesNotReplaceCacheWhenPersistenceFails(t *testing.T) {
+	srv, _ := countingChaptarrServer(t)
+	store := &memoryCacheStore{}
+	c := New(true, srv.URL, "test-key")
+	if err := c.SetCacheStore(store); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RefreshBooks(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	before, beforeAt := c.CachedBooks()
+	store.err = fmt.Errorf("disk unavailable")
+	if _, err := c.RefreshBooks(context.Background()); err == nil {
+		t.Fatal("expected persistence error")
+	}
+	after, afterAt := c.CachedBooks()
+	if len(after) != len(before) || !afterAt.Equal(beforeAt) {
+		t.Error("failed refresh replaced the last known-good cache")
 	}
 }
 

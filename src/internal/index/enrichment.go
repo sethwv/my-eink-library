@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // EnrichmentCandidate is the minimal data needed to search Hardcover (or
@@ -15,6 +16,7 @@ type EnrichmentCandidate struct {
 	Author     string
 	Identifier string
 	FilePath   string
+	AddedAt    time.Time
 }
 
 // Enrichment source values stored in book_enrichment.source, surfaced on
@@ -82,7 +84,7 @@ const needsEnrichmentWhere = `COALESCE(be.status, '') = ''
 // of reprocessing the whole library.
 func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 	rows, err := d.sql.Query(`
-		SELECT b.id, b.title, b.author, COALESCE(b.identifier, ''), b.file_path FROM books b
+		SELECT b.id, b.title, b.author, COALESCE(b.identifier, ''), b.file_path, b.added_at FROM books b
 		LEFT JOIN book_enrichment be ON be.book_id = b.id
 		WHERE `+needsEnrichmentWhere+`
 		ORDER BY b.id
@@ -95,9 +97,11 @@ func (d *DB) BooksNeedingEnrichment(limit int) ([]EnrichmentCandidate, error) {
 	var out []EnrichmentCandidate
 	for rows.Next() {
 		var c EnrichmentCandidate
-		if err := rows.Scan(&c.ID, &c.Title, &c.Author, &c.Identifier, &c.FilePath); err != nil {
+		var addedAt int64
+		if err := rows.Scan(&c.ID, &c.Title, &c.Author, &c.Identifier, &c.FilePath, &addedAt); err != nil {
 			return nil, err
 		}
+		c.AddedAt = time.Unix(addedAt, 0)
 		out = append(out, c)
 	}
 	return out, rows.Err()

@@ -10,6 +10,7 @@ package chaptarr
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,18 +26,15 @@ import (
 // one /api/v1/bookfile call per distinct author with files (confirmed live
 // against a real instance: 482 authors, ~484 total requests), so this
 // trades a bounded amount of staleness for avoiding that cost on every
-// pass. See internal/web's RunEnrichmentQueue for the "ad-hoc for missing"
-// deferred-retry that keeps this from silently violating Chaptarr's
-// precedence over Hardcover for a book added to Chaptarr since the last
-// crawl.
+// pass. The scheduled refresh task keeps the snapshot current for the
+// enrichment queue without repeatedly crawling Chaptarr during enrichment.
 const DefaultCacheTTL = 12 * time.Hour
 
 // Client is safe for concurrent use. baseURL/apiKey/enabled are mutable
 // (see SetConfig) so the admin Integrations page can turn Chaptarr on/off
 // or change its connection details without a server restart, the same
 // shape as internal/hardcover.Client. cachedBooks/cachedAt back
-// ListBooksCached — in-memory only (not persisted), so a server restart
-// costs one full re-crawl, same as if the cache had just expired.
+// ListBooksCached and may be persisted through CacheStore.
 type Client struct {
 	http *http.Client
 
@@ -46,6 +44,7 @@ type Client struct {
 	enabled     bool
 	cachedBooks []Book
 	cachedAt    time.Time
+	cacheStore  CacheStore
 }
 
 // New creates a Client using the given base URL (e.g.
@@ -61,6 +60,29 @@ func New(enabled bool, baseURL, apiKey string) *Client {
 	}
 }
 
+// SetCacheStore enables durable catalog caching and restores the current
+// configuration's most recent successful snapshot.
+func (c *Client) SetCacheStore(store CacheStore) error {
+	c.mu.Lock()
+	c.cacheStore = store
+	scope := c.cacheScopeLocked()
+	c.mu.Unlock()
+	if store == nil || scope == "" {
+		return nil
+	}
+	books, refreshedAt, err := store.LoadChaptarrCache(scope)
+	if err != nil {
+		return err
+	}
+	if refreshedAt.IsZero() {
+		return nil
+	}
+	c.mu.Lock()
+	c.cachedBooks, c.cachedAt = books, refreshedAt
+	c.mu.Unlock()
+	return nil
+}
+
 // SetConfig updates the client's enabled state, base URL, and API key in
 // place — called after the admin Integrations page saves a change. Also
 // drops any cached catalog snapshot: it was crawled under the old
@@ -68,11 +90,30 @@ func New(enabled bool, baseURL, apiKey string) *Client {
 // data from the wrong (or no longer valid) Chaptarr instance.
 func (c *Client) SetConfig(enabled bool, baseURL, apiKey string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	oldScope := c.cacheScopeLocked()
 	c.enabled = enabled
 	c.baseURL = strings.TrimRight(baseURL, "/")
 	c.apiKey = apiKey
 	c.cachedBooks = nil
+	c.cachedAt = time.Time{}
+	store := c.cacheStore
+	newScope := c.cacheScopeLocked()
+	c.mu.Unlock()
+	if store != nil && oldScope != "" && oldScope != newScope {
+		if err := store.ClearChaptarrCache(oldScope); err != nil {
+			// Cache invalidation is best-effort here. A mismatched scope can
+			// never be loaded by the new configuration.
+			return
+		}
+	}
+	if store != nil && newScope != "" {
+		books, refreshedAt, err := store.LoadChaptarrCache(newScope)
+		if err == nil && !refreshedAt.IsZero() {
+			c.mu.Lock()
+			c.cachedBooks, c.cachedAt = books, refreshedAt
+			c.mu.Unlock()
+		}
+	}
 }
 
 // Enabled reports whether Chaptarr is turned on and has both a base URL and
@@ -91,6 +132,35 @@ func (c *Client) config() (baseURL, apiKey string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.baseURL, c.apiKey
+}
+
+func (c *Client) cacheScopeLocked() string {
+	if c.baseURL == "" || c.apiKey == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(c.baseURL + "\x00" + c.apiKey))
+	return fmt.Sprintf("%x", sum[:])
+}
+
+// CachedBooks returns the most recently successful snapshot and when it was
+// refreshed. It never makes network requests.
+func (c *Client) CachedBooks() ([]Book, time.Time) {
+	if c == nil {
+		return nil, time.Time{}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cachedBooks, c.cachedAt
+}
+
+// NextRefreshAt reports when the current snapshot must be refreshed. A zero
+// time means no successful snapshot exists yet.
+func (c *Client) NextRefreshAt() time.Time {
+	_, refreshedAt := c.CachedBooks()
+	if refreshedAt.IsZero() {
+		return time.Time{}
+	}
+	return refreshedAt.Add(DefaultCacheTTL)
 }
 
 // Book is a single title Chaptarr is tracking with an on-disk file, with
@@ -280,10 +350,7 @@ func (c *Client) ListBooks(ctx context.Context) ([]Book, error) {
 // ListBooksCached returns the cached catalog snapshot if it's younger than
 // ttl, or calls RefreshBooks (a full crawl via ListBooks) and caches the
 // result otherwise. The returned bool reports whether the cache was used
-// (true) or a fresh crawl just happened (false) — callers that need to
-// know whether a "no match" for a specific book might just be stale data,
-// rather than a real absence, should check this and fall back to
-// RefreshBooks for that case (see RunEnrichmentQueue's deferred-retry).
+// (true) or a fresh crawl just happened (false).
 func (c *Client) ListBooksCached(ctx context.Context, ttl time.Duration) ([]Book, bool, error) {
 	c.mu.Lock()
 	if c.cachedBooks != nil && time.Since(c.cachedAt) < ttl {
@@ -304,9 +371,18 @@ func (c *Client) RefreshBooks(ctx context.Context) ([]Book, error) {
 	if err != nil {
 		return nil, err
 	}
+	refreshedAt := time.Now()
 	c.mu.Lock()
-	c.cachedBooks = books
-	c.cachedAt = time.Now()
+	store := c.cacheStore
+	scope := c.cacheScopeLocked()
+	c.mu.Unlock()
+	if store != nil && scope != "" {
+		if err := store.SaveChaptarrCache(scope, books, refreshedAt); err != nil {
+			return nil, err
+		}
+	}
+	c.mu.Lock()
+	c.cachedBooks, c.cachedAt = books, refreshedAt
 	c.mu.Unlock()
 	return books, nil
 }

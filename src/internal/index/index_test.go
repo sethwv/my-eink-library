@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/sethwv/my-eink-library/internal/chaptarr"
 )
 
 const testContainerXML = `<?xml version="1.0"?>
@@ -106,6 +109,25 @@ func openTestDB(t *testing.T) *DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+func TestChaptarrCachePersistsCatalogAndTimestamp(t *testing.T) {
+	db := openTestDB(t)
+	books := []chaptarr.Book{{ID: 42, Title: "Cache Me", Paths: []string{"/library/cache-me.epub"}}}
+	refreshedAt := time.Unix(1_700_000_000, 0)
+	if err := db.SaveChaptarrCache("scope", books, refreshedAt); err != nil {
+		t.Fatal(err)
+	}
+	got, gotAt, err := db.LoadChaptarrCache("scope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != books[0].ID || got[0].Title != books[0].Title {
+		t.Fatalf("cache books = %+v, want %+v", got, books)
+	}
+	if !gotAt.Equal(refreshedAt) {
+		t.Errorf("cache timestamp = %v, want %v", gotAt, refreshedAt)
+	}
 }
 
 func TestScan_IndexesBooks(t *testing.T) {

@@ -139,6 +139,9 @@ func main() {
 	authn := auth.New(sessionSecret, generalSettings.SessionTTL, userStore)
 	hc := hardcover.New(integrationSettings.HardcoverEnabled, integrationSettings.HardcoverToken)
 	ch := chaptarr.New(integrationSettings.ChaptarrEnabled, integrationSettings.ChaptarrURL, integrationSettings.ChaptarrAPIKey)
+	if err := ch.SetCacheStore(db); err != nil {
+		log.Fatalf("load chaptarr cache: %v", err)
+	}
 	srv := &web.Server{
 		Auth:         authn,
 		DB:           db,
@@ -173,8 +176,16 @@ func main() {
 	taskManager.Register(tasks.Task{Key: "email-digest", Name: "Email digest", Kind: tasks.KindJob, Runnable: true, NextRun: "Weekly"}, func(context.Context) error {
 		return srv.SendDigestNow()
 	})
+	taskManager.Register(tasks.Task{Key: "chaptarr-refresh", Name: "Refresh Chaptarr catalog", Kind: tasks.KindJob, Runnable: true, NextRun: "Every 12 hours"}, func(ctx context.Context) error {
+		if !ch.Enabled() {
+			return nil
+		}
+		_, err := ch.RefreshBooks(ctx)
+		return err
+	})
 	taskManager.Register(tasks.Task{Key: "filesystem-watcher", Name: "Filesystem watcher", Kind: tasks.KindService}, nil)
 	taskManager.Register(tasks.Task{Key: "enrichment-queue", Name: "Enrichment queue", Kind: tasks.KindService}, nil)
+	taskManager.Register(tasks.Task{Key: "chaptarr-refresh-scheduler", Name: "Chaptarr refresh scheduler", Kind: tasks.KindService}, nil)
 	taskManager.Register(tasks.Task{Key: "digest-scheduler", Name: "Digest scheduler", Kind: tasks.KindService}, nil)
 	srv.Tasks = taskManager
 
@@ -208,6 +219,9 @@ func main() {
 	// later still works without a restart.
 	if err := taskManager.StartService(ctx, "enrichment-queue", srv.RunEnrichmentQueue); err != nil {
 		log.Fatalf("start enrichment task: %v", err)
+	}
+	if err := taskManager.StartService(ctx, "chaptarr-refresh-scheduler", srv.RunChaptarrRefreshScheduler); err != nil {
+		log.Fatalf("start chaptarr refresh scheduler: %v", err)
 	}
 	if generalSettings.PublicURL == "" {
 		log.Printf("warning: Public URL is not set; password-reset and invite emails are disabled")

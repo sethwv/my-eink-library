@@ -170,6 +170,7 @@ func (d *DB) ClearLibrary() error {
 			`DELETE FROM book_locations`,
 			`DELETE FROM books`,
 			`DELETE FROM meta WHERE key IN ('last_scan_at', 'last_scan_duration_ms')`,
+			`DELETE FROM chaptarr_catalog_cache`,
 		} {
 			if _, err := tx.Exec(query); err != nil {
 				return err

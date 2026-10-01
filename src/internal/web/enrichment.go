@@ -54,16 +54,11 @@ const enrichmentBatchSize = 200
 // always checked and always wins if it has a match, in every single pass,
 // not just often.
 //
-// Chaptarr's catalog is fetched via ListBooksCached (chaptarr.DefaultCacheTTL,
-// currently 12h) rather than a fresh crawl every pass — a full crawl is
-// several dozen to several hundred HTTP requests on a real library (see
-// chaptarr.Client's doc comment), and most passes don't need current-to-
-// the-second data. A candidate that doesn't match a *cached* list is held
-// back from the Hardcover fallback and retried once against a forced
-// RefreshBooks after the main loop, rather than conceded to Hardcover
-// immediately — a stale-cache false negative falling through to Hardcover
-// would otherwise silently break the precedence guarantee above for a book
-// added to Chaptarr since the last crawl.
+// Chaptarr's catalog is supplied by the scheduled refresh task. This loop
+// only reads its last successful snapshot, so an unavailable or stale
+// catalog leaves candidates pending rather than allowing a false negative to
+// fall through to Hardcover. A candidate imported after the snapshot waits
+// for the next refresh before its Chaptarr miss is considered authoritative.
 func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 	for {
 		select {
@@ -96,28 +91,18 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 		}
 
 		var chBooks []chaptarr.Book
-		fromCache := false
+		var chaptarrRefreshedAt time.Time
 		if s.Chaptarr.Enabled() {
-			var err error
-			chBooks, fromCache, err = s.Chaptarr.ListBooksCached(ctx, chaptarr.DefaultCacheTTL)
-			if err != nil {
-				log.Printf("enrichment queue: chaptarr list books: %v", err)
-				// Don't abort the whole pass — Hardcover can still process
-				// every candidate below even though Chaptarr's list failed.
+			chBooks, chaptarrRefreshedAt = s.Chaptarr.CachedBooks()
+			if chaptarrRefreshedAt.IsZero() || !chaptarrRefreshedAt.Add(chaptarr.DefaultCacheTTL).After(time.Now()) {
+				// The scheduler owns catalog crawls. Do not let a missing or
+				// expired snapshot concede books to Hardcover before Chaptarr
+				// has had a successful opportunity to claim them.
+				sleepOrDone(ctx, idlePollInterval)
+				continue
 			}
 		}
 
-		// Candidates that don't match the (possibly cached) Chaptarr list
-		// are held back from the Hardcover fallback rather than conceded to
-		// it immediately, if that list came from cache — a stale cache
-		// saying "no match" doesn't mean Chaptarr genuinely has no match,
-		// just that it didn't as of the last crawl (e.g. the book was added
-		// to Chaptarr since). Falling through to Hardcover on a false
-		// negative would violate Chaptarr's precedence, since a book
-		// Hardcover marks done/no_match drops out of BooksNeedingEnrichment
-		// for good. See the second loop below for the one bounded re-crawl
-		// that resolves this before anything is actually conceded.
-		var deferred []index.EnrichmentCandidate
 		processedAny := false
 		for _, c := range candidates {
 			select {
@@ -126,17 +111,17 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			default:
 			}
 
+			if s.Chaptarr.Enabled() && !c.AddedAt.Before(chaptarrRefreshedAt.Truncate(time.Second)) {
+				// A scan may have found this file after the snapshot was built.
+				// Keep it pending until the next scheduled catalog refresh.
+				continue
+			}
 			if s.processChaptarrMatch(ctx, c, chBooks, overwriteCover) {
 				processedAny = true
 				continue
 			}
-			if fromCache && s.Chaptarr.Enabled() {
-				deferred = append(deferred, c)
-				continue
-			}
-			// A confident "no path match": either Chaptarr is disabled (in
-			// which case chBooks is nil and this is skipped entirely below)
-			// or the list we checked against was fresh, not stale cache.
+			// The snapshot predates the candidate and is still within its TTL,
+			// so this is a confirmed Chaptarr miss.
 			if chBooks != nil {
 				if err := s.DB.SetChaptarrStatus(c.ID, "no_match"); err != nil {
 					log.Printf("enrichment queue: mark chaptarr no_match failed for book %d: %v", c.ID, err)
@@ -144,30 +129,6 @@ func (s *Server) RunEnrichmentQueue(ctx context.Context) {
 			}
 			if s.processHardcoverMatch(ctx, c, overwriteCover) {
 				processedAny = true
-			}
-		}
-
-		if len(deferred) > 0 {
-			freshBooks, err := s.Chaptarr.RefreshBooks(ctx)
-			if err != nil {
-				log.Printf("enrichment queue: chaptarr refresh for deferred candidates: %v", err)
-				freshBooks = nil
-			}
-			for _, c := range deferred {
-				if freshBooks != nil && s.processChaptarrMatch(ctx, c, freshBooks, overwriteCover) {
-					processedAny = true
-					continue
-				}
-				// freshBooks (unlike the earlier cached chBooks) is never
-				// stale, so a miss against it is confident either way.
-				if freshBooks != nil {
-					if err := s.DB.SetChaptarrStatus(c.ID, "no_match"); err != nil {
-						log.Printf("enrichment queue: mark chaptarr no_match failed for book %d: %v", c.ID, err)
-					}
-				}
-				if s.processHardcoverMatch(ctx, c, overwriteCover) {
-					processedAny = true
-				}
 			}
 		}
 

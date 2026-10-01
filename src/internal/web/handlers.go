@@ -1182,7 +1182,19 @@ func (s *Server) AdminTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) populateTaskNextRun(summary *tasks.Summary) {
-	if summary.Key != "email-digest" {
+	switch summary.Key {
+	case "chaptarr-refresh":
+		if !s.Chaptarr.Enabled() {
+			summary.NextRun = "Disabled"
+			return
+		}
+		summary.NextRunAt = s.Chaptarr.NextRefreshAt()
+		if summary.NextRunAt.IsZero() {
+			summary.NextRun = "Pending initial refresh"
+		}
+		return
+	case "email-digest":
+	default:
 		return
 	}
 	settings, err := s.Users.GetSMTPSettings()
@@ -1213,6 +1225,11 @@ func (s *Server) serviceStatus(summary tasks.Summary) string {
 		}
 		return "Waiting for candidates"
 	case "digest-scheduler":
+		return "Scheduled"
+	case "chaptarr-refresh-scheduler":
+		if !s.Chaptarr.Enabled() {
+			return "Waiting for Chaptarr"
+		}
 		return "Scheduled"
 	default:
 		return summary.Status
