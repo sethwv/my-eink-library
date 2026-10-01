@@ -162,7 +162,13 @@ func main() {
 	defer taskStore.Close()
 	taskManager := tasks.New(taskStore)
 	taskManager.Register(tasks.Task{Key: "rescan", Name: "Scan Library", Kind: tasks.KindJob, Runnable: true, NextRun: "Startup & On-Demand"}, func(context.Context) error {
-		return db.Scan(cfg.LibraryPaths, covers)
+		if err := db.Scan(cfg.LibraryPaths, covers); err != nil {
+			return err
+		}
+		if n, err := db.Count(index.Filter{}); err == nil {
+			log.Printf("indexed %d books", n)
+		}
+		return nil
 	})
 	taskManager.Register(tasks.Task{Key: "email-digest", Name: "Email digest", Kind: tasks.KindJob, Runnable: true, NextRun: "Weekly"}, func(context.Context) error {
 		return srv.SendDigestNow()
@@ -177,19 +183,21 @@ func main() {
 	if err := taskManager.Start(ctx); err != nil {
 		log.Fatalf("start task manager: %v", err)
 	}
-	log.Printf("scanning library at %s", strings.Join(cfg.LibraryPaths, ", "))
-	if err := taskManager.Run(ctx, "rescan"); err != nil {
-		log.Fatalf("initial scan: %v", err)
+	if _, _, err := taskManager.Enqueue("rescan"); err != nil {
+		log.Printf("queue initial library scan: %v", err)
 	}
-	if n, err := db.Count(index.Filter{}); err == nil {
-		log.Printf("indexed %d books", n)
-	}
+	log.Printf("queued library scan for %s", strings.Join(cfg.LibraryPaths, ", "))
 
-	watcher, err := index.NewWatcher(cfg.LibraryPaths, db, covers)
-	if err != nil {
-		log.Fatalf("start watcher: %v", err)
-	}
-	if err := taskManager.StartService(ctx, "filesystem-watcher", watcher.Run); err != nil {
+	if err := taskManager.StartService(ctx, "filesystem-watcher", func(ctx context.Context) {
+		watcher, err := index.NewWatcher(ctx, cfg.LibraryPaths, db, covers)
+		if err != nil {
+			if ctx.Err() == nil {
+				log.Printf("start watcher: %v", err)
+			}
+			return
+		}
+		watcher.Run(ctx)
+	}); err != nil {
 		log.Fatalf("start filesystem watcher task: %v", err)
 	}
 	// Single background loop for both integrations (idles, rather than

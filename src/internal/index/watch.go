@@ -29,8 +29,12 @@ type Watcher struct {
 
 // NewWatcher creates a watcher and registers all existing subdirectories of
 // each of libraryRoots. fsnotify does not watch recursively, so each
-// directory must be added explicitly.
-func NewWatcher(libraryRoots []string, db *DB, saver CoverSaver) (*Watcher, error) {
+// directory must be added explicitly. Context cancellation interrupts a
+// potentially long traversal of a large library.
+func NewWatcher(ctx context.Context, libraryRoots []string, db *DB, saver CoverSaver) (*Watcher, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -46,6 +50,9 @@ func NewWatcher(libraryRoots []string, db *DB, saver CoverSaver) (*Watcher, erro
 
 	for _, root := range libraryRoots {
 		err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if err != nil {
 				return nil
 			}

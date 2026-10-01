@@ -2,6 +2,7 @@ package index
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +16,7 @@ func TestWatcher_DetectsNewAndRemovedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w, err := NewWatcher([]string{libDir}, db, nil)
+	w, err := NewWatcher(context.Background(), []string{libDir}, db, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,6 +40,16 @@ func TestWatcher_DetectsNewAndRemovedFiles(t *testing.T) {
 		n, _ := db.Count(Filter{})
 		return n == 0
 	}, "book to disappear from index after delete")
+}
+
+func TestNewWatcher_StopsWhenContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := NewWatcher(ctx, []string{t.TempDir()}, openTestDB(t), nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("NewWatcher() error = %v, want context.Canceled", err)
+	}
 }
 
 func waitFor(t *testing.T, timeout time.Duration, cond func() bool, desc string) {

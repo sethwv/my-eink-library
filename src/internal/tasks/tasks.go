@@ -293,7 +293,6 @@ func (m *Manager) Enqueue(key string) (Run, bool, error) {
 }
 
 // Run executes a registered job immediately while recording it like any queued run.
-// It is used for the startup scan, which intentionally still blocks server startup.
 func (m *Manager) Run(ctx context.Context, key string) error {
 	m.mu.RLock()
 	task, ok := m.tasks[key]
