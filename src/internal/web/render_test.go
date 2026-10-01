@@ -24,6 +24,121 @@ func TestRenderIncludesBuildVersion(t *testing.T) {
 	}
 }
 
+func TestRenderAdminIntegrationsTabsAndForms(t *testing.T) {
+	tests := []struct {
+		name           string
+		provider       string
+		wantTab        string
+		wantPanel      string
+		wantFormAction string
+		wantInput      string
+	}{
+		{
+			name:           "hardcover",
+			provider:       "hardcover",
+			wantTab:        `href="/admin/integrations?provider=hardcover" aria-current="page" class="is-active"`,
+			wantPanel:      `class="integration-card is-first-tab-active" aria-labelledby="hardcover-heading"`,
+			wantFormAction: `action="/admin/integrations/hardcover"`,
+			wantInput:      `name="hardcover_token"`,
+		},
+		{
+			name:           "chaptarr",
+			provider:       "chaptarr",
+			wantTab:        `href="/admin/integrations?provider=chaptarr" aria-current="page" class="is-active"`,
+			wantPanel:      `class="integration-card" aria-labelledby="chaptarr-heading"`,
+			wantFormAction: `action="/admin/integrations/chaptarr"`,
+			wantInput:      `name="chaptarr_api_key"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			render(recorder, "admin_integrations.html", map[string]any{
+				"Title":         "Enrichment",
+				"SiteName":      "Test Library",
+				"EnrichmentTab": tt.provider,
+			})
+
+			if recorder.Code != 200 {
+				t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body.String())
+			}
+			body := recorder.Body.String()
+			for _, want := range []string{`aria-label="Enrichment providers"`, tt.wantTab, tt.wantPanel, tt.wantFormAction, tt.wantInput} {
+				if !strings.Contains(body, want) {
+					t.Errorf("response missing %q: %s", want, body)
+				}
+			}
+			if strings.Contains(body, "Back to library") {
+				t.Errorf("response retains removed navigation: %s", body)
+			}
+		})
+	}
+}
+
+func TestTemplatesDoNotContainBackToLibraryLinks(t *testing.T) {
+	for _, name := range []string{
+		"account_bookmark.html",
+		"account_password.html",
+		"admin_integrations.html",
+		"admin_server.html",
+		"admin_settings.html",
+		"admin_smtp.html",
+		"admin_users.html",
+		"book_edit_metadata.html",
+		"name_index.html",
+	} {
+		t.Run(name, func(t *testing.T) {
+			body, err := templatesFS.ReadFile("templates/" + name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(body), "Back to library") {
+				t.Errorf("%s retains Back to library link", name)
+			}
+		})
+	}
+}
+
+func TestButtonLinksHaveNoTextDecorationAndVisibleFocus(t *testing.T) {
+	body, err := staticFS.ReadFile("static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(body)
+	for _, want := range []string{
+		".btn, .btn:hover, .btn:focus, .btn:active,",
+		".btn-download, .btn-download:hover, .btn-download:focus, .btn-download:active,",
+		".btn-hardcover, .btn-hardcover:hover, .btn-hardcover:focus, .btn-hardcover:active,",
+		".shelf-toggle, .shelf-toggle:hover, .shelf-toggle:focus, .shelf-toggle:active {",
+		"text-decoration: none;",
+		".btn:focus, .btn-download:focus, .btn-hardcover:focus, .shelf-toggle:focus {",
+		"outline: 2px solid #111;",
+		".topnav a:hover { color: #111; text-decoration: none; }",
+		".admin-tabs a.is-active {\n  color: #111;\n  font-weight: 600;\n  border-color: #ddd;\n  border-bottom-color: #fff;\n  background: transparent;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("stylesheet missing %q", want)
+		}
+	}
+}
+
+func TestBookPopupUsesAnAccessibleMetadataEditIcon(t *testing.T) {
+	body, err := templatesFS.ReadFile("templates/partials.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`class="modal-title-action"`,
+		`aria-label="Edit metadata for {{.Title}}"`,
+		`href="/books/{{.ID}}/edit-metadata"`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("book popup template missing %q", want)
+		}
+	}
+}
+
 func TestBaseDataIncludesBuildVersion(t *testing.T) {
 	server := &Server{BuildVersion: "v1.2.3", BuildDate: "2026-08-15"}
 	data, _, err := server.baseData(httptest.NewRequest("GET", "/login", nil))

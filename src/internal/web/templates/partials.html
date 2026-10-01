@@ -91,7 +91,7 @@
 </div>
 <div id="book-{{.ID}}" class="modal-overlay">
   <div class="modal-box modal-box-wide">
-    <h3>{{.Title}}</h3>
+    <h3><span class="modal-title">{{.Title}}{{if $.IsAdmin}}<a class="modal-title-action" href="/books/{{.ID}}/edit-metadata" aria-label="Edit metadata for {{.Title}}" title="Edit metadata"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></a>{{end}}</span></h3>
     <table class="modal-layout">
       <tr>
         <td class="modal-cover-cell">
@@ -128,7 +128,6 @@
     {{range .}}<span class="pill">{{locationLabel .LibraryRoot .FilePath}}</span>{{end}}
     </div>
     {{end}}
-    {{if $.IsAdmin}}<a class="btn-hardcover" href="/books/{{.ID}}/edit-metadata">Edit Metadata</a>{{end}}
   </div>
 </div>
 {{end}}

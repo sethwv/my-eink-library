@@ -87,11 +87,21 @@ button, .btn {
   cursor: pointer;
 }
 button:hover { background: #f7f7f7; }
+.btn, .btn:hover, .btn:focus, .btn:active,
+.btn-download, .btn-download:hover, .btn-download:focus, .btn-download:active,
+.btn-hardcover, .btn-hardcover:hover, .btn-hardcover:focus, .btn-hardcover:active,
+.shelf-toggle, .shelf-toggle:hover, .shelf-toggle:focus, .shelf-toggle:active {
+  text-decoration: none;
+}
+.btn:focus, .btn-download:focus, .btn-hardcover:focus, .shelf-toggle:focus {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
 .inline-form { display: inline; }
 .btn-link {
   border: none;
   background: none;
-  text-decoration: underline;
+  text-decoration: none;
   padding: 0.3em;
 }
 
@@ -148,7 +158,7 @@ label { display: block; margin: 0.6em 0; }
   font-size: 0.95em;
   white-space: nowrap;
 }
-.topnav a:hover { color: #111; text-decoration: underline; }
+.topnav a:hover { color: #111; text-decoration: none; }
 .nav-icon {
   display: inline-block;
   vertical-align: middle;
@@ -175,16 +185,59 @@ label { display: block; margin: 0.6em 0; }
   border-bottom: 1px solid #ddd;
 }
 
-.admin-subtabs {
-  margin: 1.5em 0 1em;
+.integration-tabs {
+  position: relative;
+  z-index: 1;
+  margin: 1.5em 0 0;
 }
-.admin-subtabs a {
+.integration-tabs a {
   display: inline-block;
-  margin-right: 0.75em;
+  padding: 0.55em 0.85em;
+  margin-bottom: -1px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  -webkit-border-radius: 5px 5px 0 0;
+  border-radius: 5px 5px 0 0;
 }
-.admin-subtabs a.is-active {
+.integration-tabs a.is-active {
   font-weight: 600;
   color: #111;
+  background: #fff;
+  border-color: #ddd;
+  border-bottom-color: #fff;
+}
+.integration-tabs a:focus {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.integration-card {
+  width: 100%;
+  padding: 1em;
+  border: 1px solid #ddd;
+  -webkit-border-radius: 8px;
+  border-radius: 8px;
+  background: #fff;
+  -webkit-box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.integration-card.is-first-tab-active {
+  -webkit-border-top-left-radius: 0;
+  border-top-left-radius: 0;
+}
+.integration-card h2 { margin-top: 0; }
+.integration-form label { margin: 0 0 0.9em; }
+.integration-form input[type="text"], .integration-form input[type="password"] {
+  display: block;
+  width: 100%;
+  margin-top: 0.3em;
+}
+.integration-form .integration-checkbox {
+  display: block;
+}
+.integration-form .integration-checkbox input { margin-right: 0.4em; }
+@media (max-width: 480px) {
+  .integration-card { padding: 0.85em; }
+  .integration-tabs a { padding: 0.55em 0.65em; }
 }
 .admin-tabs a {
   display: inline-block;
@@ -193,7 +246,7 @@ label { display: block; margin: 0.6em 0; }
   text-decoration: none;
   color: #444;
   border: 1px solid transparent;
-  border-bottom: none;
+  border-bottom-color: transparent;
   -webkit-border-radius: 5px 5px 0 0;
   border-radius: 5px 5px 0 0;
 }
@@ -202,7 +255,8 @@ label { display: block; margin: 0.6em 0; }
   color: #111;
   font-weight: 600;
   border-color: #ddd;
-  background: #f7f7f7;
+  border-bottom-color: #fff;
+  background: transparent;
 }
 
 /* Search/sort toolbar: a simple two-row table pairing each row's control
@@ -363,6 +417,7 @@ label { display: block; margin: 0.6em 0; }
   background: #fff;
   text-align: left;
 }
+.shelf-toggle:hover { background: #f7f7f7; }
 .shelf-check {
   display: inline-block;
   vertical-align: middle;
@@ -452,6 +507,17 @@ label { display: block; margin: 0.6em 0; }
   border-radius: 5px;
 }
 .modal-box h3 { margin-top: 0; text-align: center;}
+.modal-title { display: inline-block; position: relative; }
+.modal-title-action {
+  position: absolute;
+  top: 0.25em;
+  left: 100%;
+  margin-left: 0.3em;
+  color: #111;
+  line-height: 0;
+  text-decoration: none;
+}
+.modal-title-action:hover, .modal-title-action:focus { color: #444; outline: none; text-decoration: none; }
 /* Manage-user modal: role/email/password are three separate <form>s (each
    posts to a different endpoint) but read as one flat settings sheet, not
    three boxed tables: plain stacked label+input, no borders, grouped
@@ -696,8 +762,13 @@ html.theme-dark .modal-danger-zone { border-color: #595959; }
 html.theme-dark .topnav a, html.theme-dark .admin-tabs a { color: #c4c4c4; }
 html.theme-dark .topnav a:hover, html.theme-dark .admin-tabs a:hover,
 html.theme-dark .admin-tabs a.is-active { color: #f2f2f2; }
-html.theme-dark .admin-tabs a.is-active { border-color: #595959; background: #292929; }
+html.theme-dark .admin-tabs a.is-active { border-color: #595959; border-bottom-color: #181818; background: transparent; }
+html.theme-dark .integration-tabs a.is-active { color: #f2f2f2; border-color: #595959; border-bottom-color: #222; background: #222; }
+html.theme-dark .integration-tabs a:focus, html.theme-dark .btn:focus,
+html.theme-dark .btn-download:focus, html.theme-dark .btn-hardcover:focus,
+html.theme-dark .shelf-toggle:focus { outline-color: #f2f2f2; }
 html.theme-dark .login-card, html.theme-dark .card, html.theme-dark .modal-box,
+html.theme-dark .integration-card,
 html.theme-dark .match-card { background: #222; border-color: #595959; }
 html.theme-dark .card .cover, html.theme-dark .edit-cover-wrap { background: #292929; }
 html.theme-dark .card-author, html.theme-dark .card-series, html.theme-dark .card-date,
@@ -706,10 +777,13 @@ html.theme-dark .modal-section-label, html.theme-dark .source-badge,
 html.theme-dark .match-card-meta { color: #c4c4c4; }
 html.theme-dark .pill { color: #c4c4c4; background: #303030; border-color: #595959; }
 html.theme-dark .shelf-toggle { background: #222; border-color: #595959; }
+html.theme-dark .shelf-toggle:hover { background: #303030; }
 html.theme-dark .shelf-toggle.is-on, html.theme-dark .match-card.is-on { background: #303030; border-color: #c4c4c4; }
 html.theme-dark .modal-checkbox-label { color: #f2f2f2 !important; }
 html.theme-dark .btn-download, html.theme-dark .btn-hardcover { color: #f2f2f2; border-color: #9b9b9b; }
 html.theme-dark .btn-download:hover, html.theme-dark .btn-hardcover:hover { background: #303030; }
+html.theme-dark .modal-title-action { color: #f2f2f2; }
+html.theme-dark .modal-title-action:hover, html.theme-dark .modal-title-action:focus { color: #c4c4c4; }
 html.theme-dark .table-wrap { border-color: #595959; }
 html.theme-dark th, html.theme-dark td { border-color: #595959; }
 html.theme-dark th { background: #292929; }
