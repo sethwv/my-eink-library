@@ -146,19 +146,21 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: version/scripts/screenshots/package-lock.json
+          cache-dependency-path: tooling/scripts/screenshots/package-lock.json
       - if: matrix.capture
         run: npm ci --prefix version/scripts/screenshots
+      - if: matrix.capture
+        run: npm ci --prefix tooling/scripts/screenshots
       - id: playwright-cache
         if: matrix.capture
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('version/scripts/screenshots/package-lock.json') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('tooling/scripts/screenshots/package-lock.json') }}
       - if: matrix.capture && steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx --prefix version/scripts/screenshots playwright install --with-deps chromium
+        run: npx --prefix tooling/scripts/screenshots playwright install --with-deps chromium
       - if: matrix.capture && steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx --prefix version/scripts/screenshots playwright install chromium
+        run: npx --prefix tooling/scripts/screenshots playwright install chromium
       - if: matrix.capture
         run: npm run fixtures --prefix version/scripts/screenshots -- --output "$RUNNER_TEMP/library"
       - id: build-info
@@ -212,8 +214,9 @@ jobs:
             exit 1
           fi
       - if: matrix.capture
-        run: npm run capture --prefix version/scripts/screenshots
+        run: npm run capture --prefix tooling/scripts/screenshots
         env:
+          SCREENSHOT_ROOT: ${{ github.workspace }}/version
           SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
       - run: >-
           node tooling/scripts/docs/prepare-source.mjs

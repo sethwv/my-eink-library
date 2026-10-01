@@ -1,17 +1,18 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { parse } from "yaml";
+
+import { loadCaptureSpec } from "./capture-compat.mjs";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(directory, "../..");
+const root = path.resolve(process.env.SCREENSHOT_ROOT || path.resolve(directory, "../.."));
 const baseURL = process.env.SCREENSHOT_BASE_URL || "http://127.0.0.1:8080";
 const output = process.env.SCREENSHOT_OUTPUT || path.join(root, "docs/assets/images/generated");
 const username = "admin";
 const password = "password";
 const buildTag = process.env.SCREENSHOT_BUILD_TAG;
-const scenarios = parse(await readFile(path.join(root, "docs/_data/screenshots.yml"), "utf8"));
+const { scenarios } = await loadCaptureSpec(root, buildTag);
 
 const viewports = [
   { name: "desktop", width: 1440, height: 810 },
