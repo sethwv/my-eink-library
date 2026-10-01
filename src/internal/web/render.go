@@ -35,12 +35,46 @@ var templateFuncs = template.FuncMap{
 	"formatYear":          formatYear,
 	"formatPublishedYear": formatPublishedYear,
 	"formatBuildDate":     formatBuildDate,
+	"hasTime":             hasTime,
+	"relativeTime":        relativeTime,
 	"sourceURL":           sourceURL,
 	"plainText":           plainText,
 	"authorNames":         authorNames,
 	"withQueryParam":      withQueryParam,
 	"locationLabel":       locationLabel,
 	"pageURL":             pageURL,
+}
+
+func hasTime(value time.Time) bool { return !value.IsZero() }
+
+func relativeTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	delta := time.Since(value).Round(time.Second)
+	if delta < 0 {
+		delta = -delta
+		if delta < time.Minute {
+			return "in under a minute"
+		}
+		if delta < time.Hour {
+			return fmt.Sprintf("in %dm", int(delta.Minutes()))
+		}
+		if delta < 24*time.Hour {
+			return fmt.Sprintf("in %dh", int(delta.Hours()))
+		}
+		return fmt.Sprintf("in %dd", int(delta.Hours()/24))
+	}
+	if delta < time.Minute {
+		return "just now"
+	}
+	if delta < time.Hour {
+		return fmt.Sprintf("%dm ago", int(delta.Minutes()))
+	}
+	if delta < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", int(delta.Hours()))
+	}
+	return fmt.Sprintf("%dd ago", int(delta.Hours()/24))
 }
 
 // locationLabel renders a book location as "<library root name>/<epub

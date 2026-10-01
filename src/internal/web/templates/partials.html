@@ -61,7 +61,7 @@
       {{end}}
       {{end}}
       {{if or .CanManageUsers .CanManageServer}}
-      <li><a class="shelf-toggle" href="{{if .CanManageUsers}}/admin/users{{else}}/admin/server{{end}}">Admin</a></li>
+      <li><a class="shelf-toggle" href="{{if .CanManageServer}}/admin/server{{else}}/admin/users{{end}}">Admin</a></li>
       {{end}}
       <li><form method="POST" action="/logout"><button type="submit" class="shelf-toggle">Log out</button></form></li>
     </ul>
@@ -137,6 +137,7 @@
 {{define "admintabs"}}
 <nav class="admin-tabs">
   {{if .CanManageServer}}<a href="/admin/server" class="{{if eq .AdminTab "server"}}is-active{{end}}">Server</a>{{end}}
+  {{if .CanManageServer}}<a href="/admin/tasks" class="{{if eq .AdminTab "tasks"}}is-active{{end}}">Tasks</a>{{end}}
   {{if .CanManageUsers}}<a href="/admin/users" class="{{if eq .AdminTab "users"}}is-active{{end}}">Users</a>{{end}}
   {{if .CanManageServer}}<a href="/admin/settings" class="{{if eq .AdminTab "settings"}}is-active{{end}}">Configuration</a>{{end}}
   {{if .CanManageServer}}<a href="/admin/smtp" class="{{if eq .AdminTab "smtp"}}is-active{{end}}">SMTP</a>{{end}}

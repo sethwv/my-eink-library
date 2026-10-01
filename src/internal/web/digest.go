@@ -12,12 +12,10 @@ import (
 	"github.com/sethwv/my-eink-library/internal/mail"
 )
 
-// digestInterval is how often the weekly new-book digest goes out; digestCheckInterval
-// is how often the background loop wakes up to see if it's due.
+// digestInterval is how often the weekly new-book digest goes out.
 const (
-	digestInterval      = 7 * 24 * time.Hour
-	digestCheckInterval = time.Hour
-	lastDigestMetaKey   = "last_digest_sent_at"
+	digestInterval    = 7 * 24 * time.Hour
+	lastDigestMetaKey = "last_digest_sent_at"
 )
 
 // RunDigestScheduler periodically emails every digest-subscribed user a
@@ -41,12 +39,49 @@ func (s *Server) RunDigestScheduler(ctx context.Context) {
 		default:
 		}
 
-		s.maybeSendDigest()
-		sleepOrDone(ctx, digestCheckInterval)
+		if s.digestDue() {
+			if s.Tasks == nil {
+				s.maybeSendDigest()
+			} else if _, _, err := s.Tasks.Enqueue("email-digest"); err != nil {
+				log.Printf("digest scheduler: queue digest: %v", err)
+			}
+		}
+		sleepOrDone(ctx, s.nextDigestDelay())
 	}
 }
 
-func (s *Server) maybeSendDigest() {
+func (s *Server) digestDue() bool {
+	v, ok, err := s.DB.GetMeta(lastDigestMetaKey)
+	if err != nil || !ok {
+		return false
+	}
+	lastSent, err := strconv.ParseInt(v, 10, 64)
+	return err == nil && time.Until(time.Unix(lastSent, 0).Add(digestInterval)) <= 0
+}
+
+func (s *Server) nextDigestDelay() time.Duration {
+	v, ok, err := s.DB.GetMeta(lastDigestMetaKey)
+	if err != nil || !ok {
+		return digestInterval
+	}
+	lastSent, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return digestInterval
+	}
+	delay := time.Until(time.Unix(lastSent, 0).Add(digestInterval))
+	if delay < 0 {
+		return time.Minute
+	}
+	return delay
+}
+
+// SendDigestNow runs the scheduled digest immediately, for the admin task.
+func (s *Server) SendDigestNow() error {
+	s.maybeSendDigest(true)
+	return nil
+}
+
+func (s *Server) maybeSendDigest(force ...bool) {
 	v, ok, err := s.DB.GetMeta(lastDigestMetaKey)
 	if err != nil {
 		log.Printf("digest scheduler: read last-sent marker: %v", err)
@@ -56,7 +91,7 @@ func (s *Server) maybeSendDigest() {
 	if ok {
 		lastSent, _ = strconv.ParseInt(v, 10, 64)
 	}
-	if time.Since(time.Unix(lastSent, 0)) < digestInterval {
+	if len(force) == 0 && time.Since(time.Unix(lastSent, 0)) < digestInterval {
 		return
 	}
 

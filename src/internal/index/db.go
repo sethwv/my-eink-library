@@ -160,6 +160,25 @@ func (d *DB) SetMeta(key, value string) error {
 	return err
 }
 
+// ClearLibrary removes the derived library index while preserving user shelves
+// themselves. A subsequent scan recreates books and their enrichment queue.
+func (d *DB) ClearLibrary() error {
+	return d.withTx(func(tx *sql.Tx) error {
+		for _, query := range []string{
+			`DELETE FROM shelf_books`,
+			`DELETE FROM book_enrichment`,
+			`DELETE FROM book_locations`,
+			`DELETE FROM books`,
+			`DELETE FROM meta WHERE key IN ('last_scan_at', 'last_scan_duration_ms')`,
+		} {
+			if _, err := tx.Exec(query); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // BackfillLibraryRoot tags any row left over from before multi-root support
 // (library_root = ”) with root, the first configured LIBRARY_PATH entry at
 // the time of upgrade. It preserves row IDs (and therefore shelves/

@@ -5,6 +5,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/sethwv/my-eink-library/internal/tasks"
 )
 
 func TestRenderIncludesBuildVersion(t *testing.T) {
@@ -82,6 +85,7 @@ func TestTemplatesDoNotContainBackToLibraryLinks(t *testing.T) {
 		"account_password.html",
 		"admin_integrations.html",
 		"admin_server.html",
+		"admin_tasks.html",
 		"admin_settings.html",
 		"admin_smtp.html",
 		"admin_users.html",
@@ -97,6 +101,40 @@ func TestTemplatesDoNotContainBackToLibraryLinks(t *testing.T) {
 				t.Errorf("%s retains Back to library link", name)
 			}
 		})
+	}
+}
+
+func TestAdminTabsIncludeTasks(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	render(recorder, "admin_tasks.html", map[string]any{"Title": "Tasks", "SiteName": "Test Library", "CanManageServer": true})
+	if recorder.Code != 200 {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{"href=\"/admin/tasks\"", "Services", "History", "Next run", "No task runs yet."} {
+		if !strings.Contains(body, want) {
+			t.Errorf("response missing %q: %s", want, body)
+		}
+	}
+}
+
+func TestRelativeTime(t *testing.T) {
+	if got := relativeTime(time.Now().Add(-2 * time.Hour)); got != "2h ago" {
+		t.Errorf("relativeTime() = %q, want 2h ago", got)
+	}
+	if got := relativeTime(time.Now().Add(2 * time.Hour)); got != "in 2h" {
+		t.Errorf("relativeTime() = %q, want in 2h", got)
+	}
+}
+
+func TestRenderTasksUsesTextScheduleWithoutNextRunTime(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	render(recorder, "admin_tasks.html", map[string]any{
+		"Title": "Tasks", "SiteName": "Test Library", "CanManageServer": true,
+		"Tasks": []tasks.Summary{{Task: tasks.Task{Name: "Scan Library", NextRun: "Startup & On-Demand", Runnable: true}, Status: "idle"}},
+	})
+	if !strings.Contains(recorder.Body.String(), "Startup &amp; On-Demand") {
+		t.Errorf("response missing text schedule: %s", recorder.Body.String())
 	}
 }
 

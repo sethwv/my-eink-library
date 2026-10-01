@@ -17,6 +17,7 @@ import (
 	"github.com/sethwv/my-eink-library/internal/index"
 	"github.com/sethwv/my-eink-library/internal/kepub"
 	"github.com/sethwv/my-eink-library/internal/mail"
+	"github.com/sethwv/my-eink-library/internal/tasks"
 	"github.com/sethwv/my-eink-library/internal/thumbnail"
 	"github.com/sethwv/my-eink-library/internal/users"
 )
@@ -36,6 +37,7 @@ type Server struct {
 	StartedAt    time.Time
 	BuildVersion string
 	BuildDate    string
+	Tasks        *tasks.Manager
 }
 
 const favoritesSlug = "favourites"
@@ -1079,19 +1081,24 @@ func (s *Server) ServerSMTPTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ServerRescan(w http.ResponseWriter, r *http.Request) {
-	if err := s.DB.Scan(s.LibraryPaths, s.Covers); err != nil {
-		http.Error(w, "rescan failed: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
+	s.enqueueTask(w, r, "rescan")
 }
 
 func (s *Server) ServerReimport(w http.ResponseWriter, r *http.Request) {
-	if err := s.DB.Reimport(s.LibraryPaths, s.Covers); err != nil {
-		http.Error(w, "reimport failed: "+err.Error(), http.StatusInternalServerError)
+	s.ServerLibraryClear(w, r)
+}
+
+// ServerLibraryClear clears derived library data, then queues a fresh scan.
+func (s *Server) ServerLibraryClear(w http.ResponseWriter, r *http.Request) {
+	if s.Tasks == nil {
+		http.Error(w, "task manager is unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	http.Redirect(w, r, "/admin/server", http.StatusSeeOther)
+	if err := s.DB.ClearLibrary(); err != nil {
+		http.Error(w, "clear library failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.enqueueTask(w, r, "rescan")
 }
 
 func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
@@ -1100,6 +1107,96 @@ func (s *Server) ServerEnrichmentReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/admin/integrations", http.StatusSeeOther)
+}
+
+func (s *Server) enqueueTask(w http.ResponseWriter, r *http.Request, key string) {
+	if s.Tasks == nil {
+		http.Error(w, "task manager is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	_, _, err := s.Tasks.Enqueue(key)
+	if err != nil {
+		http.Error(w, "task could not be queued", http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/admin/tasks", http.StatusSeeOther)
+}
+
+func (s *Server) AdminTaskRun(w http.ResponseWriter, r *http.Request) {
+	s.enqueueTask(w, r, r.PathValue("task"))
+}
+
+func (s *Server) AdminTasks(w http.ResponseWriter, r *http.Request) {
+	if s.Tasks == nil {
+		http.Error(w, "task manager is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	summaries, err := s.Tasks.Summaries()
+	if err != nil {
+		http.Error(w, "failed to load tasks", http.StatusInternalServerError)
+		return
+	}
+	var jobs, services []tasks.Summary
+	for _, summary := range summaries {
+		if summary.Kind == tasks.KindService {
+			summary.Status = s.serviceStatus(summary)
+			services = append(services, summary)
+		} else {
+			s.populateTaskNextRun(&summary)
+			jobs = append(jobs, summary)
+		}
+	}
+	history, err := s.Tasks.History(10)
+	if err != nil {
+		http.Error(w, "failed to load tasks", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Tasks", "AdminTab": "tasks", "TaskPage": true, "Tasks": jobs, "Services": services, "History": history}
+	mergeInto(data, base)
+	render(w, "admin_tasks.html", data)
+}
+
+func (s *Server) populateTaskNextRun(summary *tasks.Summary) {
+	if summary.Key != "email-digest" {
+		return
+	}
+	settings, err := s.Users.GetSMTPSettings()
+	if err != nil || !settings.Enabled() {
+		summary.NextRun = "Disabled"
+		return
+	}
+	value, ok, err := s.DB.GetMeta(lastDigestMetaKey)
+	if err != nil || !ok {
+		return
+	}
+	lastSent, err := strconv.ParseInt(value, 10, 64)
+	if err == nil {
+		summary.NextRunAt = time.Unix(lastSent, 0).Add(digestInterval)
+	}
+}
+
+func (s *Server) serviceStatus(summary tasks.Summary) string {
+	if summary.Status != tasks.StatusRunning {
+		return summary.Status
+	}
+	switch summary.Key {
+	case "filesystem-watcher":
+		return "Watching for changes"
+	case "enrichment-queue":
+		if !s.Hardcover.Enabled() && !s.Chaptarr.Enabled() {
+			return "Waiting for sources"
+		}
+		return "Waiting for candidates"
+	case "digest-scheduler":
+		return "Scheduled"
+	default:
+		return summary.Status
+	}
 }
 
 func (s *Server) ServerIntegrations(w http.ResponseWriter, r *http.Request) {

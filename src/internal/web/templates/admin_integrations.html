@@ -21,6 +21,7 @@
 <form method="POST" action="/admin/integrations/enrichment-reset" style="margin-top:1em;">
   <button type="submit">Reset enrichment</button>
 </form>
+
 {{end}}
 
 <nav class="integration-tabs" aria-label="Enrichment providers">
@@ -30,7 +31,7 @@
 
 {{if eq .EnrichmentTab "hardcover"}}
 <section class="integration-card is-first-tab-active" aria-labelledby="hardcover-heading">
-  <h2 id="hardcover-heading">Hardcover</h2>
+  <!-- <h2 id="hardcover-heading">Hardcover</h2> -->
   {{if .HardcoverActive}}
   <p class="muted">Enabled</p>
   {{else if .HardcoverConfigured}}
@@ -50,7 +51,7 @@
 
 {{else}}
 <section class="integration-card" aria-labelledby="chaptarr-heading">
-  <h2 id="chaptarr-heading">Chaptarr</h2>
+  <!-- <h2 id="chaptarr-heading">Chaptarr</h2> -->
   {{if .ChaptarrActive}}
   <p class="muted">Enabled</p>
   {{else if .ChaptarrConfigured}}

@@ -19,6 +19,7 @@ import (
 	"github.com/sethwv/my-eink-library/internal/config"
 	"github.com/sethwv/my-eink-library/internal/hardcover"
 	"github.com/sethwv/my-eink-library/internal/index"
+	"github.com/sethwv/my-eink-library/internal/tasks"
 	"github.com/sethwv/my-eink-library/internal/thumbnail"
 	"github.com/sethwv/my-eink-library/internal/users"
 	"github.com/sethwv/my-eink-library/internal/web"
@@ -118,23 +119,6 @@ func main() {
 		log.Fatalf("open cover store: %v", err)
 	}
 
-	log.Printf("scanning library at %s", strings.Join(cfg.LibraryPaths, ", "))
-	if err := db.Scan(cfg.LibraryPaths, covers); err != nil {
-		log.Fatalf("initial scan: %v", err)
-	}
-	if n, err := db.Count(index.Filter{}); err == nil {
-		log.Printf("indexed %d books", n)
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	watcher, err := index.NewWatcher(cfg.LibraryPaths, db, covers)
-	if err != nil {
-		log.Fatalf("start watcher: %v", err)
-	}
-	go watcher.Run(ctx)
-
 	// Hardcover/Chaptarr settings are DB-backed (admin Integrations page)
 	// and take precedence over env vars at every run after the first: if no
 	// integration_settings row exists yet, HARDCOVER_API_TOKEN (the old
@@ -171,20 +155,61 @@ func main() {
 		BuildVersion: buildVersion,
 		BuildDate:    buildDate,
 	}
+	taskStore, err := tasks.Open(filepath.Join(cfg.DataDir, "tasks.db"))
+	if err != nil {
+		log.Fatalf("open task store: %v", err)
+	}
+	defer taskStore.Close()
+	taskManager := tasks.New(taskStore)
+	taskManager.Register(tasks.Task{Key: "rescan", Name: "Scan Library", Kind: tasks.KindJob, Runnable: true, NextRun: "Startup & On-Demand"}, func(context.Context) error {
+		return db.Scan(cfg.LibraryPaths, covers)
+	})
+	taskManager.Register(tasks.Task{Key: "email-digest", Name: "Email digest", Kind: tasks.KindJob, Runnable: true, NextRun: "Weekly"}, func(context.Context) error {
+		return srv.SendDigestNow()
+	})
+	taskManager.Register(tasks.Task{Key: "filesystem-watcher", Name: "Filesystem watcher", Kind: tasks.KindService}, nil)
+	taskManager.Register(tasks.Task{Key: "enrichment-queue", Name: "Enrichment queue", Kind: tasks.KindService}, nil)
+	taskManager.Register(tasks.Task{Key: "digest-scheduler", Name: "Digest scheduler", Kind: tasks.KindService}, nil)
+	srv.Tasks = taskManager
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := taskManager.Start(ctx); err != nil {
+		log.Fatalf("start task manager: %v", err)
+	}
+	log.Printf("scanning library at %s", strings.Join(cfg.LibraryPaths, ", "))
+	if err := taskManager.Run(ctx, "rescan"); err != nil {
+		log.Fatalf("initial scan: %v", err)
+	}
+	if n, err := db.Count(index.Filter{}); err == nil {
+		log.Printf("indexed %d books", n)
+	}
+
+	watcher, err := index.NewWatcher(cfg.LibraryPaths, db, covers)
+	if err != nil {
+		log.Fatalf("start watcher: %v", err)
+	}
+	if err := taskManager.StartService(ctx, "filesystem-watcher", watcher.Run); err != nil {
+		log.Fatalf("start filesystem watcher task: %v", err)
+	}
 	// Single background loop for both integrations (idles, rather than
 	// exiting, while both are disabled) — see RunEnrichmentQueue's doc
 	// comment for why Chaptarr and Hardcover are tried in one deterministic
 	// per-book step in the same goroutine rather than two independently
 	// polling ones, which enabling either from the admin Integrations page
 	// later still works without a restart.
-	go srv.RunEnrichmentQueue(ctx)
+	if err := taskManager.StartService(ctx, "enrichment-queue", srv.RunEnrichmentQueue); err != nil {
+		log.Fatalf("start enrichment task: %v", err)
+	}
 	if generalSettings.PublicURL == "" {
 		log.Printf("warning: Public URL is not set; password-reset and invite emails are disabled")
 	}
 	if smtpSettings, err := userStore.GetSMTPSettings(); err != nil {
 		log.Printf("load smtp settings: %v", err)
 	} else if smtpSettings.Enabled() {
-		go srv.RunDigestScheduler(ctx)
+		if err := taskManager.StartService(ctx, "digest-scheduler", srv.RunDigestScheduler); err != nil {
+			log.Fatalf("start digest task: %v", err)
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -219,8 +244,10 @@ func main() {
 	mux.Handle("POST /admin/users/{id}/invite/resend", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersResendInvite)))
 	mux.Handle("POST /admin/users/{id}/email", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersSetEmail)))
 	mux.Handle("GET /admin/server", authn.RequireManageServer(http.HandlerFunc(srv.ServerInfo)))
+	mux.Handle("GET /admin/tasks", authn.RequireManageServer(http.HandlerFunc(srv.AdminTasks)))
+	mux.Handle("POST /admin/tasks/{task}/run", authn.RequireManageServer(http.HandlerFunc(srv.AdminTaskRun)))
 	mux.Handle("POST /admin/server/rescan", authn.RequireManageServer(http.HandlerFunc(srv.ServerRescan)))
-	mux.Handle("POST /admin/server/reimport", authn.RequireManageServer(http.HandlerFunc(srv.ServerReimport)))
+	mux.Handle("POST /admin/server/clear", authn.RequireManageServer(http.HandlerFunc(srv.ServerLibraryClear)))
 	mux.Handle("GET /admin/settings", authn.RequireManageServer(http.HandlerFunc(srv.AdminSettings)))
 	mux.Handle("POST /admin/settings/general", authn.RequireManageServer(http.HandlerFunc(srv.AdminSettingsGeneralSave)))
 	mux.Handle("GET /admin/smtp", authn.RequireManageServer(http.HandlerFunc(srv.AdminSMTP)))

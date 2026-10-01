@@ -63,3 +63,25 @@ func TestScan_RecordsLastScanMeta(t *testing.T) {
 	}
 	_ = durMs
 }
+
+func TestClearLibraryRemovesIndexAndScanMetadata(t *testing.T) {
+	libDir := t.TempDir()
+	writeTestEpub(t, libDir+"/book.epub", "Book", "Author")
+	db := openTestDB(t)
+	if err := db.Scan([]string{libDir}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.ClearLibrary(); err != nil {
+		t.Fatal(err)
+	}
+	count, err := db.Count(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("book count = %d, want 0", count)
+	}
+	if _, ok, err := db.GetMeta("last_scan_at"); err != nil || ok {
+		t.Errorf("last_scan_at found = %t, err = %v; want false, nil", ok, err)
+	}
+}

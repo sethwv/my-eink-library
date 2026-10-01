@@ -2,6 +2,7 @@ package web
 
 import (
 	"archive/zip"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/sethwv/my-eink-library/internal/auth"
 	"github.com/sethwv/my-eink-library/internal/index"
+	"github.com/sethwv/my-eink-library/internal/tasks"
 	"github.com/sethwv/my-eink-library/internal/users"
 )
 
@@ -30,6 +32,37 @@ func newTestServer(t *testing.T) *Server {
 		Auth:     auth.New("test-session-secret", time.Hour, store),
 		Users:    store,
 		SiteName: "Test Library",
+	}
+}
+
+func addTestTaskManager(t *testing.T, server *Server) {
+	t.Helper()
+	store, err := tasks.Open(filepath.Join(t.TempDir(), "tasks.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+	server.Tasks = tasks.New(store)
+	server.Tasks.Register(tasks.Task{Key: "rescan", Name: "Rescan library", Kind: tasks.KindJob, Runnable: true}, func(context.Context) error { return nil })
+}
+
+func TestServerRescanQueuesTask(t *testing.T) {
+	server := newTestServer(t)
+	addTestTaskManager(t, server)
+	recorder := httptest.NewRecorder()
+	server.ServerRescan(recorder, httptest.NewRequest(http.MethodPost, "/admin/server/rescan", nil))
+	if recorder.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusSeeOther)
+	}
+	if got := recorder.Header().Get("Location"); got != "/admin/tasks" {
+		t.Errorf("Location = %q", got)
+	}
+	history, err := server.Tasks.History(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 1 || history[0].TaskKey != "rescan" || history[0].Status != tasks.StatusQueued {
+		t.Fatalf("history = %#v, want queued rescan", history)
 	}
 }
 

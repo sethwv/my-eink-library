@@ -651,6 +651,12 @@ th, td { text-align: left; padding: 0.6em 0.7em; border-bottom: 1px solid #ddd; 
 tr:last-child td { border-bottom: none; }
 th { background: #f7f7f7; }
 .admin-users form { margin: 0.3em 0; }
+.task-action { width: 1%; text-align: center; }
+.task-run { padding: 0.35em 0.5em; line-height: 0; }
+.task-run svg { width: 1.1em; height: 1.1em; }
+.task-run:disabled { cursor: default; }
+.task-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+.task-page-heading h1 { margin: 0.4em 0; }
 
 /* Edit Metadata page: cover-left/actions-right via the same table primitive
    as .modal-layout above, a card-per-candidate match picker (reusing
