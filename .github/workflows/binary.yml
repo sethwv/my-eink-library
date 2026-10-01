@@ -15,6 +15,35 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows-amd64
+            goos: windows
+            goarch: amd64
+            extension: .exe
+            debian_package: false
+          - target: darwin-amd64
+            goos: darwin
+            goarch: amd64
+            extension: ""
+            debian_package: false
+          - target: darwin-arm64
+            goos: darwin
+            goarch: arm64
+            extension: ""
+            debian_package: false
+          - target: linux-amd64
+            goos: linux
+            goarch: amd64
+            extension: ""
+            debian_package: true
+          - target: linux-arm64
+            goos: linux
+            goarch: arm64
+            extension: ""
+            debian_package: true
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -33,56 +62,47 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "date=$(git log -1 --format=%as)" >> "$GITHUB_OUTPUT"
-      - name: Build Windows executable
+      - name: Build ${{ matrix.target }}
         working-directory: src
         env:
           VERSION: ${{ steps.metadata.outputs.version }}
           BUILD_DATE: ${{ steps.metadata.outputs.date }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          EXTENSION: ${{ matrix.extension }}
+          DEBIAN_PACKAGE: ${{ matrix.debian_package }}
         run: |
           mkdir -p ../dist
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
-            -ldflags="-s -w -X main.buildVersion=${VERSION} -X main.buildDate=${BUILD_DATE}" \
-            -o "../dist/eink-library_${VERSION}_windows_amd64.exe" ./cmd/server
-      - name: Build macOS executables
-        working-directory: src
-        env:
-          VERSION: ${{ steps.metadata.outputs.version }}
-          BUILD_DATE: ${{ steps.metadata.outputs.date }}
-        run: |
-          for arch in amd64 arm64; do
-            CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go build -trimpath \
-              -ldflags="-s -w -X main.buildVersion=${VERSION} -X main.buildDate=${BUILD_DATE}" \
-              -o "../dist/eink-library_${VERSION}_darwin_${arch}" ./cmd/server
-          done
-      - name: Build Debian packages
-        working-directory: src
-        env:
-          VERSION: ${{ steps.metadata.outputs.version }}
-          BUILD_DATE: ${{ steps.metadata.outputs.date }}
-        run: |
-          case "$VERSION" in
-            [0-9]*) package_version="$VERSION" ;;
-            *) package_version="0~$VERSION" ;;
-          esac
-          for arch in amd64 arm64; do
-            package="../dist/package-${arch}"
+          artifact="../dist/eink-library_${VERSION}_${GOOS}_${GOARCH}${EXTENSION}"
+          if test "$DEBIAN_PACKAGE" = true; then
+            package="../dist/package"
             mkdir -p "$package/DEBIAN" "$package/usr/bin"
-            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
-              -ldflags="-s -w -X main.buildVersion=${VERSION} -X main.buildDate=${BUILD_DATE}" \
-              -o "$package/usr/bin/eink-library" ./cmd/server
+            artifact="../dist/eink-library_${VERSION}_${GOOS}_${GOARCH}.deb"
+            output="$package/usr/bin/eink-library"
+          else
+            output="$artifact"
+          fi
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags="-s -w -X main.buildVersion=${VERSION} -X main.buildDate=${BUILD_DATE}" \
+            -o "$output" ./cmd/server
+          if test "$DEBIAN_PACKAGE" = true; then
+            case "$VERSION" in
+              [0-9]*) package_version="$VERSION" ;;
+              *) package_version="0~$VERSION" ;;
+            esac
             printf '%s\n' \
               'Package: eink-library' \
               "Version: ${package_version}" \
-              "Architecture: ${arch}" \
+              "Architecture: ${GOARCH}" \
               'Maintainer: Seth WV <sethwv@users.noreply.github.com>' \
               'Description: Self-hosted EPUB library for e-readers' \
               > "$package/DEBIAN/control"
-            dpkg-deb --root-owner-group --build "$package" "../dist/eink-library_${VERSION}_linux_${arch}.deb"
-          done
-          rm -rf ../dist/package-amd64 ../dist/package-arm64
+            dpkg-deb --root-owner-group --build "$package" "$artifact"
+            rm -rf "$package"
+          fi
       - uses: actions/upload-artifact@v7
         with:
-          name: standalone-binaries
+          name: standalone-binary-${{ matrix.target }}
           path: dist/
           if-no-files-found: error
           retention-days: 14
