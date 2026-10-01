@@ -35,6 +35,7 @@ var templateFuncs = template.FuncMap{
 	"formatYear":          formatYear,
 	"formatPublishedYear": formatPublishedYear,
 	"formatBuildDate":     formatBuildDate,
+	"sourceURL":           sourceURL,
 	"plainText":           plainText,
 	"authorNames":         authorNames,
 	"withQueryParam":      withQueryParam,
@@ -139,6 +140,19 @@ func formatBuildDate(raw string) string {
 		return raw
 	}
 	return t.Format("01-02-2006")
+}
+
+// sourceURL links release tags directly and development builds to their
+// commit suffix, which is injected as branch-shortSHA at build time.
+func sourceURL(version string) string {
+	revision := version
+	if dash := strings.LastIndex(version, "-"); dash >= 0 {
+		candidate := version[dash+1:]
+		if regexp.MustCompile(`^[0-9a-f]{7,40}$`).MatchString(candidate) {
+			revision = candidate
+		}
+	}
+	return "https://github.com/sethwv/my-eink-library/tree/" + revision
 }
 
 // formatPublished renders an EPUB's raw <dc:date> string as "MM/DD/YYYY" when

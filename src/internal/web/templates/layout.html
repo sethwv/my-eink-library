@@ -13,7 +13,7 @@
 <div class="container">
 {{template "content" .}}
 </div>
-{{if .BuildVersion}}<footer class="footer">{{.BuildVersion}} {{formatBuildDate .BuildDate}} <a href="https://github.com/sethwv/my-eink-library">Source</a></footer>{{end}}
+{{if .BuildVersion}}<footer class="footer"><a class="footer-version" href="{{sourceURL .BuildVersion}}">{{.BuildVersion}}</a> {{formatBuildDate .BuildDate}}</footer>{{end}}
 </body>
 </html>
 {{end}}

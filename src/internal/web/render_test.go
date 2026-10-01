@@ -19,7 +19,7 @@ func TestRenderIncludesBuildVersion(t *testing.T) {
 	if recorder.Code != 200 {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
-	if !strings.Contains(recorder.Body.String(), "v1.2.3 08-15-2026") {
+	if !strings.Contains(recorder.Body.String(), `href="https://github.com/sethwv/my-eink-library/tree/v1.2.3"`) || !strings.Contains(recorder.Body.String(), "v1.2.3</a> 08-15-2026") || strings.Contains(recorder.Body.String(), ">Source<") {
 		t.Errorf("response does not contain the build metadata: %s", recorder.Body.String())
 	}
 }
@@ -41,6 +41,12 @@ func TestBaseDataIncludesBuildVersion(t *testing.T) {
 func TestFormatBuildDate(t *testing.T) {
 	if got := formatBuildDate("2026-08-15"); got != "08-15-2026" {
 		t.Errorf("formatBuildDate() = %q, want 08-15-2026", got)
+	}
+}
+
+func TestSourceURL(t *testing.T) {
+	if got := sourceURL("main-8edeb01"); got != "https://github.com/sethwv/my-eink-library/tree/8edeb01" {
+		t.Errorf("sourceURL() = %q", got)
 	}
 }
 
