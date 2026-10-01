@@ -187,13 +187,13 @@ jobs:
       - name: Start fixture server
         if: matrix.capture
         run: |
-          PORT=8080
-          LIBRARY_PATH="$RUNNER_TEMP/library"
-          DATA_DIR="$RUNNER_TEMP/data"
-          LIBRARY_USER=admin
-          LIBRARY_PASS=password
-          SESSION_SECRET=fixture-session-secret-for-documentation-captures
-          SITE_NAME="my-eink-library"
+          PORT=8080 \
+          LIBRARY_PATH="$RUNNER_TEMP/library" \
+          DATA_DIR="$RUNNER_TEMP/data" \
+          LIBRARY_USER=admin \
+          LIBRARY_PASS=password \
+          SESSION_SECRET=fixture-session-secret-for-documentation-captures \
+          SITE_NAME="my-eink-library" \
           "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
       - name: Wait for fixture server
         if: matrix.capture
