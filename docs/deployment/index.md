@@ -39,4 +39,4 @@ For the full development environment and contribution terms, see [CONTRIBUTING.m
 
 On first startup, the application creates an `admin` account and logs its generated password once. It also generates and persists a session signing secret in `DATA_DIR/users.db`. Set `SESSION_SECRET` only when an operational override is needed. The override is not stored, and changing it invalidates existing sessions.
 
-If the initial administrator password is lost, stop the application and run `eink-library admin reset-password` with the same `DATA_DIR`. It prints a newly generated password for the primary administrator without starting the server.
+If the initial administrator password is lost, stop the application and run `eink-library admin reset-password admin` with the same `DATA_DIR`. It prints a newly generated password without starting the server. The same local break-glass CLI can create an account when necessary: `eink-library admin create-user <username> <password> [role]`.

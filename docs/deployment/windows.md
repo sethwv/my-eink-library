@@ -20,4 +20,4 @@ Put the process behind an HTTPS reverse proxy, then open its HTTPS URL. Port 808
 
 The executable does not load `.env` files itself. For repeatable local launches, save the environment assignments and final command above in a private PowerShell script, such as `run-eink-library.ps1`, and keep that script out of source control.
 
-The first launch prints the generated `admin` password once. To generate a replacement without starting the server, use the same data directory: `$env:DATA_DIR = "C:\eink-library-data"; & "C:\eink-library\eink-library_<version>_windows_amd64.exe" admin reset-password`.
+The first launch prints the generated `admin` password once. To generate a replacement without starting the server, use the same data directory: `$env:DATA_DIR = "C:\eink-library-data"; & "C:\eink-library\eink-library_<version>_windows_amd64.exe" admin reset-password admin`.

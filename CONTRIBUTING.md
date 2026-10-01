@@ -25,7 +25,7 @@ DATA_DIR=/tmp/my-eink-library-data \
 (cd src && go run ./cmd/server)
 ```
 
-The first run logs a generated password for the `admin` account once. Keep `DATA_DIR` if that password needs recovery: `(cd src && DATA_DIR=/tmp/my-eink-library-data go run ./cmd/server admin reset-password)` generates and prints a replacement password without starting the server.
+The first run logs a generated password for the `admin` account once. Keep `DATA_DIR` if that password needs recovery: `(cd src && DATA_DIR=/tmp/my-eink-library-data go run ./cmd/server admin reset-password admin)` generates and prints a replacement password without starting the server. The same break-glass CLI can create an account with `admin create-user <username> <password> [role]`.
 
 For Docker development, add local credentials and the EPUB bind mount in `docker-compose.override.yml`, then run `docker compose up --build`.
 

@@ -88,17 +88,17 @@ func TestBootstrapPrimaryAdmin_CreatesOnlyOnce(t *testing.T) {
 	}
 }
 
-func TestResetPrimaryAdminPassword(t *testing.T) {
+func TestResetUserPassword(t *testing.T) {
 	s := openTestStore(t)
 	if err := s.Create("admin", "old-password", RoleAdmin, true, ""); err != nil {
 		t.Fatal(err)
 	}
-	username, password, err := s.ResetPrimaryAdminPassword()
+	password, err := s.ResetUserPassword("admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if username != "admin" || !s.CheckPassword(username, password) || s.CheckPassword(username, "old-password") {
-		t.Error("expected reset password to replace the primary administrator password")
+	if !s.CheckPassword("admin", password) || s.CheckPassword("admin", "old-password") {
+		t.Error("expected reset password to replace the user password")
 	}
 }
 

@@ -177,33 +177,43 @@ jobs:
       - if: matrix.capture
         run: go build -ldflags="-X main.buildVersion=${{ steps.build-info.outputs.version }} -X main.buildDate=${{ steps.build-info.outputs.date }}" -o "$RUNNER_TEMP/server" ./cmd/server
         working-directory: version/src
+      - if: matrix.capture
+        run: go build -o "$RUNNER_TEMP/fixture-admin" ./cmd/server
+        working-directory: tooling/src
+      - name: Seed fixture user
+        if: matrix.capture
+        run: |
+          DATA_DIR="$RUNNER_TEMP/data" "$RUNNER_TEMP/fixture-admin" admin create-user admin password admin
       - name: Start fixture server
         if: matrix.capture
-        run: >-
+        run: |
           PORT=8080
           LIBRARY_PATH="$RUNNER_TEMP/library"
           DATA_DIR="$RUNNER_TEMP/data"
+          LIBRARY_USER=admin
+          LIBRARY_PASS=password
+          SESSION_SECRET=fixture-session-secret-for-documentation-captures
           SITE_NAME="my-eink-library"
           "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
-      - id: fixture-credentials
-        name: Wait for fixture server
+      - name: Wait for fixture server
         if: matrix.capture
-        run: >-
+        run: |
           ready=false;
           for attempt in {1..30}; do
-          if curl --fail --silent http://127.0.0.1:8080/healthz; then ready=true; break; fi;
-          printf 'Waiting for fixture server (%s/30)\n' "$attempt";
-          sleep 1;
+            if curl --fail --silent http://127.0.0.1:8080/healthz; then
+              ready=true
+              break
+            fi
+            printf 'Waiting for fixture server (%s/30)\n' "$attempt"
+            sleep 1
           done;
-          if test "$ready" != true; then cat "$RUNNER_TEMP/server.log"; exit 1; fi;
-          password=$(sed -n 's/.*generated administrator password for admin: //p' "$RUNNER_TEMP/server.log")
-          test -n "$password"
-          printf 'password=%s\n' "$password" >> "$GITHUB_OUTPUT"
+          if test "$ready" != true; then
+            cat "$RUNNER_TEMP/server.log"
+            exit 1
+          fi
       - if: matrix.capture
         run: npm run capture --prefix version/scripts/screenshots
         env:
-          SCREENSHOT_USERNAME: admin
-          SCREENSHOT_PASSWORD: ${{ steps.fixture-credentials.outputs.password }}
           SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
       - run: >-
           node tooling/scripts/docs/prepare-source.mjs

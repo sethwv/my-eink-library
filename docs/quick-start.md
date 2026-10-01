@@ -43,4 +43,4 @@ services:
 The first configured folder wins when duplicate EPUBs are found.
 
 {: .note }
-If the initial password is lost, stop the service and run `docker compose run --rm eink-library admin reset-password`. The command prints a replacement password without starting a web server.
+If the initial password is lost, stop the service and run `docker compose run --rm eink-library admin reset-password admin`. The command prints a replacement password without starting a web server.

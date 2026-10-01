@@ -51,30 +51,23 @@ func (s *Store) BootstrapPrimaryAdmin() (username, password string, created bool
 	return primaryAdminUsername, password, true, nil
 }
 
-// ResetPrimaryAdminPassword generates and sets a new password for the oldest
-// administrator, which is the primary administrator created at first startup.
-func (s *Store) ResetPrimaryAdminPassword() (username, password string, err error) {
-	err = s.sql.QueryRow(`SELECT username FROM users WHERE role = ? ORDER BY id LIMIT 1`, RoleAdmin).Scan(&username)
+// ResetUserPassword generates and sets a new password for username.
+func (s *Store) ResetUserPassword(username string) (string, error) {
+	u, err := s.UserByUsername(username)
 	if err != nil {
-		return "", "", fmt.Errorf("find primary administrator: %w", err)
+		return "", err
 	}
-	password, err = randomValue(24)
+	if u == nil {
+		return "", fmt.Errorf("user %q does not exist", username)
+	}
+	password, err := randomValue(24)
 	if err != nil {
-		return "", "", fmt.Errorf("generate administrator password: %w", err)
+		return "", fmt.Errorf("generate password: %w", err)
 	}
-	if err := s.ResetPasswordByUsername(username, password); err != nil {
-		return "", "", err
+	if err := s.ResetPassword(u.ID, password); err != nil {
+		return "", err
 	}
-	return username, password, nil
-}
-
-func (s *Store) ResetPasswordByUsername(username, newPassword string) error {
-	hash, err := passwordHash(newPassword)
-	if err != nil {
-		return err
-	}
-	_, err = s.sql.Exec(`UPDATE users SET password_hash = ? WHERE username = ?`, hash, username)
-	return err
+	return password, nil
 }
 
 func randomValue(bytes int) (string, error) {

@@ -63,4 +63,4 @@ sudo systemctl status eink-library
 
 `EnvironmentFile` is systemd's supported way to load the `.env`-style file. Do not pass this file directly to the executable; it only reads variables inherited from its process environment.
 
-The first service startup writes the generated `admin` password to the journal once. Retrieve it with `sudo journalctl -u eink-library` and store it safely. To recover access later, stop the service and run `sudo -u eink-library DATA_DIR=/var/lib/eink-library /usr/bin/eink-library admin reset-password`; it prints a replacement password without running the server.
+The first service startup writes the generated `admin` password to the journal once. Retrieve it with `sudo journalctl -u eink-library` and store it safely. To recover access later, stop the service and run `sudo -u eink-library DATA_DIR=/var/lib/eink-library /usr/bin/eink-library admin reset-password admin`; it prints a replacement password without running the server.

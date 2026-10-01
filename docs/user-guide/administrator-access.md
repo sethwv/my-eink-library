@@ -49,4 +49,4 @@ Pending invitations can be resent from the user's Manage panel. Once a user has 
 {: .warning }
 Deleting a user removes their access. Check that the account is no longer needed before selecting **Delete user**.
 
-On first startup, the application creates the `admin` account and logs a generated password once. Store that password safely. If it is lost, stop the application and run `eink-library admin reset-password` with the same `DATA_DIR`; the break-glass command prints a replacement password without starting the server. See [Deployment](../../deployment/) for platform-specific commands.
+On first startup, the application creates the `admin` account and logs a generated password once. Store that password safely. If it is lost, stop the application and run `eink-library admin reset-password admin` with the same `DATA_DIR`; the break-glass command prints a replacement password without starting the server. See [Deployment](../../deployment/) for platform-specific commands.
