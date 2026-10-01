@@ -17,7 +17,15 @@ cd src
 go mod download
 ```
 
-For a local server, point the app at writable data plus an EPUB directory:
+For a local server populated with the screenshot fixture books, run:
+
+```bash
+scripts/dev-server.sh
+```
+
+It generates the EPUBs and stores the catalog plus application data under the ignored `.dev/` directory. On first run it creates an `admin` account with password `password`. Set `EINK_LIBRARY_FIXTURE_DIR` or `EINK_LIBRARY_DATA_DIR` to use other locations, or set `PORT` to change the listen port.
+
+To use your own EPUB directory instead:
 
 ```bash
 LIBRARY_PATH=/path/to/epubs \
@@ -25,7 +33,7 @@ DATA_DIR=/tmp/my-eink-library-data \
 (cd src && go run ./cmd/server)
 ```
 
-The first run logs a generated password for the `admin` account once. Keep `DATA_DIR` if that password needs recovery: `(cd src && DATA_DIR=/tmp/my-eink-library-data go run ./cmd/server admin reset-password admin)` generates and prints a replacement password without starting the server. The same break-glass CLI can create an account with `admin create-user <username> <password> [role]`.
+Keep `DATA_DIR` if that password needs recovery: `(cd src && DATA_DIR=/tmp/my-eink-library-data go run ./cmd/server admin reset-password admin)` generates and prints a replacement password without starting the server. The same break-glass CLI can create an account with `admin create-user <username> <password> [role]`.
 
 For Docker development, add local credentials and the EPUB bind mount in `docker-compose.override.yml`, then run `docker compose up --build`.
 
