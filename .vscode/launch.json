@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug fixture server",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/src/cmd/server",
+      "cwd": "${workspaceFolder}/src",
+      "env": {
+        "LIBRARY_PATH": "${workspaceFolder}/.dev/library",
+        "DATA_DIR": "${workspaceFolder}/.dev/data",
+        "PORT": "8080"
+      },
+      "preLaunchTask": "Prepare fixture library"
+    }
+  ]
+}

@@ -25,6 +25,8 @@ scripts/dev-server.sh
 
 It generates the EPUBs and stores the catalog plus application data under the ignored `.dev/` directory. On first run it creates an `admin` account with password `password`. Set `EINK_LIBRARY_FIXTURE_DIR` or `EINK_LIBRARY_DATA_DIR` to use other locations, or set `PORT` to change the listen port.
 
+With the VS Code Go extension installed, choose **Debug fixture server** from Run and Debug. Its pre-launch task performs the same fixture and account setup before starting the debugger.
+
 To use your own EPUB directory instead:
 
 ```bash
