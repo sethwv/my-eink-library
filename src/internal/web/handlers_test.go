@@ -66,6 +66,47 @@ func TestServerRescanQueuesTask(t *testing.T) {
 	}
 }
 
+func TestServerInfoDataIncludesRuntimeDetails(t *testing.T) {
+	server := newTestServer(t)
+	db, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	server.DB = db
+	server.StartedAt = time.Now().Add(-time.Minute)
+	server.BuildVersion = "v1.2.3"
+	server.BuildDate = "2026-10-01"
+
+	data, err := server.serverInfoData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"Platform", "BuildVersion", "BuildDate", "Goroutines", "MemoryAllocated", "MemoryReserved", "MemoryPercent"} {
+		if data[key] == "" || data[key] == nil {
+			t.Errorf("server info %s = %v, want a value", key, data[key])
+		}
+	}
+	if got := data["MemoryPercent"].(int); got < 0 || got > 100 {
+		t.Errorf("MemoryPercent = %d, want 0 through 100", got)
+	}
+}
+
+func TestFormatBytes(t *testing.T) {
+	for _, test := range []struct {
+		value uint64
+		want  string
+	}{
+		{1000, "1000 B"},
+		{1024, "1.0 KiB"},
+		{1024 * 1024, "1.0 MiB"},
+	} {
+		if got := formatBytes(test.value); got != test.want {
+			t.Errorf("formatBytes(%d) = %q, want %q", test.value, got, test.want)
+		}
+	}
+}
+
 func addTestBook(t *testing.T, db *index.DB) int64 {
 	t.Helper()
 

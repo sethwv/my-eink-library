@@ -79,6 +79,28 @@ func TestRenderAdminIntegrationsTabsAndForms(t *testing.T) {
 	}
 }
 
+func TestRenderAdminServerIncludesRuntimeDetails(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	render(recorder, "admin_server.html", map[string]any{
+		"Title": "Manage Server", "SiteName": "Test Library", "CanManageServer": true,
+		"Platform": "darwin/arm64", "BuildVersion": "v1.2.3", "BuildDate": "2026-10-01",
+		"GoVersion": "go1.25.7", "Goroutines": 12, "MemoryAllocated": "12.0 MiB",
+		"MemoryReserved": "20.0 MiB", "MemoryPercent": 60,
+	})
+	if recorder.Code != 200 {
+		t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{"Platform", "Build version", "Goroutines", "Memory (Go runtime)", "resource-bar-fill"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("response missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "Last scan") {
+		t.Errorf("response retains removed last-scan row: %s", body)
+	}
+}
+
 func TestTemplatesDoNotContainBackToLibraryLinks(t *testing.T) {
 	for _, name := range []string{
 		"account_bookmark.html",

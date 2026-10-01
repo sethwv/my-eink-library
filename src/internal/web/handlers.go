@@ -794,32 +794,48 @@ func (s *Server) serverInfoData() (map[string]any, error) {
 		}
 	}
 
-	var lastScanAt string
-	if v, ok, _ := s.DB.GetMeta("last_scan_at"); ok {
-		if unix, err := strconv.ParseInt(v, 10, 64); err == nil {
-			lastScanAt = time.Unix(unix, 0).Format("2006-01-02 15:04:05 MST")
-		}
-	}
-	var lastScanDurationMs string
-	if v, ok, _ := s.DB.GetMeta("last_scan_duration_ms"); ok {
-		lastScanDurationMs = v
+	var memory runtime.MemStats
+	runtime.ReadMemStats(&memory)
+	memoryPercent := 0
+	if memory.Sys > 0 {
+		memoryPercent = int(memory.HeapAlloc * 100 / memory.Sys)
 	}
 
 	return map[string]any{
-		"Title":              "Manage Server",
-		"AdminTab":           "server",
-		"GoVersion":          runtime.Version(),
-		"Uptime":             time.Since(s.StartedAt).Round(time.Second).String(),
-		"LibraryPath":        strings.Join(s.LibraryPaths, ", "),
-		"DataDir":            s.DataDir,
-		"BookCount":          bookCount,
-		"AuthorCount":        len(authors),
-		"SeriesCount":        len(series),
-		"UserCount":          len(userList),
-		"AdminCount":         adminCount,
-		"LastScanAt":         lastScanAt,
-		"LastScanDurationMs": lastScanDurationMs,
+		"Title":           "Manage Server",
+		"AdminTab":        "server",
+		"Uptime":          time.Since(s.StartedAt).Round(time.Second).String(),
+		"Platform":        runtime.GOOS + "/" + runtime.GOARCH,
+		"BuildVersion":    s.BuildVersion,
+		"BuildDate":       s.BuildDate,
+		"GoVersion":       runtime.Version(),
+		"Goroutines":      runtime.NumGoroutine(),
+		"MemoryAllocated": formatBytes(memory.HeapAlloc),
+		"MemoryReserved":  formatBytes(memory.Sys),
+		"MemoryPercent":   memoryPercent,
+		"LibraryPath":     strings.Join(s.LibraryPaths, ", "),
+		"DataDir":         s.DataDir,
+		"BookCount":       bookCount,
+		"AuthorCount":     len(authors),
+		"SeriesCount":     len(series),
+		"UserCount":       len(userList),
+		"AdminCount":      adminCount,
 	}, nil
+}
+
+func formatBytes(value uint64) string {
+	if value < 1024 {
+		return strconv.FormatUint(value, 10) + " B"
+	}
+
+	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	size := float64(value)
+	unit := -1
+	for size >= 1024 && unit < len(units)-1 {
+		size /= 1024
+		unit++
+	}
+	return fmt.Sprintf("%.1f %s", size, units[unit])
 }
 
 func (s *Server) adminSettingsData() (map[string]any, error) {

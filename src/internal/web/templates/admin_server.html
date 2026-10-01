@@ -11,14 +11,20 @@
 <tr><th>Setting</th><th>Value</th></tr>
 <tr><td>Site name</td><td>{{.SiteName}}</td></tr>
 <tr><td>Uptime</td><td>{{.Uptime}}</td></tr>
+<tr><td>Platform</td><td>{{.Platform}}</td></tr>
+<tr><td>Build version</td><td>{{.BuildVersion}}</td></tr>
+<tr><td>Build date</td><td>{{.BuildDate}}</td></tr>
 <tr><td>Go version</td><td>{{.GoVersion}}</td></tr>
+<tr><td>Goroutines</td><td>{{.Goroutines}}</td></tr>
+<tr><td>Memory (Go runtime)</td><td>{{.MemoryAllocated}} allocated of {{.MemoryReserved}} reserved
+  <span class="resource-bar" role="img" aria-label="Go runtime memory: {{.MemoryPercent}} percent allocated"><span class="resource-bar-fill" style="width: {{.MemoryPercent}}%"></span></span>
+</td></tr>
 <tr><td>Library path</td><td>{{.LibraryPath}}</td></tr>
 <tr><td>Data directory</td><td>{{.DataDir}}</td></tr>
 <tr><td>Books indexed</td><td>{{.BookCount}}</td></tr>
 <tr><td>Authors</td><td>{{.AuthorCount}}</td></tr>
 <tr><td>Series</td><td>{{.SeriesCount}}</td></tr>
 <tr><td>Users</td><td>{{.UserCount}} ({{.AdminCount}} admin)</td></tr>
-<tr><td>Last scan</td><td>{{if .LastScanAt}}{{.LastScanAt}} ({{.LastScanDurationMs}}ms){{else}}never{{end}}</td></tr>
 </table>
 </div>
 
