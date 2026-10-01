@@ -20,3 +20,5 @@ nav_order: 3
 {% include screenshot-pair.html id="admin-users" %}
 
 {% include screenshot-pair.html id="admin-settings" %}
+
+{% include screenshot-pair.html id="admin-tasks" %}

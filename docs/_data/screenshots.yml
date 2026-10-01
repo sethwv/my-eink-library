@@ -129,16 +129,27 @@
 
 - id: admin-server
   title: Library maintenance
-  description: Rescan and reimport controls for maintaining the indexed library.
+  description: Server details and the action to clear the derived index before queueing a new scan.
   actions:
     - login
     - goto: /admin/server
   annotations:
-    - selector: 'form[action="/admin/server/rescan"] button'
-      label: Check configured folders for changes
+    - selector: 'form[action="/admin/server/clear"] button'
+      label: Clear the index and queue a fresh scan
+      placement: bottom
+
+- id: admin-tasks
+  title: Background tasks
+  description: Queued maintenance work, scheduled email delivery, and continuous services.
+  actions:
+    - login
+    - goto: /admin/tasks
+  annotations:
+    - selector: 'form[action="/admin/tasks/rescan/run"] button'
+      label: Queue a library scan
       placement: top
-    - selector: 'form[action="/admin/server/reimport"] button'
-      label: Rebuild the index when needed
+    - selector: '#task-poll-toggle'
+      label: Pause automatic status refresh
       placement: bottom
 
 - id: admin-smtp

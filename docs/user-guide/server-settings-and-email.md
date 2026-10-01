@@ -8,11 +8,11 @@ nav_order: 6
 
 Admins and Server Managers can open **Admin** from the account menu. The Server tab shows the running library's indexed-book counts, configured paths, data directory, uptime, and last scan.
 
-## Update the library index
+## Maintain the library index
 
-Use **Rescan library now** after adding, removing, or replacing EPUB files in the configured library folders. A rescan checks the current folders and updates the index. This is also periodically triggered aautomatically.
+Open **Tasks** and queue **Scan Library** after adding, removing, or replacing EPUB files in the configured library folders. A scan also runs when the server starts. See [Tasks](../tasks/) for queue status and history.
 
-Use **Force full reimport** only when a normal rescan cannot repair an indexing problem. It rebuilds the index from the source folders, so allow it to finish before investigating missing books or metadata.
+Use **Clear library and queue scan** on the Server tab when the derived index needs to be rebuilt from the configured folders. This removes indexed books, enrichment state, locations, and book-to-shelf memberships, then queues a fresh scan. Shelf definitions remain in place.
 
 {% include screenshot-pair.html id="admin-server" %}
 
