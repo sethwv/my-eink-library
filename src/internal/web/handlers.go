@@ -1073,10 +1073,18 @@ func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.R
 	http.Redirect(w, r, "/admin/integrations?provider=chaptarr", http.StatusSeeOther)
 }
 
-// Account shows the authenticated user's password, digest, and permitted
-// bookmark-link settings.
+// Account shows password and permitted bookmark-link settings.
 func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
-	s.renderAccount(w, r, "", "")
+	s.renderAccount(w, r, "account.html", "account", "", "")
+}
+
+// AccountEmail shows email and digest settings when email is configured.
+func (s *Server) AccountEmail(w http.ResponseWriter, r *http.Request) {
+	if !s.smtpAvailable() {
+		http.Redirect(w, r, "/account", http.StatusSeeOther)
+		return
+	}
+	s.renderAccount(w, r, "account_email.html", "email", "", "")
 }
 
 // AccountRedirect preserves incoming links to the account pages that were
@@ -1085,18 +1093,25 @@ func (s *Server) AccountRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/account", http.StatusSeeOther)
 }
 
-func (s *Server) renderAccount(w http.ResponseWriter, r *http.Request, errMsg, status string) {
+func (s *Server) renderAccount(w http.ResponseWriter, r *http.Request, page, tab, errMsg, status string) {
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
+	user, err := s.Users.UserByUsername(username)
+	if err != nil || user == nil {
+		http.Error(w, "failed to load account", http.StatusInternalServerError)
+		return
+	}
 
 	data := map[string]any{
 		"Title":            "Account",
+		"AccountTab":       tab,
 		"Error":            errMsg,
 		"Status":           status,
+		"Email":            user.Email,
 		"DigestSubscribed": s.Users.IsDigestSubscribed(username),
 		"EmailAvailable":   s.smtpAvailable(),
 		"EmailMessage":     "Email is unavailable. Configure SMTP in Server settings.",
@@ -1104,7 +1119,30 @@ func (s *Server) renderAccount(w http.ResponseWriter, r *http.Request, errMsg, s
 		"HasToken":         s.Users.HasBookmarkToken(username),
 	}
 	mergeInto(data, base)
-	render(w, "account.html", data)
+	render(w, page, data)
+}
+
+// AccountEmailSubmit updates the logged-in user's optional email address.
+func (s *Server) AccountEmailSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	if !s.smtpAvailable() {
+		http.Redirect(w, r, "/account", http.StatusSeeOther)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	user, err := s.Users.UserByUsername(username)
+	if err != nil || user == nil {
+		http.Error(w, "failed to load account", http.StatusInternalServerError)
+		return
+	}
+	if err := s.Users.SetEmail(user.ID, r.FormValue("email")); err != nil {
+		s.renderAccount(w, r, "account_email.html", "email", err.Error(), "")
+		return
+	}
+	s.renderAccount(w, r, "account_email.html", "email", "", "Email updated.")
 }
 
 // AccountBookmarkRegenerate revokes any existing bookmark token, issues a
@@ -1138,7 +1176,7 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	newPassword := r.FormValue("new_password")
 
 	if !s.Auth.CheckPassword(username, current) {
-		s.renderAccount(w, r, "Current password is incorrect.", "")
+		s.renderAccount(w, r, "account.html", "account", "Current password is incorrect.", "")
 		return
 	}
 
@@ -1152,11 +1190,11 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Users.ResetPassword(user.ID, newPassword); err != nil {
-		s.renderAccount(w, r, err.Error(), "")
+		s.renderAccount(w, r, "account.html", "account", err.Error(), "")
 		return
 	}
 
-	s.renderAccount(w, r, "", "Password updated.")
+	s.renderAccount(w, r, "account.html", "account", "", "Password updated.")
 }
 
 // AccountDigestToggle flips the logged-in user's opt-in to the weekly
@@ -1175,7 +1213,7 @@ func (s *Server) AccountDigestToggle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to update preference", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/account", http.StatusSeeOther)
+	http.Redirect(w, r, "/account/email", http.StatusSeeOther)
 }
 
 // ForgotPasswordPage shows the "request a reset link" form.

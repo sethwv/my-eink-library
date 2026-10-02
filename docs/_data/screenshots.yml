@@ -91,17 +91,28 @@
       placement: bottom
 
 - id: account-preferences
-  title: Account preferences
-  description: Password and new-book digest controls, with the relevant fields highlighted.
+  title: Email preferences
+  description: Email address and new-book digest controls, with the relevant fields highlighted.
+  actions:
+    - login
+    - goto: /account/email
+  annotations:
+    - selector: 'input[name="email"]'
+      label: Add or change your email address
+      placement: bottom
+    - selector: 'form[action="/account/digest"]'
+      label: Optional weekly new-book digest
+      placement: bottom
+
+- id: account-password
+  title: Change password
+  description: The Account tab for changing your password.
   actions:
     - login
     - goto: /account
   annotations:
     - selector: 'input[name="new_password"]'
       label: Choose a new password
-      placement: bottom
-    - selector: h2:nth-of-type(2)
-      label: Optional weekly new-book digest
       placement: bottom
 
 - id: account-bookmark

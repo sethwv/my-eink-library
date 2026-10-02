@@ -141,3 +141,10 @@
   {{if .CanManageServer}}<a href="/admin/integrations" class="{{if eq .AdminTab "integrations"}}is-active{{end}}">Enhancement</a>{{end}}
 </nav>
 {{end}}
+
+{{define "accounttabs"}}
+<nav class="account-tabs" aria-label="Account settings">
+  <a href="/account" class="{{if eq .AccountTab "account"}}is-active{{end}}">Account</a>
+  {{if .EmailAvailable}}<a href="/account/email" class="{{if eq .AccountTab "email"}}is-active{{end}}">Email</a>{{end}}
+</nav>
+{{end}}

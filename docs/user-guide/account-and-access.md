@@ -20,19 +20,20 @@ The choice is stored in a browser cookie for up to a year. It applies on the dev
 
 {% include screenshot-pair.html id="account-appearance" %}
 
-## Manage account settings
+## Account settings
 
-Select **Account** from the account menu to manage your settings. To change your password, enter the current password, choose the new one, then select **Change password**. Use a password you do not reuse elsewhere.
+Select **Account** from the account menu to change your password or manage an e-reader bookmark link. To change your password, enter the current password, choose the new one, then select **Change password**. Use a password you do not reuse elsewhere.
 
-The same page has the **New-book digest** preference. Enable it and select **Save** to receive a weekly list of books added to the library. The library administrator must configure outbound email before the digest controls become available.
+If the library administrator configures outbound email, an **Email** tab becomes available. Use it to add, change, or remove your email address and to opt in to the **New-book digest**, a weekly list of books added to the library.
 
 If you forgot your password, use the sign-in page's password-reset flow. That flow is unavailable until the administrator configures SMTP and the public HTTPS URL. Contact the library administrator if the reset email does not arrive.
 
 {% include screenshot-pair.html id="account-preferences" %}
+{% include screenshot-pair.html id="account-password" %}
 
 ## Create an e-reader bookmark link
 
-If your Account page offers bookmark-link controls, you can create one passwordless link for an e-reader browser that does not retain cookies between sessions.
+Your **Account** page may offer bookmark-link controls. They create one passwordless link for an e-reader browser that does not retain cookies between sessions.
 
 1. Open the account menu and select **Account**.
 2. Select **Create bookmark link**.

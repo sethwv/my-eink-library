@@ -143,6 +143,7 @@ func TestRenderAdminServerIncludesRuntimeDetails(t *testing.T) {
 func TestTemplatesDoNotContainBackToLibraryLinks(t *testing.T) {
 	for _, name := range []string{
 		"account.html",
+		"account_email.html",
 		"admin_integrations.html",
 		"admin_server.html",
 		"admin_tasks.html",
@@ -240,7 +241,7 @@ func TestButtonLinksHaveNoTextDecorationAndVisibleFocus(t *testing.T) {
 		".btn:focus, .btn-download:focus, .btn-hardcover:focus, .shelf-toggle:focus {",
 		"outline: 2px solid #111;",
 		".topnav a:hover { color: #111; text-decoration: none; }",
-		".admin-tabs a.is-active {\n  color: #111;\n  font-weight: 600;\n  border-color: #ddd;\n  border-bottom-color: #fff;\n  background: transparent;",
+		".admin-tabs a.is-active, .account-tabs a.is-active {\n  color: #111;\n  font-weight: 600;\n  border-color: #ddd;\n  border-bottom-color: #fff;\n  background: transparent;",
 	} {
 		if !strings.Contains(css, want) {
 			t.Errorf("stylesheet missing %q", want)

@@ -15,6 +15,7 @@ import (
 
 	"github.com/sethwv/my-sideload-library/internal/auth"
 	"github.com/sethwv/my-sideload-library/internal/index"
+	"github.com/sethwv/my-sideload-library/internal/mail"
 	"github.com/sethwv/my-sideload-library/internal/tasks"
 	"github.com/sethwv/my-sideload-library/internal/users"
 )
@@ -641,10 +642,93 @@ func TestAccountPageCombinesPermittedSettings(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"<h1>Account</h1>", "Change password", "New-book digest", "Bookmark link", `action="/account/bookmark/regenerate"`} {
+	for _, want := range []string{"<h1>Account</h1>", ">Account<", "Change password", "Bookmark link", `action="/account/bookmark/regenerate"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("account page missing %q: %s", want, body)
 		}
+	}
+	if strings.Contains(body, `href="/account/email"`) {
+		t.Errorf("email tab shown without SMTP: %s", body)
+	}
+}
+
+func enableTestSMTP(t *testing.T, server *Server) {
+	t.Helper()
+	if err := server.Users.SaveSMTPSettings(mail.Settings{Host: "smtp.example.com", FromAddress: "library@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAccountEmailPageRequiresSMTP(t *testing.T) {
+	server := newAccountTestServer(t)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(t, server, http.MethodGet, "/account/email", "reader", nil)
+	server.Auth.RequireFull(http.HandlerFunc(server.AccountEmail)).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/account" {
+		t.Errorf("response = (%d, %q), want redirect to Account", recorder.Code, recorder.Header().Get("Location"))
+	}
+}
+
+func TestAccountEmailUpdatesOwnAddress(t *testing.T) {
+	server := newAccountTestServer(t)
+	enableTestSMTP(t, server)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, "reader@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Users.Create("other", "other-password", users.RoleMember, true, "other@example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	page := httptest.NewRecorder()
+	server.Auth.RequireFull(http.HandlerFunc(server.AccountEmail)).ServeHTTP(page, authenticatedRequest(t, server, http.MethodGet, "/account/email", "reader", nil))
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `href="/account/email" class="is-active"`) || !strings.Contains(page.Body.String(), "New-book digest") {
+		t.Errorf("email page = status %d, body %s", page.Code, page.Body.String())
+	}
+
+	handler := server.Auth.RequireFull(http.HandlerFunc(server.AccountEmailSubmit))
+	success := httptest.NewRecorder()
+	handler.ServeHTTP(success, authenticatedRequest(t, server, http.MethodPost, "/account/email", "reader", url.Values{"email": {"new@example.com"}}))
+	if success.Code != http.StatusOK || !strings.Contains(success.Body.String(), "Email updated.") {
+		t.Errorf("email success response = status %d, body %s", success.Code, success.Body.String())
+	}
+	reader, err := server.Users.UserByUsername("reader")
+	if err != nil || reader == nil || reader.Email != "new@example.com" {
+		t.Errorf("reader email = %#v, %v; want new@example.com", reader, err)
+	}
+
+	duplicate := httptest.NewRecorder()
+	handler.ServeHTTP(duplicate, authenticatedRequest(t, server, http.MethodPost, "/account/email", "reader", url.Values{"email": {"other@example.com"}}))
+	if duplicate.Code != http.StatusOK || !strings.Contains(duplicate.Body.String(), "is already in use") {
+		t.Errorf("duplicate email response = status %d, body %s", duplicate.Code, duplicate.Body.String())
+	}
+
+	clear := httptest.NewRecorder()
+	handler.ServeHTTP(clear, authenticatedRequest(t, server, http.MethodPost, "/account/email", "reader", url.Values{"email": {""}}))
+	reader, err = server.Users.UserByUsername("reader")
+	if clear.Code != http.StatusOK || err != nil || reader == nil || reader.Email != "" {
+		t.Errorf("clear email response = status %d, user = %#v, error = %v", clear.Code, reader, err)
+	}
+}
+
+func TestAccountDigestRedirectsToEmail(t *testing.T) {
+	server := newAccountTestServer(t)
+	enableTestSMTP(t, server)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, "reader@example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	handler := server.Auth.RequireFull(http.HandlerFunc(server.AccountDigestToggle))
+	handler.ServeHTTP(recorder, authenticatedRequest(t, server, http.MethodPost, "/account/digest", "reader", url.Values{"subscribed": {"on"}}))
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/account/email" {
+		t.Errorf("response = (%d, %q), want redirect to Email", recorder.Code, recorder.Header().Get("Location"))
+	}
+	if !server.Users.IsDigestSubscribed("reader") {
+		t.Error("digest subscription was not saved")
 	}
 }
 
@@ -712,8 +796,10 @@ func TestAccountRoutesRequireFullSession(t *testing.T) {
 		handler http.Handler
 	}{
 		{"account", http.MethodGet, "/account", server.Auth.RequireFull(http.HandlerFunc(server.Account))},
+		{"email", http.MethodGet, "/account/email", server.Auth.RequireFull(http.HandlerFunc(server.AccountEmail))},
 		{"legacy password", http.MethodGet, "/account/password", server.Auth.RequireFull(http.HandlerFunc(server.AccountRedirect))},
 		{"legacy bookmark", http.MethodGet, "/account/bookmark", server.Auth.RequireFull(http.HandlerFunc(server.AccountRedirect))},
+		{"email submit", http.MethodPost, "/account/email", server.Auth.RequireFull(http.HandlerFunc(server.AccountEmailSubmit))},
 		{"password submit", http.MethodPost, "/account/password", server.Auth.RequireFull(http.HandlerFunc(server.AccountPasswordSubmit))},
 		{"digest", http.MethodPost, "/account/digest", server.Auth.RequireFull(http.HandlerFunc(server.AccountDigestToggle))},
 		{"bookmark regenerate", http.MethodPost, "/account/bookmark/regenerate", server.Auth.RequireFull(http.HandlerFunc(server.AccountBookmarkRegenerate))},
