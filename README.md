@@ -19,9 +19,9 @@ If this project has been useful, tips are appreciated.
 - Converts EPUBs to KEPUB on demand
 - Supports Hardcover & Chaptarr Integrations
   
-| <img width="889" height="500" alt="image" src="https://github.com/user-attachments/assets/bbbb81ff-5e40-4899-bf60-474c03f4a312" /> | <img width="375" height="500" alt="image" src="https://github.com/user-attachments/assets/d00115e0-a15c-41a5-9d3d-765a3df47942" /> |
+| <img width="889" height="500" alt="Library grid in dark mode on a desktop browser" src="https://sideload.swvn.io/assets/images/generated/library-dark-desktop.png" /> | <img width="375" height="500" alt="Library grid in dark mode on a portrait e-reader browser" src="https://sideload.swvn.io/assets/images/generated/library-dark-ereader.png" /> |
 | -- | -- |
-| <img width="889" height="500" alt="image" src="https://github.com/user-attachments/assets/41a5248a-210b-4e16-8c3b-0582b488f5e6" /> | <img width="375" height="500" alt="image" src="https://github.com/user-attachments/assets/3f9f6986-847a-4972-95b2-d13f90cf0777" /> |
+| <img width="889" height="500" alt="Book details in light mode on a desktop browser" src="https://sideload.swvn.io/assets/images/generated/book-modal-desktop.png" /> | <img width="375" height="500" alt="Book details in light mode on a portrait e-reader browser" src="https://sideload.swvn.io/assets/images/generated/book-modal-ereader.png" /> |
 
 ## Run It
 

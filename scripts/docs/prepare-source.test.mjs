@@ -41,9 +41,8 @@ test('renders release and documentation branch selector groups', async () => {
     assert.ok(selector.indexOf('Releases') < selector.indexOf('Doc Branches'));
     await readFile(path.join(temporary, 'output/assets/brand/lockups/horizontal-moss-transparent.png'));
     const sidebar = await readFile(path.join(temporary, 'output/_includes/components/sidebar.html'), 'utf8');
-    assert.match(sidebar, /docs-sidebar-brand/);
+    assert.match(sidebar, /class="site-title docs-sidebar-brand"/);
     assert.match(sidebar, /horizontal-moss-transparent\.png/);
-    await readFile(path.join(temporary, 'output/assets/brand/lockups/horizontal-moss-transparent.png'));
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
