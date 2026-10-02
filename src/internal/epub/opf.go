@@ -28,6 +28,8 @@ func normalizeXMLVersion(data []byte) []byte {
 
 const dcNS = "http://purl.org/dc/elements/1.1/"
 
+const maxXMLBytes = 10 << 20
+
 type containerXML struct {
 	Rootfiles struct {
 		Rootfile []struct {
@@ -98,7 +100,7 @@ func findOPFPath(zr *zip.Reader) (string, error) {
 	}
 	defer f.Close()
 
-	data, err := io.ReadAll(f)
+	data, err := readZipEntry(f, maxXMLBytes)
 	if err != nil {
 		return "", fmt.Errorf("read container.xml: %w", err)
 	}
@@ -120,7 +122,7 @@ func parseOPF(zr *zip.Reader, opfPath string) (*opfPackage, error) {
 	}
 	defer f.Close()
 
-	data, err := io.ReadAll(f)
+	data, err := readZipEntry(f, maxXMLBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read opf: %w", err)
 	}
@@ -130,6 +132,17 @@ func parseOPF(zr *zip.Reader, opfPath string) (*opfPackage, error) {
 		return nil, fmt.Errorf("parse opf xml: %w", err)
 	}
 	return &pkg, nil
+}
+
+func readZipEntry(r io.Reader, limit int) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > limit {
+		return nil, fmt.Errorf("archive entry exceeds %d bytes", limit)
+	}
+	return data, nil
 }
 
 func openInZip(zr *zip.Reader, name string) (io.ReadCloser, error) {

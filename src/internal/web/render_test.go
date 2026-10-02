@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +25,44 @@ func TestRenderIncludesBuildVersion(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `href="https://github.com/sethwv/my-sideload-library/tree/v1.2.3"`) || !strings.Contains(recorder.Body.String(), "v1.2.3</a> 08-15-2026") || !strings.Contains(recorder.Body.String(), `rel="icon" type="image/svg+xml" href="/static/favicon.svg"`) || strings.Contains(recorder.Body.String(), ">Source<") {
 		t.Errorf("response does not contain the build metadata: %s", recorder.Body.String())
+	}
+}
+
+func TestPageTemplateClonesCachedBase(t *testing.T) {
+	login, err := pageTemplate("login.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	library, err := pageTemplate("library.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if login == library {
+		t.Fatal("pageTemplate returned a shared template")
+	}
+	if login.Lookup("content") == library.Lookup("content") {
+		t.Fatal("page templates share the content definition")
+	}
+}
+
+func TestRenderConcurrentPages(t *testing.T) {
+	var wg sync.WaitGroup
+	errs := make(chan string, 20)
+	for i := 0; i < cap(errs); i++ {
+		wg.Add(1)
+		go func(page string) {
+			defer wg.Done()
+			recorder := httptest.NewRecorder()
+			render(recorder, page, map[string]any{"Title": "Test", "SiteName": "Test"})
+			if recorder.Code != 200 {
+				errs <- recorder.Body.String()
+			}
+		}("login.html")
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent render failed: %s", err)
 	}
 }
 

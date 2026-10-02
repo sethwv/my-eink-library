@@ -9,14 +9,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
 )
 
-// endpoint is a var (not const) only so tests can point it at an
-// httptest.Server instead of the real API.
+// endpoint is variable for legacy package tests. New tests can instead inject
+// a transport through NewWithTransport without mutating package state.
 var endpoint = "https://api.hardcover.app/v1/graphql"
+
+const maxResponseBytes = 10 << 20
 
 // Client is safe for concurrent use — every call goes through a shared rate
 // limiter (Hardcover's own limit is 60 requests/min) regardless of which
@@ -43,10 +46,16 @@ const minInterval = 1100 * time.Millisecond
 // state, as loaded from users.IntegrationSettings at startup. Use SetConfig
 // to update either at runtime.
 func New(enabled bool, token string) *Client {
+	return NewWithTransport(enabled, token, nil)
+}
+
+// NewWithTransport creates a Client with transport. A nil transport uses the
+// default HTTP transport. The production timeout remains 30 seconds.
+func NewWithTransport(enabled bool, token string, transport http.RoundTripper) *Client {
 	return &Client{
 		token:   token,
 		enabled: enabled,
-		http:    &http.Client{Timeout: 30 * time.Second},
+		http:    &http.Client{Transport: transport, Timeout: 30 * time.Second},
 	}
 }
 
@@ -106,11 +115,16 @@ func (c *Client) do(ctx context.Context, query string, variables any, out any) e
 		return fmt.Errorf("hardcover: unexpected status %d", resp.StatusCode)
 	}
 
+	data, err := readResponse(resp.Body)
+	if err != nil {
+		return fmt.Errorf("hardcover: decode response: %w", err)
+	}
+
 	var envelope struct {
 		Errors []graphqlError  `json:"errors"`
 		Data   json.RawMessage `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+	if err := json.Unmarshal(data, &envelope); err != nil {
 		return fmt.Errorf("hardcover: decode response: %w", err)
 	}
 	if len(envelope.Errors) > 0 {
@@ -122,6 +136,17 @@ func (c *Client) do(ctx context.Context, query string, variables any, out any) e
 		}
 	}
 	return nil
+}
+
+func readResponse(r io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxResponseBytes {
+		return nil, fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
+	}
+	return data, nil
 }
 
 // throttle blocks until it's been at least minInterval since the previous

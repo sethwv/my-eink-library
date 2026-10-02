@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -29,6 +30,8 @@ import (
 // pass. The scheduled refresh task keeps the snapshot current for the
 // enrichment queue without repeatedly crawling Chaptarr during enrichment.
 const DefaultCacheTTL = 12 * time.Hour
+
+const maxResponseBytes = 10 << 20
 
 // Client is safe for concurrent use. baseURL/apiKey/enabled are mutable
 // (see SetConfig) so the admin Integrations page can turn Chaptarr on/off
@@ -52,11 +55,17 @@ type Client struct {
 // enabled state, as loaded from users.IntegrationSettings at startup. Use
 // SetConfig to update any of these at runtime.
 func New(enabled bool, baseURL, apiKey string) *Client {
+	return NewWithTransport(enabled, baseURL, apiKey, nil)
+}
+
+// NewWithTransport creates a Client with transport. A nil transport uses the
+// default HTTP transport. The production timeout remains 30 seconds.
+func NewWithTransport(enabled bool, baseURL, apiKey string, transport http.RoundTripper) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		apiKey:  apiKey,
 		enabled: enabled,
-		http:    &http.Client{Timeout: 30 * time.Second},
+		http:    &http.Client{Transport: transport, Timeout: 30 * time.Second},
 	}
 }
 
@@ -267,10 +276,25 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("chaptarr: unexpected status %d for %s", resp.StatusCode, path)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	data, err := readResponse(resp.Body)
+	if err != nil {
+		return fmt.Errorf("chaptarr: decode response for %s: %w", path, err)
+	}
+	if err := json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("chaptarr: decode response for %s: %w", path, err)
 	}
 	return nil
+}
+
+func readResponse(r io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxResponseBytes {
+		return nil, fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
+	}
+	return data, nil
 }
 
 // ListBooks fetches every book Chaptarr has an on-disk file for, with

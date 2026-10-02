@@ -1,14 +1,75 @@
 package chaptarr
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestNewWithTransport_UsesInjectedTransport(t *testing.T) {
+	var gotPath, gotKey, gotAccept string
+	c := NewWithTransport(true, "http://chaptarr.test", "test-key", roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		gotPath = r.URL.Path
+		gotKey = r.Header.Get("X-Api-Key")
+		gotAccept = r.Header.Get("Accept")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`[]`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+
+	if _, err := c.ListBooks(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/api/v1/book" || gotKey != "test-key" || gotAccept != "application/json" {
+		t.Errorf("request = path %q, key %q, accept %q", gotPath, gotKey, gotAccept)
+	}
+	if c.http.Timeout != 30*time.Second {
+		t.Errorf("Timeout = %v, want 30s", c.http.Timeout)
+	}
+}
+
+func TestListBooks_RejectsOversizedResponse(t *testing.T) {
+	c := NewWithTransport(true, "http://chaptarr.test", "test-key", roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader(bytes.Repeat([]byte("x"), maxResponseBytes+1))),
+			Header:     make(http.Header),
+		}, nil
+	}))
+
+	if _, err := c.ListBooks(context.Background()); err == nil || !strings.Contains(err.Error(), "response exceeds") {
+		t.Errorf("ListBooks error = %v, want oversized response error", err)
+	}
+}
+
+func TestListBooks_PreservesStatusError(t *testing.T) {
+	c := NewWithTransport(true, "http://chaptarr.test", "test-key", roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Body:       io.NopCloser(strings.NewReader(`{"message":"unavailable"}`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+
+	if _, err := c.ListBooks(context.Background()); err == nil || !strings.Contains(err.Error(), "unexpected status 502 for /api/v1/author") {
+		t.Errorf("ListBooks error = %v, want status error naming the endpoint", err)
+	}
+}
 
 type memoryCacheStore struct {
 	books map[string][]Book

@@ -3,6 +3,7 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -128,4 +129,42 @@ func (d *DB) ShelfBookIDs(shelfID int64) (map[int64]bool, error) {
 		ids[id] = true
 	}
 	return ids, rows.Err()
+}
+
+// ShelfMemberships returns the given user's shelf membership for displayed
+// books. Joining shelves scopes the result to the owner without adding one
+// query parameter per shelf.
+func (d *DB) ShelfMemberships(username string, bookIDs []int64) (map[int64]map[int64]bool, error) {
+	memberships := make(map[int64]map[int64]bool)
+	if len(bookIDs) == 0 {
+		return memberships, nil
+	}
+	args := make([]any, 1, len(bookIDs)+1)
+	args[0] = username
+	for _, bookID := range bookIDs {
+		args = append(args, bookID)
+	}
+	placeholders := func(n int) string {
+		return strings.TrimRight(strings.Repeat("?,", n), ",")
+	}
+	rows, err := d.sql.Query(
+		`SELECT shelf_books.shelf_id, shelf_books.book_id FROM shelf_books JOIN shelves ON shelves.id = shelf_books.shelf_id WHERE shelves.username = ? AND shelf_books.book_id IN (`+placeholders(len(bookIDs))+`)`,
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var shelfID, bookID int64
+		if err := rows.Scan(&shelfID, &bookID); err != nil {
+			return nil, err
+		}
+		if memberships[shelfID] == nil {
+			memberships[shelfID] = make(map[int64]bool)
+		}
+		memberships[shelfID][bookID] = true
+	}
+	return memberships, rows.Err()
 }

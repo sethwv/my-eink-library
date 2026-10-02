@@ -147,6 +147,38 @@ func TestShelfBookIDs(t *testing.T) {
 	}
 }
 
+func TestShelfMembershipsScopesBooksAndOwner(t *testing.T) {
+	db := openTestDB(t)
+	alice, err := db.EnsureSystemShelf("alice", "favourites", "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := db.EnsureSystemShelf("bob", "favourites", "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddBookToShelf(alice, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddBookToShelf(alice, 3); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddBookToShelf(bob, 2); err != nil {
+		t.Fatal(err)
+	}
+
+	memberships, err := db.ShelfMemberships("alice", []int64{1, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(memberships) != 1 || !memberships[alice][1] || memberships[alice][2] || memberships[alice][3] || memberships[bob] != nil {
+		t.Errorf("ShelfMemberships = %#v, want only shelf %d book 1", memberships, alice)
+	}
+	if memberships, err = db.ShelfMemberships("alice", nil); err != nil || len(memberships) != 0 {
+		t.Errorf("ShelfMemberships with no books = %#v, %v; want an empty map", memberships, err)
+	}
+}
+
 func TestFilter_ShelfID(t *testing.T) {
 	libDir := t.TempDir()
 	writeTestEpub(t, filepath.Join(libDir, "b1.epub"), "Zebra Tales", "Amy Zed")

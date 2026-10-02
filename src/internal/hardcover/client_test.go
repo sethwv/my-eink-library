@@ -1,14 +1,60 @@
 package hardcover
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestNewWithTransport_UsesInjectedTransport(t *testing.T) {
+	var gotMethod, gotAuth, gotContentType string
+	c := NewWithTransport(true, "test-token", roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		gotMethod = r.Method
+		gotAuth = r.Header.Get("Authorization")
+		gotContentType = r.Header.Get("Content-Type")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"data":{"search":{"ids":[],"results":{"hits":[]}}}}`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+
+	if _, err := c.Search(context.Background(), "Mistborn", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodPost || gotAuth != "Bearer test-token" || gotContentType != "application/json" {
+		t.Errorf("request = method %q, authorization %q, content type %q", gotMethod, gotAuth, gotContentType)
+	}
+	if c.http.Timeout != 30*time.Second {
+		t.Errorf("Timeout = %v, want 30s", c.http.Timeout)
+	}
+}
+
+func TestSearch_RejectsOversizedResponse(t *testing.T) {
+	c := NewWithTransport(true, "test-token", roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader(bytes.Repeat([]byte("x"), maxResponseBytes+1))),
+			Header:     make(http.Header),
+		}, nil
+	}))
+
+	if _, err := c.Search(context.Background(), "Mistborn", "", ""); err == nil || !strings.Contains(err.Error(), "response exceeds") {
+		t.Errorf("Search error = %v, want oversized response error", err)
+	}
+}
 
 // overrideEndpointForTest points the package-level endpoint at a test
 // server for the duration of t, restoring the real URL afterward.

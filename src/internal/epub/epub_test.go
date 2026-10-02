@@ -87,6 +87,32 @@ func buildEpub(t *testing.T, opf string, includeCover bool) string {
 	return epubPath
 }
 
+func buildEpubWithFiles(t *testing.T, files map[string][]byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "book.epub")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for name, content := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestParseFile_EPUB3(t *testing.T) {
 	path := buildEpub(t, opfEPUB3, true)
 
@@ -204,5 +230,40 @@ func TestParseFile_MissingOPF(t *testing.T) {
 
 	if _, err := ParseFile(epubPath); err == nil {
 		t.Error("expected error for epub missing container.xml, got nil")
+	}
+}
+
+func TestParseFile_RejectsOversizedXMLEntries(t *testing.T) {
+	files := map[string][]byte{
+		"mimetype":               []byte("application/epub+zip"),
+		"META-INF/container.xml": append([]byte(sampleContainerXML), bytes.Repeat([]byte(" "), maxXMLBytes+1)...),
+		"OEBPS/content.opf":      []byte(opfEPUB3),
+		"OEBPS/cover.jpg":        []byte("cover"),
+	}
+	if _, err := ParseFile(buildEpubWithFiles(t, files)); err == nil || !strings.Contains(err.Error(), "archive entry exceeds") {
+		t.Errorf("container ParseFile error = %v, want oversized entry error", err)
+	}
+
+	files["META-INF/container.xml"] = []byte(sampleContainerXML)
+	files["OEBPS/content.opf"] = append([]byte(opfEPUB3), bytes.Repeat([]byte(" "), maxXMLBytes+1)...)
+	if _, err := ParseFile(buildEpubWithFiles(t, files)); err == nil || !strings.Contains(err.Error(), "archive entry exceeds") {
+		t.Errorf("OPF ParseFile error = %v, want oversized entry error", err)
+	}
+}
+
+func TestParseFile_IgnoresOversizedCover(t *testing.T) {
+	path := buildEpubWithFiles(t, map[string][]byte{
+		"mimetype":               []byte("application/epub+zip"),
+		"META-INF/container.xml": []byte(sampleContainerXML),
+		"OEBPS/content.opf":      []byte(opfEPUB3),
+		"OEBPS/cover.jpg":        bytes.Repeat([]byte("x"), maxCoverBytes+1),
+	})
+
+	m, err := ParseFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.CoverData != nil || m.CoverMediaType != "" {
+		t.Errorf("cover = (%d bytes, %q), want no cover after failed extraction", len(m.CoverData), m.CoverMediaType)
 	}
 }

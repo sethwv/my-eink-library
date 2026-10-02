@@ -2,11 +2,12 @@ package epub
 
 import (
 	"archive/zip"
-	"io"
 	"mime"
 	"path"
 	"strings"
 )
+
+const maxCoverBytes = 20 << 20
 
 // findCoverHref locates the manifest item representing the cover image,
 // trying the EPUB3 properties="cover-image" convention first, then the
@@ -62,7 +63,7 @@ func extractCover(zr *zip.Reader, opfPath string, item *opfItem) ([]byte, string
 	}
 	defer f.Close()
 
-	data, err := io.ReadAll(f)
+	data, err := readZipEntry(f, maxCoverBytes)
 	if err != nil {
 		return nil, "", err
 	}

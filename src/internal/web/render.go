@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sethwv/my-sideload-library/internal/epub"
@@ -231,10 +232,29 @@ func formatPublishedYear(raw string) string {
 	return raw
 }
 
-// render parses layout.html + partials.html + the named page template fresh
-// for each call so that each page's "content" block doesn't collide with any
-// other page's. partials.html holds shared blocks (e.g. "topbar") reused
-// across authenticated pages.
+var (
+	templateBaseOnce sync.Once
+	templateBase     *template.Template
+	templateBaseErr  error
+)
+
+func pageTemplate(page string) (*template.Template, error) {
+	templateBaseOnce.Do(func() {
+		templateBase, templateBaseErr = template.New("root").Funcs(templateFuncs).ParseFS(templatesFS, "templates/layout.html", "templates/partials.html")
+	})
+	if templateBaseErr != nil {
+		return nil, templateBaseErr
+	}
+	tmpl, err := templateBase.Clone()
+	if err != nil {
+		return nil, err
+	}
+	return tmpl.ParseFS(templatesFS, "templates/"+page)
+}
+
+// render clones the cached layout.html + partials.html base before parsing a
+// page. Each clone keeps page-specific "content" blocks isolated while the
+// shared base is parsed only once.
 //
 // Executes into a buffer rather than writing to w directly: html/template
 // can fail partway through ExecuteTemplate (e.g. a runtime error in a later
@@ -245,7 +265,7 @@ func formatPublishedYear(raw string) string {
 // Buffering means a mid-render failure still gets a clean 500 with no
 // partial HTML sent.
 func render(w http.ResponseWriter, page string, data any) {
-	tmpl, err := template.New("root").Funcs(templateFuncs).ParseFS(templatesFS, "templates/layout.html", "templates/partials.html", "templates/"+page)
+	tmpl, err := pageTemplate(page)
 	if err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 		return
