@@ -45,7 +45,7 @@
     <label>Base URL<input type="text" name="chaptarr_url" value="{{.ChaptarrURL}}" placeholder="http://chaptarr.local:8978"></label>
     <label>API key<input type="password" name="chaptarr_api_key" placeholder="{{if .ChaptarrConfigured}}(unchanged){{else}}paste your Chaptarr API key{{end}}"></label>
     <label class="integration-checkbox"><input type="checkbox" name="hide_no_chaptarr_match" {{if .HideNoChaptarrMatch}}checked{{end}}> Hide unmatched books</label>
-    <button type="submit">Save Chaptarr settings</button>
+    <button type="submit">Save</button>
   </form>
 </section>
 {{else}}
@@ -64,7 +64,7 @@
     <label>API token<input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></label>
     <label class="integration-checkbox"><input type="checkbox" name="hide_no_hardcover_match" {{if .HideNoHardcoverMatch}}checked{{end}}> Hide unmatched books</label>
     <label class="integration-checkbox"><input type="checkbox" name="hardcover_overwrite_cover" {{if .HardcoverOverwriteCover}}checked{{end}}> Use Hardcover covers</label>
-    <button type="submit">Save Hardcover settings</button>
+    <button type="submit">Save</button>
   </form>
 </section>
 {{end}}

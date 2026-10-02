@@ -14,7 +14,8 @@
 <tr><th>Cover width (px)</th><td><input type="number" name="cover_width" value="{{.CoverWidth}}" required></td></tr>
 <tr><th>Books per page</th><td><input type="number" name="page_size" value="{{.PageSize}}" required></td></tr>
 <tr><th>Session length</th><td><input type="text" name="session_ttl" value="{{.SessionTTL}}" placeholder="720h"></td></tr>
-<tr><td colspan="2"><button type="submit">Save general settings</button></td></tr>
+<tr><th>Password reset</th><td><label><input type="checkbox" name="password_reset_enabled"{{if .PasswordResetEnabled}} checked{{end}}{{if not .PasswordResetConfigurable}} disabled{{end}}> Allow users to reset their password by email</label>{{if not .PasswordResetConfigurable}}<p class="muted">Configure SMTP and a Public URL to enable this setting.</p>{{end}}</td></tr>
+<tr><td colspan="2"><button type="submit">Save</button></td></tr>
 </table>
 </form>
 </div>
@@ -26,7 +27,7 @@
 <table>
 <tr><th>Enable KEPUB downloads</th><td><label><input type="checkbox" name="enabled"{{if .KepubEnabled}} checked{{end}}> Show the KEPUB download button</label></td></tr>
 <tr><th>Write Calibre series metadata</th><td><label><input type="checkbox" name="write_calibre_metadata"{{if .KepubWriteCalibreMetadata}} checked{{end}}> Fill missing series and series-number fields from library metadata for NickelSeries</label></td></tr>
-<tr><td colspan="2"><button type="submit">Save Kepubify settings</button></td></tr>
+<tr><td colspan="2"><button type="submit">Save</button></td></tr>
 </table>
 </form>
 </div>

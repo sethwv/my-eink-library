@@ -56,11 +56,12 @@ func (s *Store) SaveIntegrationSettings(m IntegrationSettings) error {
 }
 
 type GeneralSettings struct {
-	SiteName   string
-	PublicURL  string
-	CoverWidth int
-	PageSize   int
-	SessionTTL time.Duration
+	SiteName             string
+	PublicURL            string
+	CoverWidth           int
+	PageSize             int
+	SessionTTL           time.Duration
+	PasswordResetEnabled bool
 }
 
 // KepubSettings controls on-demand KEPUB conversion. It defaults to enabled so
@@ -89,8 +90,8 @@ func (s *Store) SaveKepubSettings(m KepubSettings) error {
 
 func (s *Store) GetGeneralSettings() (GeneralSettings, error) {
 	var m GeneralSettings
-	var ttlSeconds int64
-	err := s.sql.QueryRow(`SELECT site_name, public_url, cover_width, page_size, session_ttl_seconds FROM general_settings WHERE id = 1`).Scan(&m.SiteName, &m.PublicURL, &m.CoverWidth, &m.PageSize, &ttlSeconds)
+	var ttlSeconds, passwordResetEnabled int64
+	err := s.sql.QueryRow(`SELECT site_name, public_url, cover_width, page_size, session_ttl_seconds, password_reset_enabled FROM general_settings WHERE id = 1`).Scan(&m.SiteName, &m.PublicURL, &m.CoverWidth, &m.PageSize, &ttlSeconds, &passwordResetEnabled)
 	if err == sql.ErrNoRows {
 		return GeneralSettings{}, nil
 	}
@@ -98,10 +99,11 @@ func (s *Store) GetGeneralSettings() (GeneralSettings, error) {
 		return GeneralSettings{}, err
 	}
 	m.SessionTTL = time.Duration(ttlSeconds) * time.Second
+	m.PasswordResetEnabled = passwordResetEnabled != 0
 	return m, nil
 }
 
 func (s *Store) SaveGeneralSettings(m GeneralSettings) error {
-	_, err := s.sql.Exec(`INSERT INTO general_settings (id, site_name, public_url, cover_width, page_size, session_ttl_seconds) VALUES (1, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, public_url = excluded.public_url, cover_width = excluded.cover_width, page_size = excluded.page_size, session_ttl_seconds = excluded.session_ttl_seconds`, m.SiteName, m.PublicURL, m.CoverWidth, m.PageSize, int64(m.SessionTTL/time.Second))
+	_, err := s.sql.Exec(`INSERT INTO general_settings (id, site_name, public_url, cover_width, page_size, session_ttl_seconds, password_reset_enabled) VALUES (1, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, public_url = excluded.public_url, cover_width = excluded.cover_width, page_size = excluded.page_size, session_ttl_seconds = excluded.session_ttl_seconds, password_reset_enabled = excluded.password_reset_enabled`, m.SiteName, m.PublicURL, m.CoverWidth, m.PageSize, int64(m.SessionTTL/time.Second), boolToInt(m.PasswordResetEnabled))
 	return err
 }

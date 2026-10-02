@@ -28,7 +28,7 @@ Members read books and manage their own account. User Managers handle people, in
 3. Enter a username and password, leave the role as **Member**, then select **Create user**.
 4. Give the user their initial password through a private channel.
 
-Add an email address if the user should be able to reset their password. The email field is optional when creating a user, but self-service password reset needs both an address and working server email settings.
+Add an email address if the user should be able to reset their password. The email field is optional when creating a user, but self-service password reset needs an address, working server email settings, and the Password reset setting enabled in Admin Setup.
 
 {% include screenshot-pair.html id="admin-add-user" %}
 

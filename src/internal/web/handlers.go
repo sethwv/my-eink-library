@@ -128,9 +128,9 @@ func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]any{
-		"Title":          "Log in",
-		"Next":           safeNext(r.URL.Query().Get("next")),
-		"EmailAvailable": s.emailAvailable(),
+		"Title":                  "Log in",
+		"Next":                   safeNext(r.URL.Query().Get("next")),
+		"PasswordResetAvailable": s.passwordResetAvailable(),
 	}
 	mergeInto(data, base)
 	render(w, "login.html", data)
@@ -158,10 +158,10 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 	if !s.Auth.CheckPassword(username, password) {
 		base, _, _ := s.baseData(r)
 		data := map[string]any{
-			"Title":          "Log in",
-			"Error":          "Incorrect username or password.",
-			"Next":           next,
-			"EmailAvailable": s.emailAvailable(),
+			"Title":                  "Log in",
+			"Error":                  "Incorrect username or password.",
+			"Next":                   next,
+			"PasswordResetAvailable": s.passwordResetAvailable(),
 		}
 		mergeInto(data, base)
 		render(w, "login.html", data)
@@ -180,6 +180,11 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) emailAvailable() bool {
 	settings, err := s.Users.GetSMTPSettings()
 	return err == nil && settings.Enabled() && s.PublicURL != ""
+}
+
+func (s *Server) passwordResetAvailable() bool {
+	settings, err := s.Users.GetGeneralSettings()
+	return err == nil && settings.PasswordResetEnabled && s.emailAvailable()
 }
 
 func (s *Server) smtpAvailable() bool {
@@ -597,6 +602,8 @@ func (s *Server) adminSettingsData() (map[string]any, error) {
 		"CoverWidth":                general.CoverWidth,
 		"PageSize":                  general.PageSize,
 		"SessionTTL":                general.SessionTTL.String(),
+		"PasswordResetEnabled":      general.PasswordResetEnabled,
+		"PasswordResetConfigurable": s.emailAvailable(),
 		"KepubEnabled":              kepubSettings.Enabled,
 		"KepubWriteCalibreMetadata": kepubSettings.WriteCalibreMetadata,
 	}, nil
@@ -761,12 +768,21 @@ func (s *Server) AdminSettingsGeneralSave(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	current, err := s.Users.GetGeneralSettings()
+	if err != nil {
+		s.renderAdminSettingsError(w, r, "failed to load settings: "+err.Error(), "")
+		return
+	}
 	settings := users.GeneralSettings{
-		SiteName:   r.FormValue("site_name"),
-		PublicURL:  strings.TrimRight(r.FormValue("public_url"), "/"),
-		CoverWidth: coverWidth,
-		PageSize:   pageSize,
-		SessionTTL: sessionTTL,
+		SiteName:             r.FormValue("site_name"),
+		PublicURL:            strings.TrimRight(r.FormValue("public_url"), "/"),
+		CoverWidth:           coverWidth,
+		PageSize:             pageSize,
+		SessionTTL:           sessionTTL,
+		PasswordResetEnabled: current.PasswordResetEnabled,
+	}
+	if s.emailAvailable() {
+		settings.PasswordResetEnabled = r.FormValue("password_reset_enabled") == "on"
 	}
 	if err := s.Users.SaveGeneralSettings(settings); err != nil {
 		s.renderAdminSettingsError(w, r, "failed to save settings: "+err.Error(), "")
@@ -1218,12 +1234,16 @@ func (s *Server) AccountDigestToggle(w http.ResponseWriter, r *http.Request) {
 
 // ForgotPasswordPage shows the "request a reset link" form.
 func (s *Server) ForgotPasswordPage(w http.ResponseWriter, r *http.Request) {
+	if !s.passwordResetAvailable() {
+		http.NotFound(w, r)
+		return
+	}
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
-	data := map[string]any{"Title": "Forgot Password", "EmailAvailable": s.emailAvailable(), "EmailMessage": emailUnavailableMessage()}
+	data := map[string]any{"Title": "Forgot Password"}
 	mergeInto(data, base)
 	render(w, "forgot_password.html", data)
 }
@@ -1232,23 +1252,15 @@ func (s *Server) ForgotPasswordPage(w http.ResponseWriter, r *http.Request) {
 // always shows the same generic confirmation either way so the response
 // can't be used to enumerate registered email addresses.
 func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	if !s.passwordResetAvailable() {
+		http.NotFound(w, r)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
 	email := r.FormValue("email")
-	if !s.emailAvailable() {
-		base, _, err := s.baseData(r)
-		if err != nil {
-			http.Error(w, "failed to load page", http.StatusInternalServerError)
-			return
-		}
-		data := map[string]any{"Title": "Forgot Password", "Error": emailUnavailableMessage(), "EmailAvailable": false, "EmailMessage": emailUnavailableMessage()}
-		mergeInto(data, base)
-		render(w, "forgot_password.html", data)
-		return
-	}
-
 	token, _, found, err := s.Users.RequestPasswordReset(email)
 	if err != nil {
 		http.Error(w, "failed to process request", http.StatusInternalServerError)
@@ -1277,10 +1289,8 @@ func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]any{
-		"Title":          "Forgot Password",
-		"Status":         "If that address is on file, a reset link has been sent.",
-		"EmailAvailable": true,
-		"EmailMessage":   emailUnavailableMessage(),
+		"Title":  "Forgot Password",
+		"Status": "If that address is on file, a reset link has been sent.",
 	}
 	mergeInto(data, base)
 	render(w, "forgot_password.html", data)
@@ -1289,6 +1299,10 @@ func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 // ResetPasswordPage shows the "set a new password" form for a token from a
 // forgot-password email.
 func (s *Server) ResetPasswordPage(w http.ResponseWriter, r *http.Request) {
+	if !s.passwordResetAvailable() {
+		http.NotFound(w, r)
+		return
+	}
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
@@ -1307,6 +1321,10 @@ func (s *Server) ResetPasswordPage(w http.ResponseWriter, r *http.Request) {
 // ResetPasswordSubmit completes a password reset from a forgot-password
 // email link.
 func (s *Server) ResetPasswordSubmit(w http.ResponseWriter, r *http.Request) {
+	if !s.passwordResetAvailable() {
+		http.NotFound(w, r)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return

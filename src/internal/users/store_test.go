@@ -863,11 +863,12 @@ func TestGeneralSettings_SaveAndGet(t *testing.T) {
 	}
 
 	m := GeneralSettings{
-		SiteName:   "My Library",
-		PublicURL:  "https://library.example.com",
-		CoverWidth: 400,
-		PageSize:   24,
-		SessionTTL: 48 * time.Hour,
+		SiteName:             "My Library",
+		PublicURL:            "https://library.example.com",
+		CoverWidth:           400,
+		PageSize:             24,
+		SessionTTL:           48 * time.Hour,
+		PasswordResetEnabled: true,
 	}
 	if err := s.SaveGeneralSettings(m); err != nil {
 		t.Fatal(err)

@@ -26,7 +26,7 @@ Select **Account** from the account menu to change your password or manage an e-
 
 If the library administrator configures outbound email, an **Email** tab becomes available. Use it to add, change, or remove your email address and to opt in to the **New-book digest**, a weekly list of books added to the library.
 
-If you forgot your password, use the sign-in page's password-reset flow. That flow is unavailable until the administrator configures SMTP and the public HTTPS URL. Contact the library administrator if the reset email does not arrive.
+If you forgot your password, use the sign-in page's password-reset flow when it is available. The administrator must configure email and explicitly enable self-service password reset. Contact the library administrator if the reset email does not arrive.
 
 {% include screenshot-pair.html id="account-preferences" %}
 {% include screenshot-pair.html id="account-password" %}

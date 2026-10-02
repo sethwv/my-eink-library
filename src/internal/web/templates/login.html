@@ -12,6 +12,6 @@
     </label>
     <button type="submit">Log in</button>
   </form>
-  {{if .EmailAvailable}}<p><a href="/forgot-password">Forgot password?</a></p>{{else}}<p class="muted">Password reset is unavailable until an administrator configures email.</p>{{end}}
+  {{if .PasswordResetAvailable}}<p><a href="/forgot-password">Forgot password?</a></p>{{end}}
 </div>
 {{end}}

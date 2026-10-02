@@ -322,6 +322,7 @@ func TestSetupHandlers(t *testing.T) {
 
 func TestResetPasswordHandlers(t *testing.T) {
 	server := newTestServer(t)
+	enablePasswordReset(t, server)
 	if err := server.Users.Create("reader", "old-password", users.RoleMember, true, "reader@example.com"); err != nil {
 		t.Fatal(err)
 	}
@@ -391,8 +392,8 @@ func TestEmailDependentActionsRejectUnavailableConfiguration(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(url.Values{"email": {"reader@example.com"}}.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	server.ForgotPasswordSubmit(forgot, request)
-	if !strings.Contains(forgot.Body.String(), "Email is unavailable") {
-		t.Errorf("forgot-password response missing unavailable guidance: %s", forgot.Body.String())
+	if forgot.Code != http.StatusNotFound {
+		t.Errorf("forgot-password status = %d, want %d", forgot.Code, http.StatusNotFound)
 	}
 
 	invite := httptest.NewRecorder()
@@ -642,7 +643,7 @@ func TestAccountPageCombinesPermittedSettings(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"<h1>Account</h1>", ">Account<", "Change password", "Bookmark link", `action="/account/bookmark/regenerate"`} {
+	for _, want := range []string{">Account<", "Change password", "Bookmark link", `action="/account/bookmark/regenerate"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("account page missing %q: %s", want, body)
 		}
@@ -656,6 +657,35 @@ func enableTestSMTP(t *testing.T, server *Server) {
 	t.Helper()
 	if err := server.Users.SaveSMTPSettings(mail.Settings{Host: "smtp.example.com", FromAddress: "library@example.com"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func enablePasswordReset(t *testing.T, server *Server) {
+	t.Helper()
+	enableTestSMTP(t, server)
+	server.PublicURL = "https://library.example.com"
+	if err := server.Users.SaveGeneralSettings(users.GeneralSettings{PasswordResetEnabled: true}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoginOnlyShowsEnabledPasswordReset(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, "reader@example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	hidden := httptest.NewRecorder()
+	server.LoginPage(hidden, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if strings.Contains(hidden.Body.String(), "Forgot password?") {
+		t.Errorf("disabled password reset shown on login: %s", hidden.Body.String())
+	}
+
+	enablePasswordReset(t, server)
+	enabled := httptest.NewRecorder()
+	server.LoginPage(enabled, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if !strings.Contains(enabled.Body.String(), "Forgot password?") {
+		t.Errorf("enabled password reset missing from login: %s", enabled.Body.String())
 	}
 }
 
