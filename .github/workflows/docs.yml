@@ -70,7 +70,6 @@ jobs:
           node --input-type=module <<'NODE' >> "$GITHUB_OUTPUT"
           import { execFileSync } from "node:child_process";
           const { retainedVersions } = await import("./scripts/docs/version-retention.mjs");
-          const { supportsCaptureScenario } = await import("./scripts/screenshots/capture-compat.mjs");
           const tags = execFileSync("git", ["tag", "-l", "v*", "--sort=-v:refname"], { encoding: "utf8" })
             .trim().split("\n").filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag));
           if (tags.length === 0) throw new Error("at least one vX.Y.Z release tag is required");
@@ -111,7 +110,7 @@ jobs:
             : process.env.PUBLISH_LATEST === "true" ? [latest, "main"] : ["main"];
           const label = (ref) => ref === "main" ? "Development (main)" : ref;
           const capture = process.env.REGENERATE_ALL === "true" || process.env.PUBLISH_LATEST === "true" || captureChanged || !hasPublishedSite;
-          const entries = await Promise.all(selected.map(async (ref) => ({ ref, slug: ref, label: label(ref), capture, firstRun: await supportsCaptureScenario(ref, "first-admin-setup") })));
+          const entries = selected.map((ref) => ({ ref, slug: ref, label: label(ref), capture }));
           const manifest = [
             { slug: "latest", path: "", label: `Latest (${latest})` },
             ...retained.map((ref) => ({ slug: ref, path: ref, label: ref })),
@@ -192,6 +191,18 @@ jobs:
           fi
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           printf 'date=%s\n' "$(git -C version log -1 --format=%as)" >> "$GITHUB_OUTPUT"
+      - id: capture-plan
+        if: matrix.capture
+        run: |
+          first_run=$(node --input-type=module <<'NODE'
+          import { loadCaptureSpec } from "./tooling/scripts/screenshots/capture-compat.mjs";
+          const spec = await loadCaptureSpec("./version", process.env.BUILD_TAG);
+          process.stdout.write(spec.scenarios.some((scenario) => scenario.id === "first-admin-setup") ? "true" : "false");
+          NODE
+          )
+          printf 'first_run=%s\n' "$first_run" >> "$GITHUB_OUTPUT"
+        env:
+          BUILD_TAG: ${{ steps.build-info.outputs.version }}
       - if: matrix.capture
         run: go build -ldflags="-X main.buildVersion=${{ steps.build-info.outputs.version }} -X main.buildDate=${{ steps.build-info.outputs.date }}" -o "$RUNNER_TEMP/server" ./cmd/server
         working-directory: version/src
@@ -199,7 +210,7 @@ jobs:
         run: go build -o "$RUNNER_TEMP/fixture-admin" ./cmd/server
         working-directory: tooling/src
       - name: Start first-run fixture server
-        if: matrix.capture && matrix.firstRun
+        if: matrix.capture && steps.capture-plan.outputs.first_run == 'true'
         run: |
           PORT=8080 \
           LIBRARY_PATH="$RUNNER_TEMP/library" \
@@ -209,7 +220,7 @@ jobs:
           "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
           printf '%s' "$!" >"$RUNNER_TEMP/server.pid"
       - name: Wait for first-run fixture server
-        if: matrix.capture && matrix.firstRun
+        if: matrix.capture && steps.capture-plan.outputs.first_run == 'true'
         run: |
           ready=false;
           for attempt in {1..30}; do
@@ -225,14 +236,14 @@ jobs:
             exit 1
           fi
       - name: Capture first administrator setup
-        if: matrix.capture && matrix.firstRun
+        if: matrix.capture && steps.capture-plan.outputs.first_run == 'true'
         run: npm run capture --prefix tooling/scripts/screenshots
         env:
           SCREENSHOT_ROOT: ${{ github.workspace }}/version
           SCREENSHOT_BUILD_TAG: ${{ steps.build-info.outputs.version }}
           SCREENSHOT_SCENARIOS: first-admin-setup
       - name: Stop first-run fixture server
-        if: matrix.capture && matrix.firstRun
+        if: matrix.capture && steps.capture-plan.outputs.first_run == 'true'
         run: kill "$(cat "$RUNNER_TEMP/server.pid")"
       - name: Seed fixture user
         if: matrix.capture

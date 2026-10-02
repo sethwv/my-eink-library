@@ -15,17 +15,6 @@ export async function loadCaptureSpec(root, version) {
   return spec;
 }
 
-// supportsCaptureScenario reports whether a version's compatibility catalog
-// includes a scenario. Versions without a migration use the current catalog.
-export async function supportsCaptureScenario(version, scenarioID) {
-	const migration = (await loadMigrations()).find(({ upTo }) => isAtOrBefore(version, upTo));
-	if (!migration) return true;
-
-	const spec = { root: "", version, scenarios: null };
-	await migration.apply(spec);
-	return spec.scenarios.some((scenario) => scenario.id === scenarioID);
-}
-
 async function loadMigrations() {
   const files = await readdir(migrationDirectory);
   const migrations = await Promise.all(files.filter((file) => file.endsWith(".mjs")).map(async (file) => {
