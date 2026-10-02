@@ -2,8 +2,8 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-library_dir=${EINK_LIBRARY_FIXTURE_DIR:-"$root/.dev/library"}
-data_dir=${EINK_LIBRARY_DATA_DIR:-"$root/.dev/data"}
+library_dir=${MY_SIDELOAD_LIBRARY_FIXTURE_DIR:-"$root/.dev/library"}
+data_dir=${MY_SIDELOAD_LIBRARY_DATA_DIR:-"$root/.dev/data"}
 
 if [ "${1:-}" = "--prepare" ]; then
   prepare_only=true

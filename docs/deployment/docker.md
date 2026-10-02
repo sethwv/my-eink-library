@@ -9,7 +9,7 @@ nav_order: 1
 Release images are published to:
 
 ```text
-ghcr.io/sethwv/my-eink-library:latest
+ghcr.io/sethwv/my-sideload-library:latest
 ```
 
 Development builds use `<branch>` and immutable `<branch>-<short-sha>` tags, such as `main-a1b2c3d`. Versioned releases also publish exact semantic-version and major/minor tags.
@@ -18,7 +18,7 @@ Use the repository's `docker-compose.yml` with an ignored `docker-compose.overri
 
 ```yaml
 services:
-  eink-library:
+  sideload-library:
     volumes:
       - /path/to/epubs:/library:ro
 ```

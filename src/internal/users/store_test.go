@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/mail"
+	"github.com/sethwv/my-sideload-library/internal/mail"
 )
 
 func openTestStore(t *testing.T) *Store {

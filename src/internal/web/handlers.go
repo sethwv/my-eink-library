@@ -11,15 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/auth"
-	"github.com/sethwv/my-eink-library/internal/chaptarr"
-	"github.com/sethwv/my-eink-library/internal/hardcover"
-	"github.com/sethwv/my-eink-library/internal/index"
-	"github.com/sethwv/my-eink-library/internal/kepub"
-	"github.com/sethwv/my-eink-library/internal/mail"
-	"github.com/sethwv/my-eink-library/internal/tasks"
-	"github.com/sethwv/my-eink-library/internal/thumbnail"
-	"github.com/sethwv/my-eink-library/internal/users"
+	"github.com/sethwv/my-sideload-library/internal/auth"
+	"github.com/sethwv/my-sideload-library/internal/chaptarr"
+	"github.com/sethwv/my-sideload-library/internal/hardcover"
+	"github.com/sethwv/my-sideload-library/internal/index"
+	"github.com/sethwv/my-sideload-library/internal/kepub"
+	"github.com/sethwv/my-sideload-library/internal/mail"
+	"github.com/sethwv/my-sideload-library/internal/tasks"
+	"github.com/sethwv/my-sideload-library/internal/thumbnail"
+	"github.com/sethwv/my-sideload-library/internal/users"
 )
 
 type Server struct {

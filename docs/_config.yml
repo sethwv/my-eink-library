@@ -1,4 +1,4 @@
-title: my-eink-library
+title: my-sideload-library
 description: A self-hosted EPUB library for e-readers.
 url: "https://sethwv.github.io"
 baseurl: "/"
@@ -16,7 +16,7 @@ search:
 
 aux_links:
   "View on GitHub":
-    - "https://github.com/sethwv/my-eink-library"
+    - "https://github.com/sethwv/my-sideload-library"
 
 aux_links_new_tab: true
 
@@ -26,7 +26,7 @@ nav_external_links:
 
 gh_edit_link: false
 gh_edit_link_text: Improve this page on GitHub
-gh_edit_repository: "https://github.com/sethwv/my-eink-library"
+gh_edit_repository: "https://github.com/sethwv/my-sideload-library"
 gh_edit_branch: main
 gh_edit_source: docs
 gh_edit_view_mode: edit

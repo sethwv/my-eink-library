@@ -17,7 +17,7 @@ test('major mode retains all releases in the current major and final older major
 });
 
 test('prunes obsolete published version directories', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'eink-library-docs-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'sideload-library-docs-'));
   try {
     await Promise.all(['v1.0.0', 'v1.0.1', 'v2.0.0', 'main'].map((name) => mkdir(path.join(root, name))));
     await prunePublishedVersions(root, ['v1.0.1', 'v2.0.0']);

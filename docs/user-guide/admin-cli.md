@@ -6,7 +6,7 @@ nav_order: 5
 
 # Admin CLI
 
-The local `eink-library admin` command is a break-glass tool for the server operator. Use it when the web interface cannot restore access, such as when every administrator password is lost. It changes the same `users.db` used by the application, so stop the server before running it.
+The local `sideload-library admin` command is a break-glass tool for the server operator. Use it when the web interface cannot restore access, such as when every administrator password is lost. It changes the same `users.db` used by the application, so stop the server before running it.
 
 ## Reset a user's password
 
@@ -14,7 +14,7 @@ Run the command with the application's `DATA_DIR`, account username, and a repla
 
 ```sh
 read -rsp "Password: " password; echo
-DATA_DIR=/var/lib/eink-library eink-library admin reset-password admin "$password"
+DATA_DIR=/var/lib/sideload-library sideload-library admin reset-password admin "$password"
 unset password
 ```
 
@@ -26,7 +26,7 @@ Create an account when no existing administrator can sign in. The optional role 
 
 ```sh
 read -rsp "Password: " password; echo
-DATA_DIR=/var/lib/eink-library eink-library admin create-user recovery-admin "$password" admin
+DATA_DIR=/var/lib/sideload-library sideload-library admin create-user recovery-admin "$password" admin
 unset password
 ```
 

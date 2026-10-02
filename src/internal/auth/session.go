@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/users"
+	"github.com/sethwv/my-sideload-library/internal/users"
 )
 
-const CookieName = "eink_session"
+const CookieName = "sideload_session"
 
 // Authenticator's ttl is mutable (see SetTTL) so the admin Settings page can
 // change the session lifetime without a restart; already-issued cookies

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/mail"
+	"github.com/sethwv/my-sideload-library/internal/mail"
 )
 
 func (s *Store) GetSMTPSettings() (mail.Settings, error) {

@@ -66,7 +66,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/sethwv/my-eink-library
+          images: ghcr.io/sethwv/my-sideload-library
           tags: |
             type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
             type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ inputs.version != '' }}
@@ -74,10 +74,10 @@ jobs:
             type=ref,event=branch,enable=${{ github.event_name == 'push' && inputs.version == '' }}
             type=sha,prefix={{branch}}-,format=short,enable=${{ github.event_name == 'push' && inputs.version == '' }}
           labels: |
-            org.opencontainers.image.title=my-eink-library
+            org.opencontainers.image.title=my-sideload-library
             org.opencontainers.image.description=Self-hosted EPUB library for e-readers
             org.opencontainers.image.licenses=AGPL-3.0-only
-            org.opencontainers.image.source=https://github.com/sethwv/my-eink-library
+            org.opencontainers.image.source=https://github.com/sethwv/my-sideload-library
       - name: Log in to GHCR
         if: inputs.version != '' || github.event_name == 'push'
         uses: docker/login-action@v4

@@ -74,7 +74,7 @@ async function runAction(page, context, action, scenarioID) {
       await page.goto(`${baseURL}${resolve(value, context, scenarioID)}`, { waitUntil: "networkidle" });
       return;
     case "set_theme":
-      await page.context().addCookies([{ name: "eink-library-theme", value: resolve(value, context, scenarioID), url: baseURL }]);
+      await page.context().addCookies([{ name: "sideload-library-theme", value: resolve(value, context, scenarioID), url: baseURL }]);
       return;
     case "open_book": {
       const title = resolve(value, context, scenarioID);

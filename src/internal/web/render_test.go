@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/tasks"
+	"github.com/sethwv/my-sideload-library/internal/tasks"
 )
 
 func TestRenderIncludesBuildVersion(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	render(recorder, "login.html", map[string]any{
 		"Title":        "Log in",
-		"SiteName":     "eink-library",
+		"SiteName":     "sideload-library",
 		"BuildVersion": "v1.2.3",
 		"BuildDate":    "2026-08-15",
 	})
@@ -22,7 +22,7 @@ func TestRenderIncludesBuildVersion(t *testing.T) {
 	if recorder.Code != 200 {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
-	if !strings.Contains(recorder.Body.String(), `href="https://github.com/sethwv/my-eink-library/tree/v1.2.3"`) || !strings.Contains(recorder.Body.String(), "v1.2.3</a> 08-15-2026") || strings.Contains(recorder.Body.String(), ">Source<") {
+	if !strings.Contains(recorder.Body.String(), `href="https://github.com/sethwv/my-sideload-library/tree/v1.2.3"`) || !strings.Contains(recorder.Body.String(), "v1.2.3</a> 08-15-2026") || strings.Contains(recorder.Body.String(), ">Source<") {
 		t.Errorf("response does not contain the build metadata: %s", recorder.Body.String())
 	}
 }
@@ -220,10 +220,10 @@ func TestFormatBuildDate(t *testing.T) {
 }
 
 func TestSourceURL(t *testing.T) {
-	if got := sourceURL("main-8edeb01"); got != "https://github.com/sethwv/my-eink-library/tree/8edeb01" {
+	if got := sourceURL("main-8edeb01"); got != "https://github.com/sethwv/my-sideload-library/tree/8edeb01" {
 		t.Errorf("sourceURL() = %q", got)
 	}
-	if got := sourceURL("main-8edeb01 (dirty)"); got != "https://github.com/sethwv/my-eink-library/tree/8edeb01" {
+	if got := sourceURL("main-8edeb01 (dirty)"); got != "https://github.com/sethwv/my-sideload-library/tree/8edeb01" {
 		t.Errorf("sourceURL() = %q", got)
 	}
 }
@@ -349,7 +349,7 @@ func TestRenderLibraryPager(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			render(recorder, "library.html", map[string]any{
 				"Title":      "Library",
-				"SiteName":   "eink-library",
+				"SiteName":   "sideload-library",
 				"Action":     "/authors",
 				"Sort":       "author",
 				"Dir":        "asc",

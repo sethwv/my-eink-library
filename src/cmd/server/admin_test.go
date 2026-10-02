@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sethwv/my-eink-library/internal/users"
+	"github.com/sethwv/my-sideload-library/internal/users"
 )
 
 func TestSessionSecret_OverrideDoesNotReplacePersistedValue(t *testing.T) {

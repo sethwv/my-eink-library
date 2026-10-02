@@ -216,7 +216,7 @@ jobs:
           LIBRARY_PATH="$RUNNER_TEMP/library" \
           DATA_DIR="$RUNNER_TEMP/data" \
           SESSION_SECRET=fixture-session-secret-for-documentation-captures \
-          SITE_NAME="my-eink-library" \
+          SITE_NAME="my-sideload-library" \
           "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
           printf '%s' "$!" >"$RUNNER_TEMP/server.pid"
       - name: Wait for first-run fixture server
@@ -258,7 +258,7 @@ jobs:
           LIBRARY_USER=admin \
           LIBRARY_PASS=password \
           SESSION_SECRET=fixture-session-secret-for-documentation-captures \
-          SITE_NAME="my-eink-library" \
+          SITE_NAME="my-sideload-library" \
           "$RUNNER_TEMP/server" >"$RUNNER_TEMP/server.log" 2>&1 &
       - name: Wait for fixture server
         if: matrix.capture

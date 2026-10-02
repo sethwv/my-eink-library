@@ -6,7 +6,7 @@ import (
 )
 
 func TestBuildMessageEncodesBodyAndHeaders(t *testing.T) {
-	msg, err := buildMessage(Settings{FromName: "Eink Library", FromAddress: "library@example.com"}, "reader@example.com", "New books", "title\r\nBcc: attacker@example.com")
+	msg, err := buildMessage(Settings{FromName: "Sideload Library", FromAddress: "library@example.com"}, "reader@example.com", "New books", "title\r\nBcc: attacker@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,14 +20,14 @@ func TestBuildMessageEncodesBodyAndHeaders(t *testing.T) {
 }
 
 func TestBuildMessageRejectsHeaderInjection(t *testing.T) {
-	base := Settings{FromName: "Eink Library", FromAddress: "library@example.com"}
+	base := Settings{FromName: "Sideload Library", FromAddress: "library@example.com"}
 	for _, tt := range []struct {
 		name     string
 		settings Settings
 		to       string
 		subject  string
 	}{
-		{"sender name", Settings{FromName: "Eink\r\nBcc: attacker@example.com", FromAddress: base.FromAddress}, "reader@example.com", "Hello"},
+		{"sender name", Settings{FromName: "Sideload\r\nBcc: attacker@example.com", FromAddress: base.FromAddress}, "reader@example.com", "Hello"},
 		{"sender address", Settings{FromName: base.FromName, FromAddress: "library@example.com\r\nBcc: attacker@example.com"}, "reader@example.com", "Hello"},
 		{"recipient", base, "reader@example.com\r\nBcc: attacker@example.com", "Hello"},
 		{"subject", base, "reader@example.com", "Hello\r\nBcc: attacker@example.com"},

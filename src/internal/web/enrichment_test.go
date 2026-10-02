@@ -4,8 +4,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/sethwv/my-eink-library/internal/chaptarr"
-	"github.com/sethwv/my-eink-library/internal/hardcover"
+	"github.com/sethwv/my-sideload-library/internal/chaptarr"
+	"github.com/sethwv/my-sideload-library/internal/hardcover"
 )
 
 func TestResolveCoverURLPinsPublicAddress(t *testing.T) {

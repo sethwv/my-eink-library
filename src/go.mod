@@ -1,4 +1,4 @@
-module github.com/sethwv/my-eink-library
+module github.com/sethwv/my-sideload-library
 
 go 1.25.7
 

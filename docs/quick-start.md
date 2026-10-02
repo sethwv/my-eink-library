@@ -5,7 +5,7 @@ nav_order: 2
 
 # Quick Start
 
-Docker is the quickest way to run my-eink-library. Your EPUB files remain mounted read-only, while its index and user database live in a named Docker volume. For Windows and Debian package installation, see [Deployment](deployment/).
+Docker is the quickest way to run my-sideload-library. Your EPUB files remain mounted read-only, while its index and user database live in a named Docker volume. For Windows and Debian package installation, see [Deployment](deployment/).
 
 ## 1. Create an override file
 
@@ -13,7 +13,7 @@ Copy this into `docker-compose.override.yml` next to the repository's Compose fi
 
 ```yaml
 services:
-  eink-library:
+  sideload-library:
     volumes:
       - /path/to/epubs:/library:ro
 ```
@@ -32,7 +32,7 @@ Mount each folder and list its matching container paths in `LIBRARY_PATH`:
 
 ```yaml
 services:
-  eink-library:
+  sideload-library:
     environment:
       LIBRARY_PATH: /library/fiction,/library/nonfiction
     volumes:
@@ -43,4 +43,4 @@ services:
 The first configured folder wins when duplicate EPUBs are found.
 
 {: .note }
-To recover access, stop the service and run `docker compose run --rm eink-library admin reset-password <username> <password>`. The command sets the supplied password without starting a web server.
+To recover access, stop the service and run `docker compose run --rm sideload-library admin reset-password <username> <password>`. The command sets the supplied password without starting a web server.

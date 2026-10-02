@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/chaptarr"
+	"github.com/sethwv/my-sideload-library/internal/chaptarr"
 )
 
 // LoadChaptarrCache implements chaptarr.CacheStore.

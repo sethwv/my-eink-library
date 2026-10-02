@@ -6,7 +6,7 @@ nav_order: 1
 
 # Vision
 
-my-eink-library is a self-hosted EPUB library for people who want to read the files they own on the e-readers they already use.
+my-sideload-library is a self-hosted EPUB library for people who want to read the files they own on the e-readers they already use.
 
 ## What this project *is*
 
@@ -16,4 +16,4 @@ my-eink-library is a self-hosted EPUB library for people who want to read the fi
 
 ## What this project is *not*
 
-my-eink-library not a downloader and does not discover, acquire, source, or manage book files. It also does not replace applications that interface with indexers or other acquisition services. It is a private, browser-accessible home for an EPUB collection you already own.
+my-sideload-library not a downloader and does not discover, acquire, source, or manage book files. It also does not replace applications that interface with indexers or other acquisition services. It is a private, browser-accessible home for an EPUB collection you already own.

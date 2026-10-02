@@ -1,9 +1,7 @@
-# my-eink-library
-
-![my-eink-library](docs/assets/brand/lockups/horizontal-on-forest.png)
+# my-sideload-library
 
 A self-hosted EPUB library for e-readers. Browse a read-only library, download original EPUBs or Kobo-optimized KEPUBs, and manage access through a small authenticated web UI built for older e-reader browsers.
-[Refer to the docs](https://sethwv.github.io/my-eink-library/) for complete setup and deployment guides.
+[Refer to the docs](https://sethwv.github.io/my-sideload-library/) for complete setup and deployment guides.
 
 ## Support
 
@@ -31,7 +29,7 @@ Create an ignored `docker-compose.override.yml` with your library mount:
 
 ```yaml
 services:
-  eink-library:
+  sideload-library:
     volumes:
       - /path/to/epubs:/library:ro
 ```

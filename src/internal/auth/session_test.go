@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/users"
+	"github.com/sethwv/my-sideload-library/internal/users"
 )
 
 func testStore(t *testing.T) *users.Store {

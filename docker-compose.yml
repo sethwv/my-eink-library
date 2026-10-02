@@ -1,6 +1,8 @@
+name: my-sideload-library
+
 services:
-  eink-library:
-    image: ghcr.io/sethwv/my-eink-library:latest
+  sideload-library:
+    image: ghcr.io/sethwv/my-sideload-library:latest
     ports:
       - "8080:8080"
     environment:
@@ -8,8 +10,8 @@ services:
       - DATA_DIR=/data
       - PORT=8080
     volumes:
-      - eink-library-data:/data
+      - sideload-library-data:/data
     restart: unless-stopped
 
 volumes:
-  eink-library-data:
+  sideload-library-data:

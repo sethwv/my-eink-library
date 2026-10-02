@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sethwv/my-eink-library/internal/config"
-	"github.com/sethwv/my-eink-library/internal/users"
+	"github.com/sethwv/my-sideload-library/internal/config"
+	"github.com/sethwv/my-sideload-library/internal/users"
 )
 
 func sessionSecret(store *users.Store, override string) (string, error) {
@@ -20,7 +20,7 @@ func sessionSecret(store *users.Store, override string) (string, error) {
 // runAdmin executes local break-glass user administration commands.
 func runAdmin(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: eink-library admin <create-user|reset-password>")
+		return fmt.Errorf("usage: sideload-library admin <create-user|reset-password>")
 	}
 	dataDir := config.DataDir()
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -35,7 +35,7 @@ func runAdmin(args []string) error {
 	switch args[0] {
 	case "create-user":
 		if len(args) < 3 || len(args) > 4 {
-			return fmt.Errorf("usage: eink-library admin create-user <username> <password> [role]")
+			return fmt.Errorf("usage: sideload-library admin create-user <username> <password> [role]")
 		}
 		role := users.RoleMember
 		if len(args) == 4 {
@@ -47,7 +47,7 @@ func runAdmin(args []string) error {
 		return nil
 	case "reset-password":
 		if len(args) != 3 {
-			return fmt.Errorf("usage: eink-library admin reset-password <username> <password>")
+			return fmt.Errorf("usage: sideload-library admin reset-password <username> <password>")
 		}
 		user, err := store.UserByUsername(args[1])
 		if err != nil {
@@ -58,6 +58,6 @@ func runAdmin(args []string) error {
 		}
 		return store.ResetPassword(user.ID, args[2])
 	default:
-		return fmt.Errorf("usage: eink-library admin <create-user|reset-password>")
+		return fmt.Errorf("usage: sideload-library admin <create-user|reset-password>")
 	}
 }

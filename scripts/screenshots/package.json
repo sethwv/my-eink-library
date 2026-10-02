@@ -1,5 +1,5 @@
 {
-  "name": "eink-library-screenshot-harness",
+  "name": "sideload-library-screenshot-harness",
   "private": true,
   "type": "module",
   "scripts": {

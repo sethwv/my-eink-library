@@ -73,12 +73,12 @@ jobs:
           DEBIAN_PACKAGE: ${{ matrix.debian_package }}
         run: |
           mkdir -p ../dist
-          artifact="../dist/eink-library_${VERSION}_${GOOS}_${GOARCH}${EXTENSION}"
+          artifact="../dist/sideload-library_${VERSION}_${GOOS}_${GOARCH}${EXTENSION}"
           if test "$DEBIAN_PACKAGE" = true; then
             package="../dist/package"
             mkdir -p "$package/DEBIAN" "$package/usr/bin"
-            artifact="../dist/eink-library_${VERSION}_${GOOS}_${GOARCH}.deb"
-            output="$package/usr/bin/eink-library"
+            artifact="../dist/sideload-library_${VERSION}_${GOOS}_${GOARCH}.deb"
+            output="$package/usr/bin/sideload-library"
           else
             output="$artifact"
           fi
@@ -91,7 +91,7 @@ jobs:
               *) package_version="0~$VERSION" ;;
             esac
             printf '%s\n' \
-              'Package: eink-library' \
+              'Package: sideload-library' \
               "Version: ${package_version}" \
               "Architecture: ${GOARCH}" \
               'Maintainer: Seth WV <sethwv@users.noreply.github.com>' \

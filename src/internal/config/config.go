@@ -40,7 +40,7 @@ func Load() (*Config, error) {
 		DataDir:        DataDir(),
 		SessionSecret:  os.Getenv("SESSION_SECRET"),
 		Port:           getenv("PORT", "8080"),
-		SiteName:       getenv("SITE_NAME", "eink-library"),
+		SiteName:       getenv("SITE_NAME", "sideload-library"),
 		HardcoverToken: os.Getenv("HARDCOVER_API_TOKEN"),
 		PublicURL:      strings.TrimRight(os.Getenv("PUBLIC_URL"), "/"),
 	}

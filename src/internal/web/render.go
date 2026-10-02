@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/epub"
+	"github.com/sethwv/my-sideload-library/internal/epub"
 )
 
 //go:embed templates/*.html
@@ -187,7 +187,7 @@ func sourceURL(version string) string {
 			revision = candidate
 		}
 	}
-	return "https://github.com/sethwv/my-eink-library/tree/" + revision
+	return "https://github.com/sethwv/my-sideload-library/tree/" + revision
 }
 
 // formatPublished renders an EPUB's raw <dc:date> string as "MM/DD/YYYY" when

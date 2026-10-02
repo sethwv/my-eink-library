@@ -5,12 +5,12 @@ description: "A self-hosted EPUB library made for e-reader browsers."
 ---
 <div class="hero">
   <!-- <p class="eyebrow"></p> -->
-  <h1><img class="hero-lockup" src="{{ '/assets/brand/lockups/horizontal-ivory-transparent.png' | relative_url }}" alt="my-eink-library"></h1>
+  <h1>my-sideload-library</h1>
   <!-- <p class="hero-lede">A purpose built EPUB library for Kobo e-reader web browsers.</p> -->
   <div class="hero-actions">
     <a class="btn btn-primary" href="{{ '/quick-start' | relative_url }}">Get started</a>
-    <a class="btn btn-secondary" href="https://github.com/sethwv/my-eink-library/releases">Download releases</a>
-    <a class="btn btn-secondary" href="https://github.com/sethwv/my-eink-library">View source</a>
+    <a class="btn btn-secondary" href="https://github.com/sethwv/my-sideload-library/releases">Download releases</a>
+    <a class="btn btn-secondary" href="https://github.com/sethwv/my-sideload-library">View source</a>
   </div>
 </div>
 <div class="feature-grid">
@@ -21,7 +21,7 @@ description: "A self-hosted EPUB library made for e-reader browsers."
   </section>
   <section class="feature-card">
     <!-- <span class="feature-mark">02</span> -->
-    <h2>Built for e-ink</h2>
+    <h2>Built for e-readers</h2>
     <p>Scalable pages with generous tap targets, and deliberately conservative browser support keep the site usable on Kobo's older WebKit browser.</p>
   </section>
   <section class="feature-card">

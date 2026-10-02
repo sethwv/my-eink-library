@@ -2,7 +2,7 @@
 // Kobo's QtWebKit browser does not provide Web Storage. Keep this ES5-only,
 // like modal.js, so it can run on the target device.
 (function () {
-  var cookieName = "eink-library-theme";
+  var cookieName = "sideload-library-theme";
 
   function preference() {
     var cookies = document.cookie ? document.cookie.split(";") : [];

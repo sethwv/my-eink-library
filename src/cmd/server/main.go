@@ -14,15 +14,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sethwv/my-eink-library/internal/auth"
-	"github.com/sethwv/my-eink-library/internal/chaptarr"
-	"github.com/sethwv/my-eink-library/internal/config"
-	"github.com/sethwv/my-eink-library/internal/hardcover"
-	"github.com/sethwv/my-eink-library/internal/index"
-	"github.com/sethwv/my-eink-library/internal/tasks"
-	"github.com/sethwv/my-eink-library/internal/thumbnail"
-	"github.com/sethwv/my-eink-library/internal/users"
-	"github.com/sethwv/my-eink-library/internal/web"
+	"github.com/sethwv/my-sideload-library/internal/auth"
+	"github.com/sethwv/my-sideload-library/internal/chaptarr"
+	"github.com/sethwv/my-sideload-library/internal/config"
+	"github.com/sethwv/my-sideload-library/internal/hardcover"
+	"github.com/sethwv/my-sideload-library/internal/index"
+	"github.com/sethwv/my-sideload-library/internal/tasks"
+	"github.com/sethwv/my-sideload-library/internal/thumbnail"
+	"github.com/sethwv/my-sideload-library/internal/users"
+	"github.com/sethwv/my-sideload-library/internal/web"
 )
 
 // buildVersion is set by release builds with -ldflags. The fallback keeps
@@ -300,7 +300,7 @@ func main() {
 
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("eink-library starting on :%s (library=%s data=%s)", cfg.Port, strings.Join(cfg.LibraryPaths, ", "), cfg.DataDir)
+		log.Printf("sideload-library starting on :%s (library=%s data=%s)", cfg.Port, strings.Join(cfg.LibraryPaths, ", "), cfg.DataDir)
 		serveErr <- httpSrv.ListenAndServe()
 	}()
 

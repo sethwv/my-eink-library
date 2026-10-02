@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/pressly/goose/v3"
-	"github.com/sethwv/my-eink-library/internal/sqlite"
+	"github.com/sethwv/my-sideload-library/internal/sqlite"
 )
 
 //go:embed migrations/*.sql

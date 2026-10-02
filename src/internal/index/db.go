@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/pressly/goose/v3"
-	"github.com/sethwv/my-eink-library/internal/sqlite"
+	"github.com/sethwv/my-sideload-library/internal/sqlite"
 	_ "modernc.org/sqlite"
 )
 
@@ -64,7 +64,7 @@ func Open(dbPath string) (*DB, error) {
 	// databases whose book_enrichment/books tables were created before the
 	// columns they check for existed, which the goose baseline's
 	// CREATE-TABLE-IF-NOT-EXISTS alone can't retrofit onto an
-	// already-existing table. See eink-library-y3h for why this wasn't
+	// already-existing table. See sideload-library-y3h for why this wasn't
 	// folded into individual historical migrations.
 	if err := db.migrateEnrichmentStatusColumn(); err != nil {
 		sdb.Close()
