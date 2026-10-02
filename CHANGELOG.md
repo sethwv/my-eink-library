@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a first-run setup flow for creating the initial administrator account.
+- Added background task administration for library scans, scheduled email digests, and Chaptarr catalog refreshes.
+- Added configurable KEPUB downloads, including an option to write enriched series metadata for Kobo NickelSeries imports.
+- Added standalone macOS downloads for Apple Silicon and Intel Macs.
+
 ### Changed
 
+- Renamed the project to my-sideload-library and updated its application, container, and release identities.
 - Reorganized administrator configuration into dedicated server, email, and integration pages.
+- Cached Chaptarr catalogs locally and refresh them on a schedule before using Hardcover fallback matches.
+
+### Fixed
+
+- Made the server available while the initial library scan runs in the background.
 
 ## [v0.0.2] - 2026-09-16
 
