@@ -313,7 +313,7 @@ jobs:
         run: >-
           mkdir -p "artifact/${{ matrix.slug }}"
           && rsync -a --delete _site/ "artifact/${{ matrix.slug }}/"
-          && printf '%s' "${{ matrix.sitePath }}" > "artifact/${{ matrix.slug }}/.site-path"
+          && printf '%s' "${{ matrix.sitePath }}" > "artifact/${{ matrix.slug }}/site-path.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: docs-${{ matrix.slug }}
@@ -381,11 +381,11 @@ jobs:
           for artifact in incoming/*; do
             slug="${artifact##*/}"
             if test "$slug" = root; then continue; fi
-             site_path=$(cat "$artifact/.site-path")
+             site_path=$(cat "$artifact/site-path.txt")
              case "$site_path" in ''|/*|*'..'*) exit 1 ;; esac
              rm -rf "publish/$site_path"
              mkdir -p "publish/$site_path"
-             rsync -a --delete --exclude=.site-path "$artifact/" "publish/$site_path/"
+             rsync -a --delete --exclude=site-path.txt "$artifact/" "publish/$site_path/"
              test -f "publish/$site_path/index.html"
           done
           if test -d incoming/root; then
