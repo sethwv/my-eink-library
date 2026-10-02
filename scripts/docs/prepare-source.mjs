@@ -7,8 +7,8 @@ if (!source || !destination || !contributing || !changelog || !brandingSource ||
 }
 
 const versions = JSON.parse(manifestJSON);
-if (!Array.isArray(versions) || !versions.every(({ slug: versionSlug, label: versionLabel, path: versionPath }) => versionSlug && versionLabel && typeof versionPath === "string")) {
-  throw new Error("version manifest must contain slugs, paths, and labels");
+if (!Array.isArray(versions) || !versions.every(({ slug: versionSlug, label: versionLabel, path: versionPath, category }) => versionSlug && versionLabel && typeof versionPath === "string" && ["latest", "development", "release", "doc-branch"].includes(category))) {
+  throw new Error("version manifest must contain slugs, paths, labels, and categories");
 }
 
 const escapeHTML = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -23,6 +23,7 @@ await cp(path.join(brandingSource, "CNAME"), path.join(destination, "CNAME"));
 await cp(path.join(brandingSource, "_includes", "head_custom.html"), path.join(destination, "_includes", "head_custom.html"));
 await cp(path.join(brandingSource, "assets", "css"), path.join(destination, "assets", "css"), { force: true, recursive: true });
 await cp(path.join(brandingSource, "assets", "js"), path.join(destination, "assets", "js"), { force: true, recursive: true });
+await cp(path.join(brandingSource, "assets", "brand"), path.join(destination, "assets", "brand"), { force: true, recursive: true });
 
 const frontMatter = "---\ntitle: Contributing\nnav_order: 5\nsearch_exclude: true\ngh_edit_link: false\n---\n\n";
 const contributionGuide = await readFile(contributing, "utf8");
@@ -56,13 +57,19 @@ const renderOption = (version) => {
   const destinationPath = version.path ? `${normalizedBasePath}/${version.path}/` : `${normalizedBasePath}/`;
   return `<option value="${escapeHTML(destinationPath)}" data-version-root="${escapeHTML(destinationPath)}"${selected}>${escapeHTML(version.label)}</option>`;
 };
-const currentVersions = versions.filter((version) => version.slug === "latest" || version.slug === "main");
-const releasedVersions = versions.filter((version) => version.slug !== "latest" && version.slug !== "main");
+const currentVersions = versions.filter((version) => version.category === "latest" || version.category === "development");
+const releasedVersions = versions.filter((version) => version.category === "release");
+const branchVersions = versions.filter((version) => version.category === "doc-branch");
 const options = [
   ...currentVersions.map(renderOption),
   ...(releasedVersions.length ? [
     "<optgroup label=\"Releases\">",
     ...releasedVersions.map(renderOption),
+    "</optgroup>",
+  ] : []),
+  ...(branchVersions.length ? [
+    "<optgroup label=\"Doc Branches\">",
+    ...branchVersions.map(renderOption),
     "</optgroup>",
   ] : []),
 ].join("\n");
@@ -89,6 +96,10 @@ const sidebar = `{%- comment -%}
       <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
     </button>
   </div>
+
+  <a href="{{ '/' | relative_url }}" class="docs-sidebar-brand" aria-label="my-sideload-library home">
+    <img src="{{ '/assets/brand/lockups/horizontal-moss-transparent.png' | relative_url }}" alt="my-sideload-library">
+  </a>
 
   {% include_cached components/site_nav.html %}
 

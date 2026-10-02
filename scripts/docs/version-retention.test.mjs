@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { eligibleDocumentationVersions, prunePublishedVersions, retainedVersions } from './version-retention.mjs';
+import { branchArtifactSlug, documentationBranches, eligibleDocumentationVersions, prunePublishedSites, retainedVersions } from './version-retention.mjs';
 
 const tags = ['v1.0.0', 'v1.0.1', 'v1.1.0', 'v1.1.1', 'v2.0.0', 'v2.0.1'];
 
@@ -25,12 +25,36 @@ test('allows a release-free documentation site', () => {
   assert.deepEqual(retainedVersions([], 'minor'), []);
 });
 
-test('prunes obsolete published version directories', async () => {
+test('discovers documentation branches and creates safe artifact slugs', () => {
+  assert.deepEqual(documentationBranches([
+    'deadbeef\trefs/heads/docs/redesign/navbar',
+    'cafebabe\trefs/heads/main',
+    'baddcafe\trefs/heads/docs/preview',
+  ]), ['docs/preview', 'docs/redesign/navbar']);
+  assert.equal(branchArtifactSlug('docs/redesign/navbar'), 'branch-ZG9jcy9yZWRlc2lnbi9uYXZiYXI');
+});
+
+test('prunes obsolete published tag and branch directories', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'sideload-library-docs-'));
   try {
-    await Promise.all(['v1.0.0', 'v1.0.1', 'v2.0.0', 'main'].map((name) => mkdir(path.join(root, name))));
-    await prunePublishedVersions(root, ['v1.0.1', 'v2.0.0']);
-    assert.deepEqual((await readdir(root)).sort(), ['main', 'v1.0.1', 'v2.0.0']);
+    await Promise.all([
+      'tag/v1.0.0',
+      'tag/v1.0.1',
+      'branch/preview',
+      'branch/redesign/navbar',
+      'main',
+    ].map((name) => mkdir(path.join(root, name), { recursive: true })));
+    await Promise.all([
+      'tag/v1.0.0/index.html',
+      'tag/v1.0.1/index.html',
+      'branch/preview/index.html',
+      'branch/redesign/navbar/index.html',
+    ].map((name) => writeFile(path.join(root, name), 'site')));
+    await prunePublishedSites(root, ['v1.0.1'], ['redesign/navbar']);
+    assert.deepEqual((await readdir(path.join(root, 'tag'))).sort(), ['v1.0.1']);
+    assert.deepEqual((await readdir(path.join(root, 'branch'))).sort(), ['redesign']);
+    assert.deepEqual((await readdir(path.join(root, 'branch/redesign'))).sort(), ['navbar']);
+    assert.deepEqual((await readdir(root)).sort(), ['branch', 'main', 'tag']);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -19,6 +19,18 @@ export function eligibleDocumentationVersions(tags) {
   return tags.filter((tag) => compareTags(tag, minimumDocumentationTag) <= 0);
 }
 
+export function documentationBranches(remoteRefs) {
+  return remoteRefs
+    .map((line) => line.trim().split(/\s+/).at(-1))
+    .filter((ref) => ref?.startsWith('refs/heads/docs/'))
+    .map((ref) => ref.slice('refs/heads/'.length))
+    .sort((first, second) => first.localeCompare(second));
+}
+
+export function branchArtifactSlug(ref) {
+  return `branch-${Buffer.from(ref).toString('base64url')}`;
+}
+
 // retainedVersions returns tags newest first. The current release line keeps
 // every patch; historical lines collapse to their final release.
 export function retainedVersions(tags, mode) {
@@ -42,12 +54,40 @@ export function retainedVersions(tags, mode) {
   });
 }
 
-export async function prunePublishedVersions(root, retained) {
-  const entries = await readdir(root, { withFileTypes: true });
+export async function prunePublishedSites(root, retainedTags, retainedBranches) {
+  await Promise.all([
+    pruneNamespace(path.join(root, 'tag'), retainedTags),
+    pruneNamespace(path.join(root, 'branch'), retainedBranches),
+  ]);
+}
+
+async function pruneNamespace(root, retained) {
   const retainedSet = new Set(retained);
-  await Promise.all(entries
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('v') && !retainedSet.has(entry.name))
-    .map((entry) => rm(path.join(root, entry.name), { recursive: true, force: true })));
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    await pruneNamespaceEntry(root, entry.name, retainedSet);
+  }
+}
+
+async function pruneNamespaceEntry(root, relativePath, retained) {
+  const directory = path.join(root, relativePath);
+  const entries = await readdir(directory, { withFileTypes: true });
+  if (entries.some((entry) => entry.isFile() && entry.name === 'index.html')) {
+    if (!retained.has(relativePath)) await rm(directory, { recursive: true, force: true });
+    return;
+  }
+
+  for (const entry of entries) {
+    if (entry.isDirectory()) await pruneNamespaceEntry(root, path.join(relativePath, entry.name), retained);
+  }
 }
 import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
