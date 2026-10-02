@@ -100,7 +100,7 @@
     - selector: 'input[name="new_password"]'
       label: Choose a new password
       placement: bottom
-    - selector: h2
+    - selector: h2:nth-of-type(2)
       label: Optional weekly new-book digest
       placement: bottom
 
