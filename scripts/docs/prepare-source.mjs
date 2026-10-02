@@ -60,9 +60,11 @@ const currentVersions = versions.filter((version) => version.slug === "latest" |
 const releasedVersions = versions.filter((version) => version.slug !== "latest" && version.slug !== "main");
 const options = [
   ...currentVersions.map(renderOption),
-  "<optgroup label=\"Releases\">",
-  ...releasedVersions.map(renderOption),
-  "</optgroup>",
+  ...(releasedVersions.length ? [
+    "<optgroup label=\"Releases\">",
+    ...releasedVersions.map(renderOption),
+    "</optgroup>",
+  ] : []),
 ].join("\n");
 const selector = `\n<div class="docs-version-switcher">\n  <label for="docs-version">Version</label>\n  <select id="docs-version" data-docs-version data-page-path="{{ page.url }}">\n${options}\n  </select>\n</div>\n`;
 

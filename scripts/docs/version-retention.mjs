@@ -13,6 +13,12 @@ function compareTags(first, second) {
   return 0;
 }
 
+export const minimumDocumentationTag = 'v0.0.3';
+
+export function eligibleDocumentationVersions(tags) {
+  return tags.filter((tag) => compareTags(tag, minimumDocumentationTag) <= 0);
+}
+
 // retainedVersions returns tags newest first. The current release line keeps
 // every patch; historical lines collapse to their final release.
 export function retainedVersions(tags, mode) {
