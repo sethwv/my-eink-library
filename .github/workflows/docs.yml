@@ -2,7 +2,7 @@ name: Deploy documentation
 
 on:
   push:
-    branches: [main, "dev/docs/**"]
+    branches: [main, "dev/**"]
     paths:
       - ".github/workflows/docs.yml"
       - "docs/**"
@@ -77,15 +77,14 @@ jobs:
           const tags = eligibleDocumentationVersions(allTags);
           const latest = tags[0] ?? "";
           const retained = retainedVersions(tags, process.env.RETENTION_MODE);
-          const branchRefs = documentationBranches(execFileSync("git", ["ls-remote", "--heads", "origin", "dev/docs/*"], { encoding: "utf8" }).trim().split("\n").filter(Boolean));
+          const branchRefs = documentationBranches(execFileSync("git", ["ls-remote", "--heads", "origin", "dev/*"], { encoding: "utf8" }).trim().split("\n").filter(Boolean));
           const releaseEntries = retained.map((ref) => ({ ref, slug: `tag-${ref}`, sitePath: `tag/${ref}`, label: ref, category: "release" }));
-          const branchEntries = branchRefs.map((ref) => {
+          const allBranchEntries = branchRefs.map((ref) => {
             const suffix = ref.slice(documentationBranchPrefix.length);
             return { ref, slug: branchArtifactSlug(ref), sitePath: `branch/${suffix}`, label: ref, category: "doc-branch" };
           });
           const mainEntry = { ref: "main", slug: "main", sitePath: "main", label: "Development (main)", category: "development" };
           const latestEntry = latest ? { slug: "latest", sitePath: "", label: `Latest (${latest})`, category: "latest" } : null;
-          const allVersions = [...releaseEntries, ...branchEntries, mainEntry];
           const presentationPaths = [
             ".github/workflows/docs.yml",
             "docs/_config.yml",
@@ -109,15 +108,18 @@ jobs:
           }
           const presentationChanged = comparisonUnavailable || changedPaths.some((path) => presentationPaths.some((prefix) => path === prefix || path.startsWith(prefix)));
           const captureChanged = comparisonUnavailable || changedPaths.some((path) => capturePaths.some((prefix) => path === prefix || path.startsWith(prefix)));
-          let hasPublishedSite = true;
+          let hasPublishedSite = false;
           try {
-            execFileSync("git", ["ls-remote", "--exit-code", "origin", "refs/heads/docs"], { stdio: "ignore" });
-          } catch {
-            hasPublishedSite = false;
-          }
+            execFileSync("git", ["fetch", "--no-tags", "origin", "docs:refs/remotes/origin/docs"], { stdio: "ignore" });
+            hasPublishedSite = true;
+          } catch {}
           const activeBranch = process.env.EVENT_NAME === "push" && process.env.REF_NAME.startsWith(documentationBranchPrefix)
-            ? branchEntries.find(({ ref }) => ref === process.env.REF_NAME)
+            ? allBranchEntries.find(({ ref }) => ref === process.env.REF_NAME)
             : null;
+          const branchEntries = hasPublishedSite
+            ? allBranchEntries.filter((entry) => entry === activeBranch || hasPublishedPreview(entry))
+            : allBranchEntries;
+          const allVersions = [...releaseEntries, ...branchEntries, mainEntry];
           const selected = activeBranch
             ? [...(latest ? [releaseEntries.find(({ ref }) => ref === latest)] : []), activeBranch, mainEntry]
             : process.env.REGENERATE_ALL === "true" || presentationChanged
@@ -136,6 +138,15 @@ jobs:
           process.stdout.write(`latest=${latest}\n`);
           process.stdout.write(`retained=${retained.join(",")}\n`);
           process.stdout.write(`branches=${branchEntries.map(({ sitePath }) => sitePath.slice("branch/".length)).join(",")}\n`);
+
+          function hasPublishedPreview({ sitePath }) {
+            try {
+              execFileSync("git", ["cat-file", "-e", `refs/remotes/origin/docs:${sitePath}/index.html`], { stdio: "ignore" });
+              return true;
+            } catch {
+              return false;
+            }
+          }
           NODE
 
   build:

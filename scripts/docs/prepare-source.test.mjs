@@ -31,7 +31,7 @@ test('renders release and documentation branch selector groups', async () => {
     const selector = await prepare(temporary, [
       { slug: 'latest', path: '', label: 'Latest (v0.1.0)', category: 'latest' },
       { slug: 'tag-v0.1.0', path: 'tag/v0.1.0', label: 'v0.1.0', category: 'release' },
-      { slug: 'branch-preview', path: 'branch/preview', label: 'dev/docs/preview', category: 'doc-branch' },
+      { slug: 'branch-preview', path: 'branch/preview', label: 'dev/preview', category: 'doc-branch' },
       { slug: 'main', path: 'main', label: 'Development (main)', category: 'development' },
     ], 'branch-preview');
     assert.match(selector, /Latest \(v0\.1\.0\)/);

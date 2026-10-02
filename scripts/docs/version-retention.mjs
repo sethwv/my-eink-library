@@ -14,7 +14,7 @@ function compareTags(first, second) {
 }
 
 export const minimumDocumentationTag = 'v0.0.3';
-export const documentationBranchPrefix = 'dev/docs/';
+export const documentationBranchPrefix = 'dev/';
 
 export function eligibleDocumentationVersions(tags) {
   return tags.filter((tag) => compareTags(tag, minimumDocumentationTag) <= 0);
