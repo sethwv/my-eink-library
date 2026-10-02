@@ -109,7 +109,7 @@ func safeNext(next string) string {
 	// before checking for protocol-relative URLs such as /\example.com.
 	next = strings.ReplaceAll(next, "\\", "/")
 	u, err := url.Parse(next)
-	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || !strings.HasPrefix(u.Path, "/") {
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
 		return "/"
 	}
 	return u.String()
@@ -172,7 +172,7 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 	s.Auth.IssueSession(w, r, username)
 
 	target, err := url.Parse(next)
-	if err != nil || target.Hostname() != "" {
+	if err != nil || target.Scheme != "" || target.Hostname() != "" || target.User != nil || !strings.HasPrefix(target.Path, "/") || strings.HasPrefix(target.Path, "//") {
 		target = &url.URL{Path: "/"}
 	}
 	http.Redirect(w, r, target.String(), http.StatusSeeOther)

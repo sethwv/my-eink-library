@@ -301,6 +301,7 @@ func TestSafeNext(t *testing.T) {
 		{"//attacker.example", "/"},
 		{"/\\attacker.example", "/"},
 		{"\\\\attacker.example", "/"},
+		{"/%2f%2fattacker.example", "/"},
 	} {
 		if got := safeNext(tt.next); got != tt.want {
 			t.Errorf("safeNext(%q) = %q, want %q", tt.next, got, tt.want)

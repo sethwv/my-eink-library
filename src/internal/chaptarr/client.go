@@ -84,10 +84,8 @@ func (c *Client) SetCacheStore(store CacheStore) error {
 }
 
 // SetConfig updates the client's enabled state, base URL, and API key in
-// place — called after the admin Integrations page saves a change. Also
-// drops any cached catalog snapshot: it was crawled under the old
-// baseURL/apiKey, so serving it after a config change risks returning
-// data from the wrong (or no longer valid) Chaptarr instance.
+// place — called after the admin Integrations page saves a change. Also drops
+// any cached catalog snapshot when the endpoint changes.
 func (c *Client) SetConfig(enabled bool, baseURL, apiKey string) {
 	c.mu.Lock()
 	oldScope := c.cacheScopeLocked()
@@ -138,7 +136,7 @@ func (c *Client) cacheScopeLocked() string {
 	if c.baseURL == "" || c.apiKey == "" {
 		return ""
 	}
-	sum := sha256.Sum256([]byte(c.baseURL + "\x00" + c.apiKey))
+	sum := sha256.Sum256([]byte(c.baseURL))
 	return fmt.Sprintf("%x", sum[:])
 }
 

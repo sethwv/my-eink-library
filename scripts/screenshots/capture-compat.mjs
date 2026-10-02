@@ -1,18 +1,29 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parse } from "yaml";
 
 const migrationDirectory = fileURLToPath(new URL("./capture-compat/migrations/", import.meta.url));
 
 export async function loadCaptureSpec(root, version) {
-  const spec = { root, version, scenarios: null };
+	const spec = { root, version, scenarios: null };
   const migration = (await loadMigrations()).find(({ upTo }) => isAtOrBefore(version, upTo));
   if (migration) await migration.apply(spec);
-  if (!spec.scenarios) {
-    spec.scenarios = parse(await readFile(path.join(root, "docs/_data/screenshots.yml"), "utf8"));
+	if (!spec.scenarios) {
+		const { parse } = await import("yaml");
+		spec.scenarios = parse(await readFile(path.join(root, "docs/_data/screenshots.yml"), "utf8"));
   }
   return spec;
+}
+
+// supportsCaptureScenario reports whether a version's compatibility catalog
+// includes a scenario. Versions without a migration use the current catalog.
+export async function supportsCaptureScenario(version, scenarioID) {
+	const migration = (await loadMigrations()).find(({ upTo }) => isAtOrBefore(version, upTo));
+	if (!migration) return true;
+
+	const spec = { root: "", version, scenarios: null };
+	await migration.apply(spec);
+	return spec.scenarios.some((scenario) => scenario.id === scenarioID);
 }
 
 async function loadMigrations() {
