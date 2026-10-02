@@ -34,12 +34,13 @@ test('discovers documentation branches and creates safe artifact slugs', () => {
   assert.equal(branchArtifactSlug('dev/redesign/navbar'), 'branch-ZGV2L3JlZGVzaWduL25hdmJhcg');
 });
 
-test('prunes obsolete published tag and branch directories', async () => {
+test('prunes obsolete published sites and removes the legacy main path', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'sideload-library-docs-'));
   try {
     await Promise.all([
       'tag/v1.0.0',
       'tag/v1.0.1',
+      'branch/main',
       'branch/preview',
       'branch/redesign/navbar',
       'main',
@@ -47,14 +48,16 @@ test('prunes obsolete published tag and branch directories', async () => {
     await Promise.all([
       'tag/v1.0.0/index.html',
       'tag/v1.0.1/index.html',
+      'branch/main/index.html',
       'branch/preview/index.html',
       'branch/redesign/navbar/index.html',
+      'main/index.html',
     ].map((name) => writeFile(path.join(root, name), 'site')));
-    await prunePublishedSites(root, ['v1.0.1'], ['redesign/navbar']);
+    await prunePublishedSites(root, ['v1.0.1'], ['main', 'redesign/navbar']);
     assert.deepEqual((await readdir(path.join(root, 'tag'))).sort(), ['v1.0.1']);
-    assert.deepEqual((await readdir(path.join(root, 'branch'))).sort(), ['redesign']);
+    assert.deepEqual((await readdir(path.join(root, 'branch'))).sort(), ['main', 'redesign']);
     assert.deepEqual((await readdir(path.join(root, 'branch/redesign'))).sort(), ['navbar']);
-    assert.deepEqual((await readdir(root)).sort(), ['branch', 'main', 'tag']);
+    assert.deepEqual((await readdir(root)).sort(), ['branch', 'tag']);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

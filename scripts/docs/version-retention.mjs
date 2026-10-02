@@ -59,6 +59,8 @@ export async function prunePublishedSites(root, retainedTags, retainedBranches) 
   await Promise.all([
     pruneNamespace(path.join(root, 'tag'), retainedTags),
     pruneNamespace(path.join(root, 'branch'), retainedBranches),
+    // main moved into branch/main; remove the legacy top-level site after migration.
+    rm(path.join(root, 'main'), { recursive: true, force: true }),
   ]);
 }
 

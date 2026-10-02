@@ -83,7 +83,7 @@ jobs:
             const suffix = ref.slice(documentationBranchPrefix.length);
             return { ref, slug: branchArtifactSlug(ref), sitePath: `branch/${suffix}`, label: ref, category: "doc-branch" };
           });
-          const mainEntry = { ref: "main", slug: "main", sitePath: "main", label: "Development (main)", category: "development" };
+          const mainEntry = { ref: "main", slug: "main", sitePath: "branch/main", label: "Development (main)", category: "development" };
           const latestEntry = latest ? { slug: "latest", sitePath: "", label: `Latest (${latest})`, category: "latest" } : null;
           const presentationPaths = [
             ".github/workflows/docs.yml",
@@ -137,7 +137,7 @@ jobs:
           process.stdout.write(`manifest=${JSON.stringify(manifest)}\n`);
           process.stdout.write(`latest=${latest}\n`);
           process.stdout.write(`retained=${retained.join(",")}\n`);
-          process.stdout.write(`branches=${branchEntries.map(({ sitePath }) => sitePath.slice("branch/".length)).join(",")}\n`);
+          process.stdout.write(`branches=${[...branchEntries.map(({ sitePath }) => sitePath.slice("branch/".length)), "main"].join(",")}\n`);
 
           function hasPublishedPreview({ sitePath }) {
             try {

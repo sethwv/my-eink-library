@@ -68,7 +68,7 @@ const options = [
     "</optgroup>",
   ] : []),
   ...(branchVersions.length ? [
-    "<optgroup label=\"Doc Branches\">",
+    "<optgroup label=\"Branches\">",
     ...branchVersions.map(renderOption),
     "</optgroup>",
   ] : []),
