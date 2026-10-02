@@ -22,7 +22,7 @@ func TestRenderIncludesBuildVersion(t *testing.T) {
 	if recorder.Code != 200 {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
-	if !strings.Contains(recorder.Body.String(), `href="https://github.com/sethwv/my-sideload-library/tree/v1.2.3"`) || !strings.Contains(recorder.Body.String(), "v1.2.3</a> 08-15-2026") || strings.Contains(recorder.Body.String(), ">Source<") {
+	if !strings.Contains(recorder.Body.String(), `href="https://github.com/sethwv/my-sideload-library/tree/v1.2.3"`) || !strings.Contains(recorder.Body.String(), "v1.2.3</a> 08-15-2026") || !strings.Contains(recorder.Body.String(), `rel="icon" type="image/svg+xml" href="/static/favicon.svg"`) || strings.Contains(recorder.Body.String(), ">Source<") {
 		t.Errorf("response does not contain the build metadata: %s", recorder.Body.String())
 	}
 }
