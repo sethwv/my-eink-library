@@ -109,6 +109,76 @@ func TestCreateAndCheckPassword(t *testing.T) {
 	}
 }
 
+func TestSetEnabledRevokesAccessAndPreservesAccount(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.Create("reader", "password", RoleMember, true, "reader@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	u, err := s.UserByUsername("reader")
+	if err != nil || u == nil {
+		t.Fatalf("UserByUsername() = (%+v, %v)", u, err)
+	}
+	if err := s.SetDigestSubscribed("reader", true); err != nil {
+		t.Fatal(err)
+	}
+	bookmark, err := s.GenerateBookmarkToken("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset, _, found, err := s.RequestPasswordReset("reader@example.com")
+	if err != nil || !found {
+		t.Fatalf("RequestPasswordReset() = (%q, %t, %v)", reset, found, err)
+	}
+
+	if err := s.SetEnabled(u.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if s.CheckPassword("reader", "password") {
+		t.Error("disabled account accepted password login")
+	}
+	if _, ok := s.VerifyBookmarkToken(bookmark); ok {
+		t.Error("disabled account accepted bookmark token")
+	}
+	if _, ok := s.VerifyResetToken(reset); ok {
+		t.Error("disabled account accepted reset token")
+	}
+	if _, _, found, err := s.RequestPasswordReset("reader@example.com"); err != nil || found {
+		t.Errorf("disabled RequestPasswordReset() found=%t, err=%v", found, err)
+	}
+
+	if err := s.SetEnabled(u.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := s.UserByID(u.ID)
+	if err != nil || restored == nil {
+		t.Fatalf("UserByID() = (%+v, %v)", restored, err)
+	}
+	if !restored.Enabled || restored.Email != "reader@example.com" || !restored.CanBookmark || !restored.DigestSubscribed {
+		t.Errorf("restored account = %+v", restored)
+	}
+	if !s.CheckPassword("reader", "password") {
+		t.Error("re-enabled account did not restore password access")
+	}
+}
+
+func TestSetEnabledRefusesLastEnabledAdmin(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.Create("admin1", "password", RoleAdmin, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Create("admin2", "password", RoleAdmin, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	admin1, _ := s.UserByUsername("admin1")
+	admin2, _ := s.UserByUsername("admin2")
+	if err := s.SetEnabled(admin2.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetEnabled(admin1.ID, false); err == nil {
+		t.Error("disabled the final enabled administrator")
+	}
+}
+
 func TestUserLookups(t *testing.T) {
 	s := openTestStore(t)
 	if err := s.Create("reader", "password", RoleUserManager, true, "reader@example.com"); err != nil {

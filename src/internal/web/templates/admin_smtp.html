@@ -31,7 +31,7 @@
 <form method="POST" action="/admin/settings/smtp/test">
 <table>
 <tr><th>Test recipient</th><td><input type="email" name="test_email" required></td></tr>
-<tr><td colspan="2"><button type="submit">Send test email</button></td></tr>
+<tr><td colspan="2"><button type="submit" {{if not .SMTPConfigured}}disabled{{end}}>Send test email</button>{{if not .SMTPConfigured}} <span class="muted">Save a hostname and From email first.</span>{{end}}</td></tr>
 </table>
 </form>
 </div>

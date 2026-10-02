@@ -7,17 +7,18 @@
 
 <p>
   <a href="#" class="btn" onclick="return openModal('add-user-modal');">+ Add user</a>
-  <a href="#" class="btn" onclick="return openModal('invite-user-modal');">+ Invite by email</a>
+  {{if .EmailAvailable}}<a href="#" class="btn" onclick="return openModal('invite-user-modal');">+ Invite by email</a>{{else}}<span class="muted">{{.EmailMessage}}</span>{{end}}
 </p>
 
 <div class="table-wrap">
 <table class="admin-users">
-<tr><th>Username</th><th>Email</th><th>Role</th><th></th></tr>
+<tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr>
 {{range .Users}}
 <tr>
   <td>{{.Username}}{{if .InvitePending}} <span class="muted">(invite pending)</span>{{end}}</td>
   <td>{{if .Email}}{{.Email}}{{else}}<span class="muted">None</span>{{end}}</td>
   <td>{{.Role}}</td>
+  <td>{{if .Enabled}}Enabled{{else}}<span class="muted">Disabled</span>{{end}}</td>
   <td><a href="#" onclick="return openModal('manage-user-{{.ID}}');">Manage</a></td>
 </tr>
 {{end}}
@@ -51,7 +52,7 @@
     {{if .InvitePending}}
     <form method="POST" action="/admin/users/{{.ID}}/invite/resend" class="modal-field-form">
       <p class="muted">Invite still pending.</p>
-      <button type="submit">Resend invite</button>
+      {{if $.EmailAvailable}}<button type="submit">Resend invite</button>{{else}}<p class="muted">{{$.EmailMessage}}</p>{{end}}
     </form>
     {{else}}
     <form method="POST" action="/admin/users/{{.ID}}/reset-password" class="modal-field-form">
@@ -61,6 +62,10 @@
     {{end}}
 
     <div class="modal-danger-zone">
+      <form method="POST" action="/admin/users/{{.ID}}/enabled">
+        <input type="hidden" name="enabled" value="{{if .Enabled}}false{{else}}true{{end}}">
+        <button type="submit">{{if .Enabled}}Disable account{{else}}Enable account{{end}}</button>
+      </form>
       <form method="POST" action="/admin/users/{{.ID}}/delete">
         <button type="submit">Delete user</button>
       </form>
@@ -96,7 +101,7 @@
 <div id="invite-user-modal" class="modal-overlay">
   <div class="modal-box modal-box-wide">
     <h3>Invite by email</h3>
-    <p class="muted">Requires <a href="/admin/smtp">SMTP</a>.</p>
+    <p class="muted">Requires <a href="/admin/smtp">SMTP</a> and a Public URL.</p>
     <form method="POST" action="/admin/users/invite" class="modal-field-form">
       <label for="invite-username">Username</label>
       <input type="text" id="invite-username" name="username" autocapitalize="off" autocorrect="off" required>

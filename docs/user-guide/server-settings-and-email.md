@@ -43,6 +43,6 @@ Choose the encryption mode required by your provider: **SSL/TLS**, **STARTTLS**,
 {% include screenshot-pair.html id="admin-smtp" %}
 
 {: .note }
-The weekly new-book digest, invitations, and password resets all depend on working SMTP. A successful save alone does not confirm delivery, so always use the test message.
+The weekly new-book digest, invitations, and password resets all depend on working SMTP. Invitation and password-reset links also require a Public URL. Until those prerequisites are configured, the related controls are unavailable and their server actions reject requests without creating tokens or pending accounts. A successful save alone does not confirm delivery, so always use the test message.
 
 When `SESSION_SECRET` is unset, the application generates and persists a session signing secret in `DATA_DIR/users.db`. Set `SESSION_SECRET` only for a runtime override: it never overwrites the persisted value, and changing an override invalidates existing login sessions.

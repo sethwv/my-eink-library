@@ -24,9 +24,9 @@ The choice is stored in a browser cookie for up to a year. It applies on the dev
 
 Select **Change password** from the account menu to set a new password. Enter the current password, choose the new one, then select **Change password**. Use a password you do not reuse elsewhere.
 
-The same page has the **New-book digest** preference. Enable it and select **Save** to receive a weekly list of books added to the library. The library administrator must configure outbound email before the digest can be delivered.
+The same page has the **New-book digest** preference. Enable it and select **Save** to receive a weekly list of books added to the library. The library administrator must configure outbound email before the digest controls become available.
 
-If you forgot your password, use the sign-in page's password-reset flow. That flow also requires the administrator to configure SMTP and the public HTTPS URL. Contact the library administrator if the reset email does not arrive.
+If you forgot your password, use the sign-in page's password-reset flow. That flow is unavailable until the administrator configures SMTP and the public HTTPS URL. Contact the library administrator if the reset email does not arrive.
 
 {% include screenshot-pair.html id="account-preferences" %}
 

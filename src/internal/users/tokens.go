@@ -54,7 +54,7 @@ func (s *Store) VerifyBookmarkToken(token string) (string, bool) {
 	if token == "" {
 		return "", false
 	}
-	rows, err := s.sql.Query(`SELECT username, bookmark_token_hash FROM users WHERE bookmark_token_hash IS NOT NULL AND can_bookmark = 1`)
+	rows, err := s.sql.Query(`SELECT username, bookmark_token_hash FROM users WHERE bookmark_token_hash IS NOT NULL AND can_bookmark = 1 AND enabled = 1`)
 	if err != nil {
 		return "", false
 	}
@@ -75,7 +75,7 @@ func (s *Store) RequestPasswordReset(email string) (token, username string, foun
 	if email == "" {
 		return "", "", false, nil
 	}
-	err = s.sql.QueryRow(`SELECT username FROM users WHERE email = ?`, email).Scan(&username)
+	err = s.sql.QueryRow(`SELECT username FROM users WHERE email = ? AND enabled = 1`, email).Scan(&username)
 	if err == sql.ErrNoRows {
 		return "", "", false, nil
 	}
@@ -128,7 +128,7 @@ func (s *Store) InviteUser(username, email, role string, canBookmark bool) (toke
 
 func (s *Store) ResendInvite(id int64) (string, error) {
 	var pending sql.NullString
-	if err := s.sql.QueryRow(`SELECT invite_token_hash FROM users WHERE id = ?`, id).Scan(&pending); err != nil {
+	if err := s.sql.QueryRow(`SELECT invite_token_hash FROM users WHERE id = ? AND enabled = 1`, id).Scan(&pending); err != nil {
 		return "", err
 	}
 	if !pending.Valid || pending.String == "" {
@@ -192,7 +192,7 @@ func verifyTimedToken(db tokenQueryer, spec timedTokenSpec, token string) (strin
 	if token == "" {
 		return "", false
 	}
-	query := `SELECT username, ` + spec.hashColumn + `, ` + spec.createdAtColumn + ` FROM users WHERE ` + spec.hashColumn + ` IS NOT NULL`
+	query := `SELECT username, ` + spec.hashColumn + `, ` + spec.createdAtColumn + ` FROM users WHERE enabled = 1 AND ` + spec.hashColumn + ` IS NOT NULL`
 	rows, err := db.Query(query)
 	if err != nil {
 		return "", false

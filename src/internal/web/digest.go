@@ -77,6 +77,9 @@ func (s *Server) nextDigestDelay() time.Duration {
 
 // SendDigestNow runs the scheduled digest immediately, for the admin task.
 func (s *Server) SendDigestNow() error {
+	if !s.smtpAvailable() {
+		return fmt.Errorf("SMTP is not configured")
+	}
 	s.maybeSendDigest(true)
 	return nil
 }

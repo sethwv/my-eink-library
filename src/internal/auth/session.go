@@ -134,6 +134,10 @@ func (a *Authenticator) VerifySession(r *http.Request) (username string, restric
 	if time.Now().Unix() >= exp {
 		return "", false, false
 	}
+	user, err := a.users.UserByUsername(parts[0])
+	if err != nil || user == nil || !user.Enabled {
+		return "", false, false
+	}
 	restricted = len(parts) == 3 && parts[2] == "restricted"
 	return parts[0], restricted, true
 }

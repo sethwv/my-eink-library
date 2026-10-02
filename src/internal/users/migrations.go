@@ -43,6 +43,7 @@ func (s *Store) migrateColumns() error {
 		{Name: "invite_token_hash", DDL: "TEXT"},
 		{Name: "invite_token_created_at", DDL: "INTEGER"},
 		{Name: "digest_subscribed", DDL: "INTEGER NOT NULL DEFAULT 0"},
+		{Name: "enabled", DDL: "INTEGER NOT NULL DEFAULT 1"},
 	}); err != nil {
 		return err
 	}

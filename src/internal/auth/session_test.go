@@ -71,6 +71,39 @@ func TestSessionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDisabledUserSessionIsRejected(t *testing.T) {
+	store := testStore(t)
+	a := New("test-signing-secret", time.Hour, store)
+	user, err := store.UserByUsername("reader")
+	if err != nil || user == nil {
+		t.Fatalf("UserByUsername() = (%+v, %v)", user, err)
+	}
+
+	issue := httptest.NewRecorder()
+	a.IssueSession(issue, httptest.NewRequest(http.MethodPost, "/login", nil), "reader")
+	restrictedIssue := httptest.NewRecorder()
+	a.IssueRestrictedSession(restrictedIssue, httptest.NewRequest(http.MethodGet, "/", nil), "reader")
+	if err := store.SetEnabled(user.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(issue.Result().Cookies()[0])
+	if _, _, ok := a.VerifySession(req); ok {
+		t.Error("disabled user session verified")
+	}
+	restrictedReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	restrictedReq.AddCookie(restrictedIssue.Result().Cookies()[0])
+	if _, _, ok := a.VerifySession(restrictedReq); ok {
+		t.Error("disabled bookmark session verified")
+	}
+
+	w := httptest.NewRecorder()
+	a.RequireAuth(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("disabled session reached handler") })).ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want login redirect", w.Code)
+	}
+}
+
 func TestClearSessionRequiresHTTPS(t *testing.T) {
 	a := testAuthenticator(t)
 	w := httptest.NewRecorder()

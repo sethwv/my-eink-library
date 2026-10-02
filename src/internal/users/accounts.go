@@ -8,7 +8,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const userColumns = `id, username, role, can_bookmark, email, digest_subscribed,
+const userColumns = `id, username, role, can_bookmark, enabled, email, digest_subscribed,
 	invite_token_hash IS NOT NULL AND invite_token_hash != ''`
 
 func (s *Store) HasUsers() (bool, error) {
@@ -27,8 +27,8 @@ func (s *Store) CreateFirstAdmin(username, password string) (created bool, err e
 	if err != nil {
 		return false, err
 	}
-	result, err := s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, created_at)
-		SELECT ?, ?, 1, ?, 1, ? WHERE NOT EXISTS (SELECT 1 FROM users)`, username, hash, RoleAdmin, time.Now().Unix())
+	result, err := s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, enabled, created_at)
+		SELECT ?, ?, 1, ?, 1, 1, ? WHERE NOT EXISTS (SELECT 1 FROM users)`, username, hash, RoleAdmin, time.Now().Unix())
 	if err != nil {
 		return false, err
 	}
@@ -46,7 +46,7 @@ func (s *Store) Bootstrap(username, password string) error {
 // CheckPassword reports whether username/password is a valid login.
 func (s *Store) CheckPassword(username, password string) bool {
 	var hash string
-	err := s.sql.QueryRow(`SELECT password_hash FROM users WHERE username = ?`, username).Scan(&hash)
+	err := s.sql.QueryRow(`SELECT password_hash FROM users WHERE username = ? AND enabled = 1`, username).Scan(&hash)
 	if err != nil {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 		return false
@@ -71,13 +71,13 @@ func (s *Store) CanManageServer(username string) bool {
 
 func (s *Store) CanUseBookmark(username string) bool {
 	var canBookmark int
-	err := s.sql.QueryRow(`SELECT can_bookmark FROM users WHERE username = ?`, username).Scan(&canBookmark)
+	err := s.sql.QueryRow(`SELECT can_bookmark FROM users WHERE username = ? AND enabled = 1`, username).Scan(&canBookmark)
 	return err == nil && canBookmark != 0
 }
 
 func (s *Store) role(username string) (string, bool) {
 	var role string
-	err := s.sql.QueryRow(`SELECT role FROM users WHERE username = ?`, username).Scan(&role)
+	err := s.sql.QueryRow(`SELECT role FROM users WHERE username = ? AND enabled = 1`, username).Scan(&role)
 	return role, err == nil
 }
 
@@ -127,15 +127,16 @@ type userScanner interface {
 
 func scanUser(row userScanner) (User, error) {
 	var u User
-	var canBookmark, digestSubscribed, invitePending int
+	var canBookmark, enabled, digestSubscribed, invitePending int
 	var email sql.NullString
-	if err := row.Scan(&u.ID, &u.Username, &u.Role, &canBookmark, &email, &digestSubscribed, &invitePending); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.Role, &canBookmark, &enabled, &email, &digestSubscribed, &invitePending); err != nil {
 		return User{}, err
 	}
 	u.IsAdmin = u.Role == RoleAdmin
 	u.CanManageUsers = u.Role == RoleAdmin || u.Role == RoleUserManager
 	u.CanManageServer = u.Role == RoleAdmin || u.Role == RoleServerManager
 	u.CanBookmark = canBookmark != 0
+	u.Enabled = enabled != 0
 	u.Email = email.String
 	u.DigestSubscribed = digestSubscribed != 0
 	u.InvitePending = invitePending != 0
@@ -156,7 +157,7 @@ func (s *Store) Create(username, password, role string, canBookmark bool, email 
 	if err != nil {
 		return err
 	}
-	_, err = s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, username, hash, boolToInt(role == RoleAdmin), role, boolToInt(canBookmark), nullIfEmpty(email), time.Now().Unix())
+	_, err = s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, enabled, email, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`, username, hash, boolToInt(role == RoleAdmin), role, boolToInt(canBookmark), nullIfEmpty(email), time.Now().Unix())
 	return err
 }
 
@@ -164,14 +165,20 @@ func (s *Store) SetRole(id int64, role string, canBookmark bool) error {
 	if !validRole(role) {
 		return fmt.Errorf("invalid role %q", role)
 	}
+	tx, err := s.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	if role != RoleAdmin {
 		var currentRole string
-		if err := s.sql.QueryRow(`SELECT role FROM users WHERE id = ?`, id).Scan(&currentRole); err != nil {
+		var enabled int
+		if err := tx.QueryRow(`SELECT role, enabled FROM users WHERE id = ?`, id).Scan(&currentRole, &enabled); err != nil {
 			return err
 		}
-		if currentRole == RoleAdmin {
+		if currentRole == RoleAdmin && enabled != 0 {
 			var adminCount int
-			if err := s.sql.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin'`).Scan(&adminCount); err != nil {
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin' AND enabled = 1`).Scan(&adminCount); err != nil {
 				return err
 			}
 			if adminCount <= 1 {
@@ -179,8 +186,10 @@ func (s *Store) SetRole(id int64, role string, canBookmark bool) error {
 			}
 		}
 	}
-	_, err := s.sql.Exec(`UPDATE users SET role = ?, is_admin = ?, can_bookmark = ? WHERE id = ?`, role, boolToInt(role == RoleAdmin), boolToInt(canBookmark), id)
-	return err
+	if _, err := tx.Exec(`UPDATE users SET role = ?, is_admin = ?, can_bookmark = ? WHERE id = ?`, role, boolToInt(role == RoleAdmin), boolToInt(canBookmark), id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func validRole(role string) bool {
@@ -192,21 +201,57 @@ func validRole(role string) bool {
 }
 
 func (s *Store) Delete(id int64) error {
-	var role string
-	if err := s.sql.QueryRow(`SELECT role FROM users WHERE id = ?`, id).Scan(&role); err != nil {
+	tx, err := s.sql.Begin()
+	if err != nil {
 		return err
 	}
-	if role == RoleAdmin {
+	defer tx.Rollback()
+	var role string
+	var enabled int
+	if err := tx.QueryRow(`SELECT role, enabled FROM users WHERE id = ?`, id).Scan(&role, &enabled); err != nil {
+		return err
+	}
+	if role == RoleAdmin && enabled != 0 {
 		var adminCount int
-		if err := s.sql.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin'`).Scan(&adminCount); err != nil {
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin' AND enabled = 1`).Scan(&adminCount); err != nil {
 			return err
 		}
 		if adminCount <= 1 {
 			return fmt.Errorf("cannot delete the last remaining admin")
 		}
 	}
-	_, err := s.sql.Exec(`DELETE FROM users WHERE id = ?`, id)
-	return err
+	if _, err := tx.Exec(`DELETE FROM users WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// SetEnabled disables or restores an account without changing its other data.
+func (s *Store) SetEnabled(id int64, enabled bool) error {
+	tx, err := s.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var role string
+	var currentEnabled int
+	if err := tx.QueryRow(`SELECT role, enabled FROM users WHERE id = ?`, id).Scan(&role, &currentEnabled); err != nil {
+		return err
+	}
+	if !enabled && currentEnabled != 0 && role == RoleAdmin {
+		var adminCount int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE role = 'admin' AND enabled = 1`).Scan(&adminCount); err != nil {
+			return err
+		}
+		if adminCount <= 1 {
+			return fmt.Errorf("cannot disable the last enabled admin")
+		}
+	}
+	if _, err := tx.Exec(`UPDATE users SET enabled = ? WHERE id = ?`, boolToInt(enabled), id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) SetEmail(id int64, email string) error {
@@ -249,7 +294,7 @@ func (s *Store) IsDigestSubscribed(username string) bool {
 }
 
 func (s *Store) DigestSubscribers() ([]string, error) {
-	rows, err := s.sql.Query(`SELECT email FROM users WHERE digest_subscribed = 1 AND email IS NOT NULL AND email != ''`)
+	rows, err := s.sql.Query(`SELECT email FROM users WHERE enabled = 1 AND digest_subscribed = 1 AND email IS NOT NULL AND email != ''`)
 	if err != nil {
 		return nil, err
 	}

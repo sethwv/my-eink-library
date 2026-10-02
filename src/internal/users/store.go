@@ -32,6 +32,7 @@ type User struct {
 	CanManageUsers   bool
 	CanManageServer  bool
 	CanBookmark      bool
+	Enabled          bool
 	Email            string
 	DigestSubscribed bool
 	InvitePending    bool

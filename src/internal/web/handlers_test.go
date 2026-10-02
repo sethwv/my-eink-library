@@ -346,6 +346,31 @@ func TestResetPasswordHandlers(t *testing.T) {
 	})
 }
 
+func TestEmailDependentActionsRejectUnavailableConfiguration(t *testing.T) {
+	server := newTestServer(t)
+	if err := server.Users.Create("reader", "password", users.RoleMember, true, "reader@example.com"); err != nil {
+		t.Fatal(err)
+	}
+
+	forgot := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/forgot-password", strings.NewReader(url.Values{"email": {"reader@example.com"}}.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	server.ForgotPasswordSubmit(forgot, request)
+	if !strings.Contains(forgot.Body.String(), "Email is unavailable") {
+		t.Errorf("forgot-password response missing unavailable guidance: %s", forgot.Body.String())
+	}
+
+	invite := httptest.NewRecorder()
+	inviteRequest := httptest.NewRequest(http.MethodPost, "/admin/users/invite", strings.NewReader(url.Values{"username": {"invitee"}, "email": {"invitee@example.com"}, "role": {"member"}}.Encode()))
+	inviteRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	server.AdminUsersInvite(invite, inviteRequest)
+	if _, err := server.Users.UserByUsername("invitee"); err != nil {
+		t.Fatal(err)
+	} else if user, _ := server.Users.UserByUsername("invitee"); user != nil {
+		t.Error("unavailable email created an invited account")
+	}
+}
+
 func TestInviteAcceptHandlers(t *testing.T) {
 	server := newTestServer(t)
 	token, err := server.Users.InviteUser("invitee", "invitee@example.com", users.RoleMember, true)

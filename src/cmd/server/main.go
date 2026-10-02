@@ -223,12 +223,8 @@ func main() {
 	if generalSettings.PublicURL == "" {
 		log.Printf("warning: Public URL is not set; password-reset and invite emails are disabled")
 	}
-	if smtpSettings, err := userStore.GetSMTPSettings(); err != nil {
-		log.Printf("load smtp settings: %v", err)
-	} else if smtpSettings.Enabled() {
-		if err := taskManager.StartService(ctx, "digest-scheduler", srv.RunDigestScheduler); err != nil {
-			log.Fatalf("start digest task: %v", err)
-		}
+	if err := taskManager.StartService(ctx, "digest-scheduler", srv.RunDigestScheduler); err != nil {
+		log.Fatalf("start digest task: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -259,6 +255,7 @@ func main() {
 	mux.Handle("GET /admin/users", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsers)))
 	mux.Handle("POST /admin/users", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersCreate)))
 	mux.Handle("POST /admin/users/{id}/role", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersSetRole)))
+	mux.Handle("POST /admin/users/{id}/enabled", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersSetEnabled)))
 	mux.Handle("POST /admin/users/{id}/delete", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersDelete)))
 	mux.Handle("POST /admin/users/{id}/reset-password", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersResetPassword)))
 	mux.Handle("POST /admin/users/invite", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersInvite)))

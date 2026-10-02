@@ -34,13 +34,13 @@ Add an email address if the user should be able to reset their password. The ema
 
 ## Manage access
 
-Use **Manage** beside an existing user to change their role, grant or revoke bookmark-link access, update their email address, reset their password, or delete their account. Give the lowest role that allows the user to do their work. A User Manager cannot manage server configuration, while a Server Manager cannot manage users.
+Use **Manage** beside an existing user to change their role, grant or revoke bookmark-link access, update their email address, reset their password, disable or re-enable their account, or delete their account. Disabling preserves the user's data but blocks password, bookmark-link, reset-link, and invitation access until re-enabled. The final enabled administrator cannot be disabled. Give the lowest role that allows the user to do their work. A User Manager cannot manage server configuration, while a Server Manager cannot manage users.
 
 {% include screenshot-pair.html id="admin-manage-user" %}
 
 ## Invite a user by email
 
-To send an invitation, select **Invite by email**, provide the username, email address, and role, then send it. Invitations need SMTP and a public HTTPS URL. Configure and test those first in [Server](../server-settings-and-email/).
+To send an invitation, select **Invite by email**, provide the username, email address, and role, then send it. Invitations need SMTP and a public HTTPS URL. Configure and test those first in [Server](../server-settings-and-email/); the invite and resend controls remain unavailable until both are set.
 
 {% include screenshot-pair.html id="admin-invite-user" %}
 

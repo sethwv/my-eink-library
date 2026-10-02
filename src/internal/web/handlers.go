@@ -131,8 +131,9 @@ func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]any{
-		"Title": "Log in",
-		"Next":  safeNext(r.URL.Query().Get("next")),
+		"Title":          "Log in",
+		"Next":           safeNext(r.URL.Query().Get("next")),
+		"EmailAvailable": s.emailAvailable(),
 	}
 	mergeInto(data, base)
 	render(w, "login.html", data)
@@ -160,9 +161,10 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 	if !s.Auth.CheckPassword(username, password) {
 		base, _, _ := s.baseData(r)
 		data := map[string]any{
-			"Title": "Log in",
-			"Error": "Incorrect username or password.",
-			"Next":  next,
+			"Title":          "Log in",
+			"Error":          "Incorrect username or password.",
+			"Next":           next,
+			"EmailAvailable": s.emailAvailable(),
 		}
 		mergeInto(data, base)
 		render(w, "login.html", data)
@@ -176,6 +178,20 @@ func (s *Server) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 		target = &url.URL{Path: "/"}
 	}
 	http.Redirect(w, r, target.String(), http.StatusSeeOther)
+}
+
+func (s *Server) emailAvailable() bool {
+	settings, err := s.Users.GetSMTPSettings()
+	return err == nil && settings.Enabled() && s.PublicURL != ""
+}
+
+func (s *Server) smtpAvailable() bool {
+	settings, err := s.Users.GetSMTPSettings()
+	return err == nil && settings.Enabled()
+}
+
+func emailUnavailableMessage() string {
+	return "Email is unavailable. Configure SMTP and the Public URL in Server settings."
 }
 
 func (s *Server) SetupPage(w http.ResponseWriter, r *http.Request) {
@@ -624,9 +640,11 @@ func (s *Server) AdminUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Title":    "Manage Users",
-		"AdminTab": "users",
-		"Users":    list,
+		"Title":          "Manage Users",
+		"AdminTab":       "users",
+		"Users":          list,
+		"EmailAvailable": s.emailAvailable(),
+		"EmailMessage":   emailUnavailableMessage(),
 	}
 	mergeInto(data, base)
 	render(w, "admin_users.html", data)
@@ -636,13 +654,32 @@ func (s *Server) renderAdminUsersError(w http.ResponseWriter, r *http.Request, e
 	list, _ := s.Users.List()
 	base, _, _ := s.baseData(r)
 	data := map[string]any{
-		"Title":    "Manage Users",
-		"AdminTab": "users",
-		"Users":    list,
-		"Error":    errMsg,
+		"Title":          "Manage Users",
+		"AdminTab":       "users",
+		"Users":          list,
+		"Error":          errMsg,
+		"EmailAvailable": s.emailAvailable(),
+		"EmailMessage":   emailUnavailableMessage(),
 	}
 	mergeInto(data, base)
 	render(w, "admin_users.html", data)
+}
+
+func (s *Server) AdminUsersSetEnabled(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	if err := s.Users.SetEnabled(id, r.FormValue("enabled") == "true"); err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
 func (s *Server) AdminUsersCreate(w http.ResponseWriter, r *http.Request) {
@@ -716,6 +753,10 @@ func (s *Server) AdminUsersInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
+	if !s.emailAvailable() {
+		s.renderAdminUsersError(w, r, emailUnavailableMessage())
+		return
+	}
 
 	username := r.FormValue("username")
 	email := r.FormValue("email")
@@ -742,6 +783,10 @@ func (s *Server) AdminUsersResendInvite(w http.ResponseWriter, r *http.Request) 
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+	if !s.emailAvailable() {
+		s.renderAdminUsersError(w, r, emailUnavailableMessage())
 		return
 	}
 
@@ -959,6 +1004,7 @@ func (s *Server) adminSMTPData() (map[string]any, error) {
 		"SMTPUsername":    smtp.Username,
 		"SMTPFromName":    smtp.FromName,
 		"SMTPFromAddress": smtp.FromAddress,
+		"SMTPConfigured":  smtp.Enabled(),
 	}, nil
 }
 
@@ -1465,7 +1511,7 @@ func (s *Server) AccountPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
-	data := map[string]any{"Title": "Change Password", "DigestSubscribed": s.Users.IsDigestSubscribed(username)}
+	data := map[string]any{"Title": "Change Password", "DigestSubscribed": s.Users.IsDigestSubscribed(username), "EmailAvailable": s.smtpAvailable(), "EmailMessage": "Email is unavailable. Configure SMTP in Server settings."}
 	mergeInto(data, base)
 	render(w, "account_password.html", data)
 }
@@ -1487,7 +1533,7 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "failed to load page", http.StatusInternalServerError)
 			return
 		}
-		data := map[string]any{"Title": "Change Password", "Error": msg, "DigestSubscribed": s.Users.IsDigestSubscribed(username)}
+		data := map[string]any{"Title": "Change Password", "Error": msg, "DigestSubscribed": s.Users.IsDigestSubscribed(username), "EmailAvailable": s.smtpAvailable(), "EmailMessage": "Email is unavailable. Configure SMTP in Server settings."}
 		mergeInto(data, base)
 		render(w, "account_password.html", data)
 	}
@@ -1516,7 +1562,7 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
-	data := map[string]any{"Title": "Change Password", "Status": "Password updated.", "DigestSubscribed": s.Users.IsDigestSubscribed(username)}
+	data := map[string]any{"Title": "Change Password", "Status": "Password updated.", "DigestSubscribed": s.Users.IsDigestSubscribed(username), "EmailAvailable": s.smtpAvailable(), "EmailMessage": "Email is unavailable. Configure SMTP in Server settings."}
 	mergeInto(data, base)
 	render(w, "account_password.html", data)
 }
@@ -1526,6 +1572,10 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) AccountDigestToggle(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	if !s.smtpAvailable() {
+		http.Redirect(w, r, "/account/password", http.StatusSeeOther)
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
@@ -1543,7 +1593,7 @@ func (s *Server) ForgotPasswordPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
-	data := map[string]any{"Title": "Forgot Password"}
+	data := map[string]any{"Title": "Forgot Password", "EmailAvailable": s.emailAvailable(), "EmailMessage": emailUnavailableMessage()}
 	mergeInto(data, base)
 	render(w, "forgot_password.html", data)
 }
@@ -1557,6 +1607,17 @@ func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := r.FormValue("email")
+	if !s.emailAvailable() {
+		base, _, err := s.baseData(r)
+		if err != nil {
+			http.Error(w, "failed to load page", http.StatusInternalServerError)
+			return
+		}
+		data := map[string]any{"Title": "Forgot Password", "Error": emailUnavailableMessage(), "EmailAvailable": false, "EmailMessage": emailUnavailableMessage()}
+		mergeInto(data, base)
+		render(w, "forgot_password.html", data)
+		return
+	}
 
 	token, _, found, err := s.Users.RequestPasswordReset(email)
 	if err != nil {
@@ -1586,8 +1647,10 @@ func (s *Server) ForgotPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]any{
-		"Title":  "Forgot Password",
-		"Status": "If that address is on file, a reset link has been sent.",
+		"Title":          "Forgot Password",
+		"Status":         "If that address is on file, a reset link has been sent.",
+		"EmailAvailable": true,
+		"EmailMessage":   emailUnavailableMessage(),
 	}
 	mergeInto(data, base)
 	render(w, "forgot_password.html", data)

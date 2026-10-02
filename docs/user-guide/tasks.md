@@ -12,7 +12,7 @@ Open **Tasks** from the Admin tabs to monitor queued maintenance work. The page 
 
 **Scan Library** checks configured library folders and updates the derived index. It runs during server startup and can also be queued on demand. Only one scan can be queued or running at a time. The checkmark replaces the play control while the task is active.
 
-**Email digest** sends the weekly new-book digest to subscribed users. SMTP must be configured and enabled before it can run. Its next scheduled send is shown relative to the current time, and the play control sends a digest immediately.
+**Email digest** sends the weekly new-book digest to subscribed users. SMTP must be configured and enabled before it can run; otherwise its play control is unavailable and manual requests are rejected. Its next scheduled send is shown relative to the current time, and the play control sends a digest immediately.
 
 Tasks run one at a time. The History table shows the ten most recent task runs with their status, queued time, start time, and duration.
 
