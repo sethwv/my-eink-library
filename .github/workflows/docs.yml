@@ -314,7 +314,7 @@ jobs:
           mkdir -p "artifact/${{ matrix.slug }}"
           && rsync -a --delete _site/ "artifact/${{ matrix.slug }}/"
           && printf '%s' "${{ matrix.sitePath }}" > "artifact/${{ matrix.slug }}/site-path.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: docs-${{ matrix.slug }}
           path: artifact
@@ -340,7 +340,7 @@ jobs:
           && rsync -a --delete _site-root/ root-artifact/root/
       - name: Upload latest release root site
         if: matrix.ref == needs.discover.outputs.latest || (needs.discover.outputs.latest == '' && matrix.ref == 'main')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-root
           path: root-artifact
