@@ -14,6 +14,7 @@ function compareTags(first, second) {
 }
 
 export const minimumDocumentationTag = 'v0.0.3';
+export const documentationBranchPrefix = 'dev/docs/';
 
 export function eligibleDocumentationVersions(tags) {
   return tags.filter((tag) => compareTags(tag, minimumDocumentationTag) <= 0);
@@ -22,7 +23,7 @@ export function eligibleDocumentationVersions(tags) {
 export function documentationBranches(remoteRefs) {
   return remoteRefs
     .map((line) => line.trim().split(/\s+/).at(-1))
-    .filter((ref) => ref?.startsWith('refs/heads/docs/'))
+    .filter((ref) => ref?.startsWith(`refs/heads/${documentationBranchPrefix}`))
     .map((ref) => ref.slice('refs/heads/'.length))
     .sort((first, second) => first.localeCompare(second));
 }

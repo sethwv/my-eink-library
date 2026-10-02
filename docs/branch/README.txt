@@ -1,4 +1,4 @@
 This directory is reserved for generated documentation branch previews.
 
-The documentation publishing workflow writes live docs/* branch builds below
+The documentation publishing workflow writes live dev/docs/* branch builds below
 this path, for example branch/preview/. Do not add authored documentation here.

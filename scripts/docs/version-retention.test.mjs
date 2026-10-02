@@ -27,11 +27,11 @@ test('allows a release-free documentation site', () => {
 
 test('discovers documentation branches and creates safe artifact slugs', () => {
   assert.deepEqual(documentationBranches([
-    'deadbeef\trefs/heads/docs/redesign/navbar',
+    'deadbeef\trefs/heads/dev/docs/redesign/navbar',
     'cafebabe\trefs/heads/main',
-    'baddcafe\trefs/heads/docs/preview',
-  ]), ['docs/preview', 'docs/redesign/navbar']);
-  assert.equal(branchArtifactSlug('docs/redesign/navbar'), 'branch-ZG9jcy9yZWRlc2lnbi9uYXZiYXI');
+    'baddcafe\trefs/heads/dev/docs/preview',
+  ]), ['dev/docs/preview', 'dev/docs/redesign/navbar']);
+  assert.equal(branchArtifactSlug('dev/docs/redesign/navbar'), 'branch-ZGV2L2RvY3MvcmVkZXNpZ24vbmF2YmFy');
 });
 
 test('prunes obsolete published tag and branch directories', async () => {
