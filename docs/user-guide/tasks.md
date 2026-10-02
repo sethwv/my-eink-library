@@ -20,7 +20,7 @@ Tasks run one at a time. The History table shows the ten most recent task runs w
 
 The **Services** table shows continuous work that does not have a manual run control. The filesystem watcher waits for EPUB changes. The enrichment queue waits for enabled metadata sources or candidates. With SMTP enabled, the digest scheduler waits for the weekly digest deadline.
 
-{% include screenshot-pair.html id="admin-tasks" %}
+{% include screenshot-pair.html id="admin-tasks-guide" %}
 
 ## Rebuild the index
 

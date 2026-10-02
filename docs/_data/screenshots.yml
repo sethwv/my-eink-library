@@ -150,6 +150,13 @@
   actions:
     - login
     - goto: /admin/tasks
+
+- id: admin-tasks-guide
+  title: Background tasks
+  description: Queued maintenance work, scheduled email delivery, and continuous services.
+  actions:
+    - login
+    - goto: /admin/tasks
   annotations:
     - selector: 'form[action="/admin/tasks/rescan/run"] button'
       label: Queue a library scan
