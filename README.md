@@ -1,4 +1,4 @@
-# my-sideload-library
+![my-sideload-library](docs/assets/brand/lockups/horizontal-on-forest.png)
 
 A self-hosted EPUB library for e-readers. Browse a read-only library, download original EPUBs or Kobo-optimized KEPUBs, and manage access through a small authenticated web UI built for older e-reader browsers.
 [Refer to the docs](https://sethwv.github.io/my-sideload-library/) for complete setup and deployment guides.
