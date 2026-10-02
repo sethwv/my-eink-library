@@ -95,7 +95,7 @@
   description: Password and new-book digest controls, with the relevant fields highlighted.
   actions:
     - login
-    - goto: /account/password
+    - goto: /account
   annotations:
     - selector: 'input[name="new_password"]'
       label: Choose a new password
@@ -109,7 +109,7 @@
   description: The account control for creating a passwordless e-reader bookmark link.
   actions:
     - login
-    - goto: /account/bookmark
+    - goto: /account
   annotations:
     - selector: 'form[action="/account/bookmark/regenerate"] button'
       label: Create one e-reader bookmark link

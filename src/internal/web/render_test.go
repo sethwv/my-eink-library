@@ -142,8 +142,7 @@ func TestRenderAdminServerIncludesRuntimeDetails(t *testing.T) {
 
 func TestTemplatesDoNotContainBackToLibraryLinks(t *testing.T) {
 	for _, name := range []string{
-		"account_bookmark.html",
-		"account_password.html",
+		"account.html",
 		"admin_integrations.html",
 		"admin_server.html",
 		"admin_tasks.html",

@@ -1073,27 +1073,38 @@ func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.R
 	http.Redirect(w, r, "/admin/integrations?provider=chaptarr", http.StatusSeeOther)
 }
 
-// AccountBookmark shows the current bookmark-token status and a button to
-// create/regenerate one. 403s if the account's bookmark-link permission has
-// been revoked by an admin.
-func (s *Server) AccountBookmark(w http.ResponseWriter, r *http.Request) {
+// Account shows the authenticated user's password, digest, and permitted
+// bookmark-link settings.
+func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
+	s.renderAccount(w, r, "", "")
+}
+
+// AccountRedirect preserves incoming links to the account pages that were
+// consolidated under /account.
+func (s *Server) AccountRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/account", http.StatusSeeOther)
+}
+
+func (s *Server) renderAccount(w http.ResponseWriter, r *http.Request, errMsg, status string) {
 	base, _, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load page", http.StatusInternalServerError)
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
-	if !s.Users.CanUseBookmark(username) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
 
 	data := map[string]any{
-		"Title":    "Bookmark Link",
-		"HasToken": s.Users.HasBookmarkToken(username),
+		"Title":            "Account",
+		"Error":            errMsg,
+		"Status":           status,
+		"DigestSubscribed": s.Users.IsDigestSubscribed(username),
+		"EmailAvailable":   s.smtpAvailable(),
+		"EmailMessage":     "Email is unavailable. Configure SMTP in Server settings.",
+		"CanBookmark":      s.Users.CanUseBookmark(username),
+		"HasToken":         s.Users.HasBookmarkToken(username),
 	}
 	mergeInto(data, base)
-	render(w, "account_bookmark.html", data)
+	render(w, "account.html", data)
 }
 
 // AccountBookmarkRegenerate revokes any existing bookmark token, issues a
@@ -1115,20 +1126,6 @@ func (s *Server) AccountBookmarkRegenerate(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, s.bookmarkURL(r, token), http.StatusSeeOther)
 }
 
-// AccountPassword shows the self-service change-password form for a
-// logged-in user.
-func (s *Server) AccountPassword(w http.ResponseWriter, r *http.Request) {
-	base, _, err := s.baseData(r)
-	if err != nil {
-		http.Error(w, "failed to load page", http.StatusInternalServerError)
-		return
-	}
-	username, _ := auth.UsernameFromContext(r.Context())
-	data := map[string]any{"Title": "Change Password", "DigestSubscribed": s.Users.IsDigestSubscribed(username), "EmailAvailable": s.smtpAvailable(), "EmailMessage": "Email is unavailable. Configure SMTP in Server settings."}
-	mergeInto(data, base)
-	render(w, "account_password.html", data)
-}
-
 // AccountPasswordSubmit changes the logged-in user's password after
 // verifying their current one.
 func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
@@ -1140,19 +1137,8 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 	current := r.FormValue("current_password")
 	newPassword := r.FormValue("new_password")
 
-	renderErr := func(msg string) {
-		base, _, err := s.baseData(r)
-		if err != nil {
-			http.Error(w, "failed to load page", http.StatusInternalServerError)
-			return
-		}
-		data := map[string]any{"Title": "Change Password", "Error": msg, "DigestSubscribed": s.Users.IsDigestSubscribed(username), "EmailAvailable": s.smtpAvailable(), "EmailMessage": "Email is unavailable. Configure SMTP in Server settings."}
-		mergeInto(data, base)
-		render(w, "account_password.html", data)
-	}
-
 	if !s.Auth.CheckPassword(username, current) {
-		renderErr("Current password is incorrect.")
+		s.renderAccount(w, r, "Current password is incorrect.", "")
 		return
 	}
 
@@ -1166,18 +1152,11 @@ func (s *Server) AccountPasswordSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Users.ResetPassword(user.ID, newPassword); err != nil {
-		renderErr(err.Error())
+		s.renderAccount(w, r, err.Error(), "")
 		return
 	}
 
-	base, _, err := s.baseData(r)
-	if err != nil {
-		http.Error(w, "failed to load page", http.StatusInternalServerError)
-		return
-	}
-	data := map[string]any{"Title": "Change Password", "Status": "Password updated.", "DigestSubscribed": s.Users.IsDigestSubscribed(username), "EmailAvailable": s.smtpAvailable(), "EmailMessage": "Email is unavailable. Configure SMTP in Server settings."}
-	mergeInto(data, base)
-	render(w, "account_password.html", data)
+	s.renderAccount(w, r, "", "Password updated.")
 }
 
 // AccountDigestToggle flips the logged-in user's opt-in to the weekly
@@ -1188,7 +1167,7 @@ func (s *Server) AccountDigestToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.smtpAvailable() {
-		http.Redirect(w, r, "/account/password", http.StatusSeeOther)
+		http.Redirect(w, r, "/account", http.StatusSeeOther)
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
@@ -1196,7 +1175,7 @@ func (s *Server) AccountDigestToggle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to update preference", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/account/password", http.StatusSeeOther)
+	http.Redirect(w, r, "/account", http.StatusSeeOther)
 }
 
 // ForgotPasswordPage shows the "request a reset link" form.

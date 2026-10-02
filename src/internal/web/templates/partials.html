@@ -55,10 +55,7 @@
       {{if .Restricted}}
       <li><a class="shelf-toggle" href="/login">Log in</a></li>
       {{else}}
-      <li><a class="shelf-toggle" href="/account/password">Change password</a></li>
-      {{if .CanBookmark}}
-      <li><a class="shelf-toggle" href="/account/bookmark">Bookmark link</a></li>
-      {{end}}
+      <li><a class="shelf-toggle" href="/account">Account</a></li>
       {{end}}
       {{if or .CanManageUsers .CanManageServer}}
       <li><a class="shelf-toggle" href="{{if .CanManageServer}}/admin/server{{else}}/admin/users{{end}}">Admin</a></li>

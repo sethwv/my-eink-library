@@ -1,20 +1,36 @@
 {{define "content"}}
 {{template "topbar" .}}
 
-<h1>Bookmark Link</h1>
+<h1>Account</h1>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
 
+<h2>Change password</h2>
+<form method="POST" action="/account/password">
+  <label>Current password<br><input type="password" name="current_password" required></label>
+  <label>New password<br><input type="password" name="new_password" required></label>
+  <button type="submit">Change password</button>
+</form>
+
+<h2>New-book digest</h2>
+<p class="muted">Get a weekly email listing books added to the library.</p>
+{{if .EmailAvailable}}<form method="POST" action="/account/digest">
+  <label><input type="checkbox" name="subscribed" style="width:auto;display:inline" {{if .DigestSubscribed}}checked{{end}}> Email me weekly about new books</label>
+  <button type="submit">Save</button>
+</form>{{else}}<p class="muted">{{.EmailMessage}}</p>{{end}}
+
+{{if .CanBookmark}}
+<h2>Bookmark link</h2>
 <p class="muted">A bookmarkable link that logs you in without a password. Useful on an e-reader that doesn't keep cookies between sessions. Anyone with this link can access your library, so treat it like a password: only one is active at a time, and regenerating immediately invalidates the old one.</p>
-
 <p class="muted">Tapping the button below takes you straight to your library with the link in the address bar. Bookmark that page from your browser's own menu right away, since the link won't be shown again.</p>
-
 {{if .HasToken}}
 <p class="muted">You have an active bookmark link. Regenerating invalidates it immediately.</p>
 {{else}}
 <p class="muted">You don't have a bookmark link yet.</p>
 {{end}}
-
 <form method="POST" action="/account/bookmark/regenerate">
   <button type="submit">{{if .HasToken}}Regenerate bookmark link{{else}}Create bookmark link{{end}}</button>
 </form>
+{{end}}
 
 {{end}}

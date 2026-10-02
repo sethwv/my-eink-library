@@ -35,6 +35,40 @@ func newTestServer(t *testing.T) *Server {
 	}
 }
 
+func newAccountTestServer(t *testing.T) *Server {
+	t.Helper()
+
+	server := newTestServer(t)
+	db, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	server.DB = db
+	return server
+}
+
+func authenticatedRequest(t *testing.T, server *Server, method, target, username string, form url.Values) *http.Request {
+	t.Helper()
+
+	var body *strings.Reader
+	if form != nil {
+		body = strings.NewReader(form.Encode())
+	} else {
+		body = strings.NewReader("")
+	}
+	req := httptest.NewRequest(method, target, body)
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	session := httptest.NewRecorder()
+	server.Auth.IssueSession(session, req, username)
+	for _, cookie := range session.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+	return req
+}
+
 func addTestTaskManager(t *testing.T, server *Server) {
 	t.Helper()
 	store, err := tasks.Open(filepath.Join(t.TempDir(), "tasks.db"))
@@ -590,5 +624,116 @@ func TestAdminUsersCreateRendersValidationError(t *testing.T) {
 	}
 	if server.Auth.CheckPassword("reader", "reader-password") {
 		t.Error("invalid role submission created a user")
+	}
+}
+
+func TestAccountPageCombinesPermittedSettings(t *testing.T) {
+	server := newAccountTestServer(t)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(t, server, http.MethodGet, "/account", "reader", nil)
+	server.Auth.RequireFull(http.HandlerFunc(server.Account)).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{"<h1>Account</h1>", "Change password", "New-book digest", "Bookmark link", `action="/account/bookmark/regenerate"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("account page missing %q: %s", want, body)
+		}
+	}
+}
+
+func TestAccountPageHidesBookmarkSettingsWithoutPermission(t *testing.T) {
+	server := newAccountTestServer(t)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := authenticatedRequest(t, server, http.MethodGet, "/account", "reader", nil)
+	server.Auth.RequireFull(http.HandlerFunc(server.Account)).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if strings.Contains(recorder.Body.String(), "<h2>Bookmark link</h2>") {
+		t.Errorf("bookmark settings shown without permission: %s", recorder.Body.String())
+	}
+}
+
+func TestAccountPasswordSubmitShowsValidationAndSuccess(t *testing.T) {
+	server := newAccountTestServer(t)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	handler := server.Auth.RequireFull(http.HandlerFunc(server.AccountPasswordSubmit))
+
+	incorrect := httptest.NewRecorder()
+	handler.ServeHTTP(incorrect, authenticatedRequest(t, server, http.MethodPost, "/account/password", "reader", url.Values{
+		"current_password": {"wrong-password"},
+		"new_password":     {"new-reader-password"},
+	}))
+	if incorrect.Code != http.StatusOK || !strings.Contains(incorrect.Body.String(), "Current password is incorrect.") {
+		t.Errorf("incorrect password response = status %d, body %s", incorrect.Code, incorrect.Body.String())
+	}
+
+	success := httptest.NewRecorder()
+	handler.ServeHTTP(success, authenticatedRequest(t, server, http.MethodPost, "/account/password", "reader", url.Values{
+		"current_password": {"reader-password"},
+		"new_password":     {"new-reader-password"},
+	}))
+	if success.Code != http.StatusOK || !strings.Contains(success.Body.String(), "Password updated.") {
+		t.Errorf("successful password response = status %d, body %s", success.Code, success.Body.String())
+	}
+	if !server.Auth.CheckPassword("reader", "new-reader-password") {
+		t.Error("password was not updated")
+	}
+}
+
+func TestAccountRoutesRequireFullSession(t *testing.T) {
+	server := newAccountTestServer(t)
+	if err := server.Users.Create("reader", "reader-password", users.RoleMember, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	token, err := server.Users.GenerateBookmarkToken("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name    string
+		method  string
+		target  string
+		handler http.Handler
+	}{
+		{"account", http.MethodGet, "/account", server.Auth.RequireFull(http.HandlerFunc(server.Account))},
+		{"legacy password", http.MethodGet, "/account/password", server.Auth.RequireFull(http.HandlerFunc(server.AccountRedirect))},
+		{"legacy bookmark", http.MethodGet, "/account/bookmark", server.Auth.RequireFull(http.HandlerFunc(server.AccountRedirect))},
+		{"password submit", http.MethodPost, "/account/password", server.Auth.RequireFull(http.HandlerFunc(server.AccountPasswordSubmit))},
+		{"digest", http.MethodPost, "/account/digest", server.Auth.RequireFull(http.HandlerFunc(server.AccountDigestToggle))},
+		{"bookmark regenerate", http.MethodPost, "/account/bookmark/regenerate", server.Auth.RequireFull(http.HandlerFunc(server.AccountBookmarkRegenerate))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(test.method, test.target+"?token="+url.QueryEscape(token), nil)
+			test.handler.ServeHTTP(recorder, req)
+			if recorder.Code != http.StatusSeeOther || !strings.HasPrefix(recorder.Header().Get("Location"), "/login?next=") {
+				t.Errorf("status = %d, location = %q; want login step-up", recorder.Code, recorder.Header().Get("Location"))
+			}
+		})
+	}
+}
+
+func TestAccountRedirect(t *testing.T) {
+	server := newAccountTestServer(t)
+	recorder := httptest.NewRecorder()
+	server.AccountRedirect(recorder, httptest.NewRequest(http.MethodGet, "/account/password", nil))
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/account" {
+		t.Errorf("status = %d, location = %q; want redirect to /account", recorder.Code, recorder.Header().Get("Location"))
 	}
 }
