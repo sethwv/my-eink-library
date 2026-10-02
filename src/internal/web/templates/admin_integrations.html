@@ -2,7 +2,7 @@
 {{template "topbar" .}}
 {{template "admintabs" .}}
 
-<h1>Enrichment</h1>
+<h1>Enhancement</h1>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 {{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
 
@@ -24,33 +24,13 @@
 
 {{end}}
 
-<nav class="integration-tabs" aria-label="Enrichment providers">
-  <a href="/admin/integrations?provider=hardcover" aria-current="{{if eq .EnrichmentTab "hardcover"}}page{{end}}" class="{{if eq .EnrichmentTab "hardcover"}}is-active{{end}}">Hardcover</a>
+<nav class="integration-tabs" aria-label="Enhancement providers">
   <a href="/admin/integrations?provider=chaptarr" aria-current="{{if eq .EnrichmentTab "chaptarr"}}page{{end}}" class="{{if eq .EnrichmentTab "chaptarr"}}is-active{{end}}">Chaptarr</a>
+  <a href="/admin/integrations?provider=hardcover" aria-current="{{if eq .EnrichmentTab "hardcover"}}page{{end}}" class="{{if eq .EnrichmentTab "hardcover"}}is-active{{end}}">Hardcover</a>
 </nav>
 
-{{if eq .EnrichmentTab "hardcover"}}
-<section class="integration-card is-first-tab-active" aria-labelledby="hardcover-heading">
-  <!-- <h2 id="hardcover-heading">Hardcover</h2> -->
-  {{if .HardcoverActive}}
-  <p class="muted">Enabled</p>
-  {{else if .HardcoverConfigured}}
-  <p class="muted">Disabled</p>
-  {{else}}
-  <p class="muted"><a href="https://hardcover.app/settings" target="_blank" rel="noopener">Get an API token</a></p>
-  {{end}}
-
-  <form method="POST" action="/admin/integrations/hardcover" class="integration-form">
-    <label class="integration-checkbox"><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable Hardcover</label>
-    <label>API token<input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></label>
-    <label class="integration-checkbox"><input type="checkbox" name="hide_no_hardcover_match" {{if .HideNoHardcoverMatch}}checked{{end}}> Hide unmatched books</label>
-    <label class="integration-checkbox"><input type="checkbox" name="hardcover_overwrite_cover" {{if .HardcoverOverwriteCover}}checked{{end}}> Use Hardcover covers</label>
-    <button type="submit">Save Hardcover settings</button>
-  </form>
-</section>
-
-{{else}}
-<section class="integration-card" aria-labelledby="chaptarr-heading">
+{{if eq .EnrichmentTab "chaptarr"}}
+<section class="integration-card is-first-tab-active" aria-labelledby="chaptarr-heading">
   <!-- <h2 id="chaptarr-heading">Chaptarr</h2> -->
   {{if .ChaptarrActive}}
   <p class="muted">Enabled</p>
@@ -66,6 +46,25 @@
     <label>API key<input type="password" name="chaptarr_api_key" placeholder="{{if .ChaptarrConfigured}}(unchanged){{else}}paste your Chaptarr API key{{end}}"></label>
     <label class="integration-checkbox"><input type="checkbox" name="hide_no_chaptarr_match" {{if .HideNoChaptarrMatch}}checked{{end}}> Hide unmatched books</label>
     <button type="submit">Save Chaptarr settings</button>
+  </form>
+</section>
+{{else}}
+<section class="integration-card" aria-labelledby="hardcover-heading">
+  <!-- <h2 id="hardcover-heading">Hardcover</h2> -->
+  {{if .HardcoverActive}}
+  <p class="muted">Enabled</p>
+  {{else if .HardcoverConfigured}}
+  <p class="muted">Disabled</p>
+  {{else}}
+  <p class="muted"><a href="https://hardcover.app/settings" target="_blank" rel="noopener">Get an API token</a></p>
+  {{end}}
+
+  <form method="POST" action="/admin/integrations/hardcover" class="integration-form">
+    <label class="integration-checkbox"><input type="checkbox" name="hardcover_enabled" {{if .HardcoverEnabled}}checked{{end}}> Enable Hardcover</label>
+    <label>API token<input type="password" name="hardcover_token" placeholder="{{if .HardcoverConfigured}}(unchanged){{else}}paste your Hardcover API token{{end}}"></label>
+    <label class="integration-checkbox"><input type="checkbox" name="hide_no_hardcover_match" {{if .HideNoHardcoverMatch}}checked{{end}}> Hide unmatched books</label>
+    <label class="integration-checkbox"><input type="checkbox" name="hardcover_overwrite_cover" {{if .HardcoverOverwriteCover}}checked{{end}}> Use Hardcover covers</label>
+    <button type="submit">Save Hardcover settings</button>
   </form>
 </section>
 {{end}}

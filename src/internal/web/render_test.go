@@ -40,7 +40,7 @@ func TestRenderAdminIntegrationsTabsAndForms(t *testing.T) {
 			name:           "hardcover",
 			provider:       "hardcover",
 			wantTab:        `href="/admin/integrations?provider=hardcover" aria-current="page" class="is-active"`,
-			wantPanel:      `class="integration-card is-first-tab-active" aria-labelledby="hardcover-heading"`,
+			wantPanel:      `class="integration-card" aria-labelledby="hardcover-heading"`,
 			wantFormAction: `action="/admin/integrations/hardcover"`,
 			wantInput:      `name="hardcover_token"`,
 		},
@@ -48,7 +48,7 @@ func TestRenderAdminIntegrationsTabsAndForms(t *testing.T) {
 			name:           "chaptarr",
 			provider:       "chaptarr",
 			wantTab:        `href="/admin/integrations?provider=chaptarr" aria-current="page" class="is-active"`,
-			wantPanel:      `class="integration-card" aria-labelledby="chaptarr-heading"`,
+			wantPanel:      `class="integration-card is-first-tab-active" aria-labelledby="chaptarr-heading"`,
 			wantFormAction: `action="/admin/integrations/chaptarr"`,
 			wantInput:      `name="chaptarr_api_key"`,
 		},
@@ -67,7 +67,7 @@ func TestRenderAdminIntegrationsTabsAndForms(t *testing.T) {
 				t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body.String())
 			}
 			body := recorder.Body.String()
-			for _, want := range []string{`aria-label="Enrichment providers"`, tt.wantTab, tt.wantPanel, tt.wantFormAction, tt.wantInput} {
+			for _, want := range []string{`aria-label="Enhancement providers"`, tt.wantTab, tt.wantPanel, tt.wantFormAction, tt.wantInput} {
 				if !strings.Contains(body, want) {
 					t.Errorf("response missing %q: %s", want, body)
 				}
@@ -133,10 +133,37 @@ func TestAdminTabsIncludeTasks(t *testing.T) {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
 	body := recorder.Body.String()
-	for _, want := range []string{"href=\"/admin/tasks\"", "Services", "History", "Next run", "No task runs yet."} {
+	for _, want := range []string{"href=\"/admin/tasks\"", "History", "Next run", "No task runs yet."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("response missing %q: %s", want, body)
 		}
+	}
+	if strings.Contains(body, "Services") {
+		t.Errorf("response retains removed services table: %s", body)
+	}
+}
+
+func TestAdminTabsUseRequestedOrderAndLabels(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	render(recorder, "admin_tasks.html", map[string]any{
+		"Title": "Tasks", "SiteName": "Test Library", "CanManageServer": true, "CanManageUsers": true,
+	})
+	if recorder.Code != 200 {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{"Server", "Setup", "Users", "Tasks", "SMTP", "Enhancement"} {
+		if !strings.Contains(body, ">"+want+"<") {
+			t.Errorf("response missing %q: %s", want, body)
+		}
+	}
+	last := -1
+	for _, want := range []string{">Server<", ">Setup<", ">Users<", ">Tasks<", ">SMTP<", ">Enhancement<"} {
+		position := strings.Index(body, want)
+		if position <= last {
+			t.Errorf("admin tab %q is out of order: %s", want, body)
+		}
+		last = position
 	}
 }
 

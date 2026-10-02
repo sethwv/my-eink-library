@@ -6,7 +6,7 @@ nav_order: 7
 
 # Tasks
 
-Open **Tasks** from the Admin tabs to monitor queued maintenance work and continuous background services. The page refreshes every ten seconds while open. Select **Pause refresh** when reading a changing table or troubleshooting a task.
+Open **Tasks** from the Admin tabs to monitor queued maintenance work. The page refreshes every ten seconds while open. Select **Pause refresh** when reading a changing table or troubleshooting a task.
 
 ## Run a task
 
@@ -15,10 +15,6 @@ Open **Tasks** from the Admin tabs to monitor queued maintenance work and contin
 **Email digest** sends the weekly new-book digest to subscribed users. SMTP must be configured and enabled before it can run. Its next scheduled send is shown relative to the current time, and the play control sends a digest immediately.
 
 Tasks run one at a time. The History table shows the ten most recent task runs with their status, queued time, start time, and duration.
-
-## Services
-
-The **Services** table shows continuous work that does not have a manual run control. The filesystem watcher waits for EPUB changes. The enrichment queue waits for enabled metadata sources or candidates. With SMTP enabled, the digest scheduler waits for the weekly digest deadline.
 
 {% include screenshot-pair.html id="admin-tasks-guide" %}
 

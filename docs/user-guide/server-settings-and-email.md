@@ -18,7 +18,7 @@ Use **Clear library and queue scan** on the Server tab when the derived index ne
 
 ## Configure the library
 
-Open **Configuration** to change the site name, cover width, books per page, and session length. Use a positive number for cover width and books per page. Session length uses a Go duration such as `720h` for thirty days.
+Open **Setup** to change the site name, cover width, books per page, and session length. Use a positive number for cover width and books per page. Session length uses a Go duration such as `720h` for thirty days.
 
 Set **Public URL** to the externally reachable HTTPS address, for example `https://library.example.com`. It is required for password-reset and invitation messages so links in email point to the correct public site. It does not replace the HTTPS reverse-proxy requirement in [Deployment](../../deployment/).
 

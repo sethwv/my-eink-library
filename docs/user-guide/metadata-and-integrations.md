@@ -6,11 +6,11 @@ nav_order: 8
 
 # Metadata
 
-The **Enrichment** admin tab can enrich indexed EPUB metadata with Hardcover or Chaptarr. It is optional. A library remains usable with the metadata and covers found in its EPUB files.
+The **Enhancement** admin tab can enrich indexed EPUB metadata with Chaptarr or Hardcover. It is optional. A library remains usable with the metadata and covers found in its EPUB files.
 
 ## Connect an enrichment provider
 
-For **Hardcover**, obtain an API token from Hardcover, open **Enrichment**, select the Hardcover tab, paste the token, enable the provider, then save. For **Chaptarr**, provide its base URL and API key, enable it, then save.
+For **Chaptarr**, open **Enhancement**, provide its base URL and API key, enable the provider, then save. For **Hardcover**, obtain an API token from Hardcover, select the Hardcover tab, paste the token, enable the provider, then save.
 
 After configuration, the queue reports books that are pending, completed, unmatched, or errored. Start with one provider and confirm its results before enabling additional options.
 

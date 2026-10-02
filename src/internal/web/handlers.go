@@ -932,7 +932,7 @@ func (s *Server) adminSettingsData() (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"Title":                     "Configuration",
+		"Title":                     "Setup",
 		"AdminTab":                  "settings",
 		"SiteName":                  general.SiteName,
 		"PublicURL":                 general.PublicURL,
@@ -973,7 +973,7 @@ func (s *Server) serverIntegrationsData(provider string) (map[string]any, error)
 	}
 
 	return map[string]any{
-		"Title":                   "Enrichment",
+		"Title":                   "Enhancement",
 		"AdminTab":                "integrations",
 		"EnrichmentTab":           provider,
 		"HardcoverEnabled":        settings.HardcoverEnabled,
@@ -1265,22 +1265,20 @@ func (s *Server) AdminTasks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to load tasks", http.StatusInternalServerError)
 		return
 	}
-	var jobs, services []tasks.Summary
+	var jobs []tasks.Summary
 	for _, summary := range summaries {
 		if summary.Kind == tasks.KindService {
-			summary.Status = s.serviceStatus(summary)
-			services = append(services, summary)
-		} else {
-			s.populateTaskNextRun(&summary)
-			jobs = append(jobs, summary)
+			continue
 		}
+		s.populateTaskNextRun(&summary)
+		jobs = append(jobs, summary)
 	}
 	history, err := s.Tasks.History(10)
 	if err != nil {
 		http.Error(w, "failed to load tasks", http.StatusInternalServerError)
 		return
 	}
-	data := map[string]any{"Title": "Tasks", "AdminTab": "tasks", "TaskPage": true, "Tasks": jobs, "Services": services, "History": history}
+	data := map[string]any{"Title": "Tasks", "AdminTab": "tasks", "TaskPage": true, "Tasks": jobs, "History": history}
 	mergeInto(data, base)
 	render(w, "admin_tasks.html", data)
 }
@@ -1316,30 +1314,6 @@ func (s *Server) populateTaskNextRun(summary *tasks.Summary) {
 	}
 }
 
-func (s *Server) serviceStatus(summary tasks.Summary) string {
-	if summary.Status != tasks.StatusRunning {
-		return summary.Status
-	}
-	switch summary.Key {
-	case "filesystem-watcher":
-		return "Watching for changes"
-	case "enrichment-queue":
-		if !s.Hardcover.Enabled() && !s.Chaptarr.Enabled() {
-			return "Waiting for sources"
-		}
-		return "Waiting for candidates"
-	case "digest-scheduler":
-		return "Scheduled"
-	case "chaptarr-refresh-scheduler":
-		if !s.Chaptarr.Enabled() {
-			return "Waiting for Chaptarr"
-		}
-		return "Scheduled"
-	default:
-		return summary.Status
-	}
-}
-
 func (s *Server) ServerIntegrations(w http.ResponseWriter, r *http.Request) {
 	base, _, err := s.baseData(r)
 	if err != nil {
@@ -1347,8 +1321,8 @@ func (s *Server) ServerIntegrations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	provider := r.URL.Query().Get("provider")
-	if provider != "chaptarr" {
-		provider = "hardcover"
+	if provider != "hardcover" {
+		provider = "chaptarr"
 	}
 	data, err := s.serverIntegrationsData(provider)
 	if err != nil {
