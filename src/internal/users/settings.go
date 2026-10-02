@@ -66,23 +66,24 @@ type GeneralSettings struct {
 // KepubSettings controls on-demand KEPUB conversion. It defaults to enabled so
 // existing installations retain their current download behavior.
 type KepubSettings struct {
-	Enabled bool
+	Enabled              bool
+	WriteCalibreMetadata bool
 }
 
 func (s *Store) GetKepubSettings() (KepubSettings, error) {
-	var enabled int
-	err := s.sql.QueryRow(`SELECT enabled FROM kepub_settings WHERE id = 1`).Scan(&enabled)
+	var enabled, writeCalibreMetadata int
+	err := s.sql.QueryRow(`SELECT enabled, write_calibre_metadata FROM kepub_settings WHERE id = 1`).Scan(&enabled, &writeCalibreMetadata)
 	if err == sql.ErrNoRows {
 		return KepubSettings{Enabled: true}, nil
 	}
 	if err != nil {
 		return KepubSettings{}, err
 	}
-	return KepubSettings{Enabled: enabled != 0}, nil
+	return KepubSettings{Enabled: enabled != 0, WriteCalibreMetadata: writeCalibreMetadata != 0}, nil
 }
 
 func (s *Store) SaveKepubSettings(m KepubSettings) error {
-	_, err := s.sql.Exec(`INSERT INTO kepub_settings (id, enabled) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET enabled = excluded.enabled`, boolToInt(m.Enabled))
+	_, err := s.sql.Exec(`INSERT INTO kepub_settings (id, enabled, write_calibre_metadata) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET enabled = excluded.enabled, write_calibre_metadata = excluded.write_calibre_metadata`, boolToInt(m.Enabled), boolToInt(m.WriteCalibreMetadata))
 	return err
 }
 

@@ -24,6 +24,12 @@ Set **Public URL** to the externally reachable HTTPS address, for example `https
 
 {% include screenshot-pair.html id="admin-configuration" %}
 
+## Configure KEPUB downloads
+
+The **Kepubify** section controls whether users see the KEPUB download button. **Write Calibre series metadata** is optional and fills missing `calibre:series` and `calibre:series_index` fields in generated KEPUB downloads from the library's effective series metadata. It does not modify the source EPUB or overwrite series metadata already in the book.
+
+Kobo does not normally import those fields from sideloaded books by itself. To show the series on Kobo, install [NickelSeries](https://pgaskin.net/kepubify/ns/) so it imports the metadata with the book, or run [`seriesmeta`](https://pgaskin.net/kepubify/) after sideloading to write the series data to Kobo's database. NickelSeries with books downloaded through Kobo's browser has not yet been verified, so test with one book before relying on this workflow.
+
 ## Send a test email
 
 1. Open the **SMTP** tab.

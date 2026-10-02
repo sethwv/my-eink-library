@@ -25,6 +25,7 @@
 <form method="POST" action="/admin/settings/kepub">
 <table>
 <tr><th>Enable KEPUB downloads</th><td><label><input type="checkbox" name="enabled"{{if .KepubEnabled}} checked{{end}}> Show the KEPUB download button</label></td></tr>
+<tr><th>Write Calibre series metadata</th><td><label><input type="checkbox" name="write_calibre_metadata"{{if .KepubWriteCalibreMetadata}} checked{{end}}> Fill missing series and series-number fields from library metadata for NickelSeries</label></td></tr>
 <tr><td colspan="2"><button type="submit">Save Kepubify settings</button></td></tr>
 </table>
 </form>

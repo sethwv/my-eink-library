@@ -571,7 +571,11 @@ func (s *Server) DownloadKepub(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/epub+zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 
-	if err := kepub.ConvertFile(r.Context(), w, fullPath); err != nil {
+	var metadata *kepub.Metadata
+	if settings.WriteCalibreMetadata {
+		metadata = &kepub.Metadata{Series: book.Series, SeriesIndex: book.SeriesIndex}
+	}
+	if err := kepub.ConvertFile(r.Context(), w, fullPath, metadata); err != nil {
 		log.Printf("kepub conversion failed for %s: %v", book.FilePath, err)
 	}
 }
@@ -928,14 +932,15 @@ func (s *Server) adminSettingsData() (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"Title":        "Configuration",
-		"AdminTab":     "settings",
-		"SiteName":     general.SiteName,
-		"PublicURL":    general.PublicURL,
-		"CoverWidth":   general.CoverWidth,
-		"PageSize":     general.PageSize,
-		"SessionTTL":   general.SessionTTL.String(),
-		"KepubEnabled": kepubSettings.Enabled,
+		"Title":                     "Configuration",
+		"AdminTab":                  "settings",
+		"SiteName":                  general.SiteName,
+		"PublicURL":                 general.PublicURL,
+		"CoverWidth":                general.CoverWidth,
+		"PageSize":                  general.PageSize,
+		"SessionTTL":                general.SessionTTL.String(),
+		"KepubEnabled":              kepubSettings.Enabled,
+		"KepubWriteCalibreMetadata": kepubSettings.WriteCalibreMetadata,
 	}, nil
 }
 
@@ -1123,7 +1128,10 @@ func (s *Server) AdminSettingsKepubSave(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
-	if err := s.Users.SaveKepubSettings(users.KepubSettings{Enabled: r.FormValue("enabled") == "on"}); err != nil {
+	if err := s.Users.SaveKepubSettings(users.KepubSettings{
+		Enabled:              r.FormValue("enabled") == "on",
+		WriteCalibreMetadata: r.FormValue("write_calibre_metadata") == "on",
+	}); err != nil {
 		s.renderAdminSettingsError(w, r, "failed to save KEPUB settings: "+err.Error(), "")
 		return
 	}

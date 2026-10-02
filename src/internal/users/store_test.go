@@ -836,7 +836,7 @@ func TestKepubSettings_SaveAndGet(t *testing.T) {
 		t.Errorf("GetKepubSettings() defaults = %+v, want enabled conversion", defaults)
 	}
 
-	want := KepubSettings{Enabled: false}
+	want := KepubSettings{Enabled: false, WriteCalibreMetadata: true}
 	if err := s.SaveKepubSettings(want); err != nil {
 		t.Fatal(err)
 	}
