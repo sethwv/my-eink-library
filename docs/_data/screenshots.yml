@@ -95,6 +95,7 @@
   description: Email address and new-book digest controls, with the relevant fields highlighted.
   actions:
     - login
+    - configure_smtp
     - goto: /account/email
   annotations:
     - selector: 'input[name="email"]'

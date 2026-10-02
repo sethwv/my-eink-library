@@ -70,6 +70,16 @@ async function runAction(page, context, action, scenarioID) {
       if (value !== undefined) throw new Error(`Screenshot ${scenarioID} login does not accept a value`);
       await login(page);
       return;
+    case "configure_smtp":
+      if (value !== undefined) throw new Error(`Screenshot ${scenarioID} configure_smtp does not accept a value`);
+      await page.goto(`${baseURL}/admin/smtp`, { waitUntil: "networkidle" });
+      await page.locator('input[name="host"]').fill("smtp.example.com");
+      await page.locator('input[name="from_addr"]').fill("library@example.com");
+      await Promise.all([
+        page.waitForURL(`${baseURL}/admin/smtp`),
+        page.locator('form[action="/admin/settings/smtp"] button[type="submit"]').click(),
+      ]);
+      return;
     case "goto":
       await page.goto(`${baseURL}${resolve(value, context, scenarioID)}`, { waitUntil: "networkidle" });
       return;
