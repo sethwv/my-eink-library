@@ -825,6 +825,30 @@ func TestGeneralSettings_SaveAndGet(t *testing.T) {
 	}
 }
 
+func TestKepubSettings_SaveAndGet(t *testing.T) {
+	s := openTestStore(t)
+
+	defaults, err := s.GetKepubSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaults != (KepubSettings{Enabled: true}) {
+		t.Errorf("GetKepubSettings() defaults = %+v, want enabled conversion", defaults)
+	}
+
+	want := KepubSettings{Enabled: false}
+	if err := s.SaveKepubSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetKepubSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("GetKepubSettings() = %+v, want %+v", got, want)
+	}
+}
+
 func TestSetEmail(t *testing.T) {
 	s := openTestStore(t)
 

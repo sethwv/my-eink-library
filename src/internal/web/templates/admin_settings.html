@@ -19,4 +19,15 @@
 </form>
 </div>
 
+<h2>Kepubify</h2>
+<p class="muted">Convert EPUB downloads to Kobo's KEPUB format.</p>
+<div class="table-wrap">
+<form method="POST" action="/admin/settings/kepub">
+<table>
+<tr><th>Enable KEPUB downloads</th><td><label><input type="checkbox" name="enabled"{{if .KepubEnabled}} checked{{end}}> Show the KEPUB download button</label></td></tr>
+<tr><td colspan="2"><button type="submit">Save Kepubify settings</button></td></tr>
+</table>
+</form>
+</div>
+
 {{end}}

@@ -71,6 +71,13 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 			return nil, nil, err
 		}
 	}
+	kepubSettings := users.KepubSettings{Enabled: true}
+	if s.Users != nil {
+		kepubSettings, err = s.Users.GetKepubSettings()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
 	data = map[string]any{
 		"Username":        username,
@@ -84,6 +91,7 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 		"CurrentURL":      r.URL.RequestURI(),
 		"BuildVersion":    s.BuildVersion,
 		"BuildDate":       s.BuildDate,
+		"KepubEnabled":    kepubSettings.Enabled,
 	}
 	return data, shelves, nil
 }
@@ -542,6 +550,16 @@ func (s *Server) DownloadEPUB(w http.ResponseWriter, r *http.Request) {
 
 // DownloadKepub converts the EPUB to kepub on the fly and streams it. Not cached to disk.
 func (s *Server) DownloadKepub(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.Users.GetKepubSettings()
+	if err != nil {
+		http.Error(w, "failed to load KEPUB settings", http.StatusInternalServerError)
+		return
+	}
+	if !settings.Enabled {
+		http.NotFound(w, r)
+		return
+	}
+
 	book, ok := s.lookupBook(w, r)
 	if !ok {
 		return
@@ -904,15 +922,20 @@ func (s *Server) adminSettingsData() (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	kepubSettings, err := s.Users.GetKepubSettings()
+	if err != nil {
+		return nil, err
+	}
 
 	return map[string]any{
-		"Title":      "Configuration",
-		"AdminTab":   "settings",
-		"SiteName":   general.SiteName,
-		"PublicURL":  general.PublicURL,
-		"CoverWidth": general.CoverWidth,
-		"PageSize":   general.PageSize,
-		"SessionTTL": general.SessionTTL.String(),
+		"Title":        "Configuration",
+		"AdminTab":     "settings",
+		"SiteName":     general.SiteName,
+		"PublicURL":    general.PublicURL,
+		"CoverWidth":   general.CoverWidth,
+		"PageSize":     general.PageSize,
+		"SessionTTL":   general.SessionTTL.String(),
+		"KepubEnabled": kepubSettings.Enabled,
 	}, nil
 }
 
@@ -1092,6 +1115,18 @@ func (s *Server) AdminSettingsGeneralSave(w http.ResponseWriter, r *http.Request
 	s.Covers.SetWidth(settings.CoverWidth)
 	s.Auth.SetTTL(settings.SessionTTL)
 
+	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)
+}
+
+func (s *Server) AdminSettingsKepubSave(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	if err := s.Users.SaveKepubSettings(users.KepubSettings{Enabled: r.FormValue("enabled") == "on"}); err != nil {
+		s.renderAdminSettingsError(w, r, "failed to save KEPUB settings: "+err.Error(), "")
+		return
+	}
 	http.Redirect(w, r, "/admin/settings", http.StatusSeeOther)
 }
 
