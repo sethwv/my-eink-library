@@ -77,17 +77,6 @@ body {
   letter-spacing: -0.04em;
 }
 
-.site-title.docs-sidebar-brand {
-  flex: 1;
-  padding: 0.75rem 1rem;
-}
-
-.docs-sidebar-brand img {
-  display: block;
-  height: auto;
-  max-width: 13rem;
-}
-
 .docs-theme-credit,
 .docs-sidebar-copyright,
 .docs-sidebar-license {

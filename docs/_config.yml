@@ -1,5 +1,6 @@
 title: my-sideload-library
 description: A self-hosted EPUB library for e-readers.
+logo: "/assets/brand/lockups/horizontal-moss-transparent.png"
 url: "https://sethwv.github.io"
 baseurl: "/"
 

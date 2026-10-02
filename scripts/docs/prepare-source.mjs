@@ -91,9 +91,7 @@ const sidebar = `{%- comment -%}
 {%- endcomment -%}
 <header class="side-bar">
   <div class="site-header">
-    <a href="{{ '/' | relative_url }}" class="site-title docs-sidebar-brand" aria-label="my-sideload-library home">
-      <img src="{{ '/assets/brand/lockups/horizontal-moss-transparent.png' | relative_url }}" alt="my-sideload-library">
-    </a>
+    <a href="{{ '/' | relative_url }}" class="site-title lh-tight">{% include title.html %}</a>
     <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
       <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
     </button>
