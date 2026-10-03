@@ -405,6 +405,12 @@ label { display: block; margin: 0.6em 0; }
 /* Shelf toggle list inside the download modal's shelves section */
 .shelf-list { list-style: none; padding: 0; margin: 0 0 0.5em; }
 .shelf-list li { margin: 0.5em 0; }
+.shelf-nav-list { text-align: left; }
+.shelf-nav-list li { display: inline-block; width: 49%; padding-right: 0.3em; vertical-align: top; }
+.shelf-nav-list .shelf-nav-manage { width: 100%; margin-top: 0.8em; padding-top: 0.8em; border-top: 1px solid #ddd; }
+@media (max-width: 480px) {
+  .shelf-nav-list li { display: block; width: 100%; padding-right: 0; }
+}
 .shelf-toggle {
   display: block;
   width: 100%;

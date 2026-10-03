@@ -34,9 +34,12 @@
 <div id="shelves-nav-modal" class="modal-overlay">
   <div class="modal-box">
     <h3>Shelves</h3>
-    <ul class="shelf-list">
+    <ul class="shelf-list shelf-nav-list">
     {{range .Shelves}}
     <li><a class="shelf-toggle" href="{{if .IsSystem}}/favorites{{else}}/shelves/{{.ID}}{{end}}">{{.Name}}</a></li>
+    {{end}}
+    {{if .CanOwnShelves}}
+    <li class="shelf-nav-manage"><a class="shelf-toggle" href="/account/shelves">Manage shelves</a></li>
     {{end}}
     </ul>
   </div>
