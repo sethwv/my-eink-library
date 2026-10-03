@@ -2,6 +2,7 @@ package index
 
 import (
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -79,6 +80,60 @@ func TestGetShelf_FoundAndNotFound(t *testing.T) {
 	}
 	if missing != nil {
 		t.Errorf("GetShelf(missing) = %+v, want nil", missing)
+	}
+}
+
+func TestUserShelfLifecycleIsPrivateAndOwnerScoped(t *testing.T) {
+	db := openTestDB(t)
+	shelf, err := db.CreateShelf("alice", "To Read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shelf.IsSystem || shelf.Visibility != "private" || shelf.Slug != "to-read" {
+		t.Errorf("created shelf = %+v, want a private non-system To Read shelf", shelf)
+	}
+	if owned, err := db.GetOwnedShelf("alice", shelf.ID); err != nil || owned == nil {
+		t.Fatalf("GetOwnedShelf(alice) = %+v, %v", owned, err)
+	}
+	if owned, err := db.GetOwnedShelf("bob", shelf.ID); err != nil || owned != nil {
+		t.Errorf("GetOwnedShelf(bob) = %+v, %v, want nil", owned, err)
+	}
+	if err := db.RenameShelf("alice", shelf.ID, "Reading Soon"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CreateShelf("alice", "reading soon"); err == nil {
+		t.Error("expected case-insensitive duplicate shelf name to fail")
+	}
+	if err := db.DeleteShelf("bob", shelf.ID); err == nil {
+		t.Error("expected another user to be unable to delete the shelf")
+	}
+	if err := db.DeleteShelf("alice", shelf.ID); err != nil {
+		t.Fatal(err)
+	}
+	if shelf, err := db.GetShelf(shelf.ID); err != nil || shelf != nil {
+		t.Errorf("GetShelf after delete = %+v, %v, want nil", shelf, err)
+	}
+}
+
+func TestUserShelfLimitAndSystemShelfProtection(t *testing.T) {
+	db := openTestDB(t)
+	favorites, err := db.EnsureSystemShelf("alice", "favourites", "Favourites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RenameShelf("alice", favorites, "Renamed"); err == nil {
+		t.Error("expected system shelf rename to fail")
+	}
+	if err := db.DeleteShelf("alice", favorites); err == nil {
+		t.Error("expected system shelf delete to fail")
+	}
+	for i := 0; i < MaxUserShelves; i++ {
+		if _, err := db.CreateShelf("alice", "Shelf "+strconv.Itoa(i)); err != nil {
+			t.Fatalf("CreateShelf %d: %v", i, err)
+		}
+	}
+	if _, err := db.CreateShelf("alice", "One too many"); err == nil {
+		t.Errorf("expected more than %d user shelves to fail", MaxUserShelves)
 	}
 }
 

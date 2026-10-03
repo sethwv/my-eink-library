@@ -3,19 +3,23 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
+
+const MaxUserShelves = 25
 
 // Shelf is a named, per-user collection of books. "Favourites" is the first
 // system-provided shelf; user-created shelves (with their own management UI)
 // are a natural future extension of this same table.
 type Shelf struct {
-	ID       int64
-	Username string
-	Slug     string
-	Name     string
-	IsSystem bool
+	ID         int64
+	Username   string
+	Slug       string
+	Name       string
+	IsSystem   bool
+	Visibility string
 }
 
 // EnsureSystemShelf returns the id of the given system shelf for username,
@@ -31,7 +35,7 @@ func (d *DB) EnsureSystemShelf(username, slug, name string) (int64, error) {
 	}
 
 	res, err := d.sql.Exec(
-		`INSERT INTO shelves (username, slug, name, is_system, created_at) VALUES (?, ?, ?, 1, ?)`,
+		`INSERT INTO shelves (username, slug, name, is_system, visibility, created_at) VALUES (?, ?, ?, 1, 'private', ?)`,
 		username, slug, name, time.Now().Unix(),
 	)
 	if err != nil {
@@ -43,7 +47,7 @@ func (d *DB) EnsureSystemShelf(username, slug, name string) (int64, error) {
 // ListShelves returns every shelf owned by username, system shelves first.
 func (d *DB) ListShelves(username string) ([]Shelf, error) {
 	rows, err := d.sql.Query(
-		`SELECT id, username, slug, name, is_system FROM shelves WHERE username = ? ORDER BY is_system DESC, name`,
+		`SELECT id, username, slug, name, is_system, visibility FROM shelves WHERE username = ? ORDER BY is_system DESC, name`,
 		username,
 	)
 	if err != nil {
@@ -55,7 +59,7 @@ func (d *DB) ListShelves(username string) ([]Shelf, error) {
 	for rows.Next() {
 		var sh Shelf
 		var isSystem int
-		if err := rows.Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem); err != nil {
+		if err := rows.Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem, &sh.Visibility); err != nil {
 			return nil, err
 		}
 		sh.IsSystem = isSystem != 0
@@ -71,8 +75,8 @@ func (d *DB) GetShelf(id int64) (*Shelf, error) {
 	var sh Shelf
 	var isSystem int
 	err := d.sql.QueryRow(
-		`SELECT id, username, slug, name, is_system FROM shelves WHERE id = ?`, id,
-	).Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem)
+		`SELECT id, username, slug, name, is_system, visibility FROM shelves WHERE id = ?`, id,
+	).Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem, &sh.Visibility)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -81,6 +85,151 @@ func (d *DB) GetShelf(id int64) (*Shelf, error) {
 	}
 	sh.IsSystem = isSystem != 0
 	return &sh, nil
+}
+
+// GetOwnedShelf returns a shelf owned by username, or nil when it does not
+// exist. It centralizes the owner scope required by private shelves.
+func (d *DB) GetOwnedShelf(username string, id int64) (*Shelf, error) {
+	var sh Shelf
+	var isSystem int
+	err := d.sql.QueryRow(
+		`SELECT id, username, slug, name, is_system, visibility FROM shelves WHERE id = ? AND username = ?`, id, username,
+	).Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem, &sh.Visibility)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sh.IsSystem = isSystem != 0
+	return &sh, nil
+}
+
+// CreateShelf creates a private non-system shelf for username. The caller is
+// responsible for checking the effective own_shelves permission.
+func (d *DB) CreateShelf(username, name string) (*Shelf, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("shelf name is required")
+	}
+	if len(name) > 100 {
+		return nil, fmt.Errorf("shelf name must be 100 characters or fewer")
+	}
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var count int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM shelves WHERE username = ? AND is_system = 0`, username).Scan(&count); err != nil {
+		return nil, err
+	}
+	if count >= MaxUserShelves {
+		return nil, fmt.Errorf("you can create at most %d shelves", MaxUserShelves)
+	}
+	var exists int
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM shelves WHERE username = ? AND is_system = 0 AND name = ? COLLATE NOCASE)`, username, name).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if exists != 0 {
+		return nil, fmt.Errorf("a shelf with that name already exists")
+	}
+	slug, err := shelfSlug(tx, username, name)
+	if err != nil {
+		return nil, err
+	}
+	result, err := tx.Exec(`INSERT INTO shelves (username, slug, name, visibility, created_at) VALUES (?, ?, ?, 'private', ?)`, username, slug, name, time.Now().Unix())
+	if err != nil {
+		return nil, fmt.Errorf("create shelf: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &Shelf{ID: id, Username: username, Slug: slug, Name: name, Visibility: "private"}, nil
+}
+
+func (d *DB) RenameShelf(username string, id int64, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("shelf name is required")
+	}
+	if len(name) > 100 {
+		return fmt.Errorf("shelf name must be 100 characters or fewer")
+	}
+	result, err := d.sql.Exec(`UPDATE shelves SET name = ? WHERE id = ? AND username = ? AND is_system = 0`, name, id, username)
+	if err != nil {
+		if strings.Contains(err.Error(), "idx_shelves_owner_name") || strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return fmt.Errorf("a shelf with that name already exists")
+		}
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 0 {
+		return fmt.Errorf("shelf not found")
+	}
+	return nil
+}
+
+func (d *DB) DeleteShelf(username string, id int64) error {
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`DELETE FROM shelves WHERE id = ? AND username = ? AND is_system = 0`, id, username)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 0 {
+		return fmt.Errorf("shelf not found")
+	}
+	if _, err := tx.Exec(`DELETE FROM shelf_books WHERE shelf_id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+type shelfSlugQueryer interface {
+	QueryRow(string, ...any) *sql.Row
+}
+
+func shelfSlug(q shelfSlugQueryer, username, name string) (string, error) {
+	var b strings.Builder
+	for _, r := range strings.ToLower(name) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else if b.Len() > 0 && !strings.HasSuffix(b.String(), "-") {
+			b.WriteByte('-')
+		}
+	}
+	base := strings.Trim(b.String(), "-")
+	if base == "" {
+		base = "shelf"
+	}
+	for n := 1; ; n++ {
+		slug := base
+		if n > 1 {
+			slug += "-" + strconv.Itoa(n)
+		}
+		var exists bool
+		if err := q.QueryRow(`SELECT EXISTS(SELECT 1 FROM shelves WHERE username = ? AND slug = ?)`, username, slug).Scan(&exists); err != nil {
+			return "", err
+		}
+		if !exists {
+			return slug, nil
+		}
+	}
 }
 
 // IsBookOnShelf reports whether bookID is already on shelfID.

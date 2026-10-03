@@ -653,6 +653,42 @@ func TestAccountPageCombinesPermittedSettings(t *testing.T) {
 	}
 }
 
+func TestAccountShelvesLifecycleRequiresOwnerCapability(t *testing.T) {
+	server := newAccountTestServer(t)
+	if err := server.Users.Create("reader", "password", users.RoleMember, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	create := server.Auth.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(server.AccountShelvesCreate))
+	form := url.Values{"name": {"Reading Soon"}}
+	recorder := httptest.NewRecorder()
+	create.ServeHTTP(recorder, authenticatedRequest(t, server, http.MethodPost, "/account/shelves", "reader", form))
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != "/account/shelves" {
+		t.Fatalf("create response = (%d, %q), want redirect to account shelves", recorder.Code, recorder.Header().Get("Location"))
+	}
+	shelves, err := server.DB.ListShelves("reader")
+	if err != nil || len(shelves) != 1 || shelves[0].Name != "Reading Soon" || shelves[0].Visibility != "private" {
+		t.Fatalf("ListShelves = %+v, %v; want private Reading Soon", shelves, err)
+	}
+	page := httptest.NewRecorder()
+	server.Auth.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(server.AccountShelves)).ServeHTTP(page, authenticatedRequest(t, server, http.MethodGet, "/account/shelves", "reader", nil))
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Your shelves") || !strings.Contains(page.Body.String(), "Reading Soon") {
+		t.Fatalf("account shelves page did not render created shelf: (%d) %s", page.Code, page.Body.String())
+	}
+	reader, err := server.Users.UserByUsername("reader")
+	if err != nil || reader == nil {
+		t.Fatal("reader account missing")
+	}
+	revoke := false
+	if err := server.Users.SetPermissionOverride(reader.ID, users.PermissionOwnShelves, &revoke); err != nil {
+		t.Fatal(err)
+	}
+	forbidden := httptest.NewRecorder()
+	create.ServeHTTP(forbidden, authenticatedRequest(t, server, http.MethodPost, "/account/shelves", "reader", form))
+	if forbidden.Code != http.StatusForbidden {
+		t.Errorf("revoked owner capability response = %d, want forbidden", forbidden.Code)
+	}
+}
+
 func enableTestSMTP(t *testing.T, server *Server) {
 	t.Helper()
 	if err := server.Users.SaveSMTPSettings(mail.Settings{Host: "smtp.example.com", FromAddress: "library@example.com"}); err != nil {

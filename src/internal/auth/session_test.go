@@ -372,3 +372,21 @@ func TestRequireManageUsers_AllowsAdmin(t *testing.T) {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
 	}
 }
+
+func TestRequirePermission_RedirectsRestrictedSessionBeforeCheckingCapability(t *testing.T) {
+	store := testStore(t)
+	a := New("test-signing-secret", time.Hour, store)
+	handler := a.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	token, err := store.GenerateBookmarkToken("reader")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/account/shelves?token="+token, nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want password step-up redirect", w.Code)
+	}
+}

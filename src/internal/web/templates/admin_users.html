@@ -26,11 +26,12 @@
 </div>
 
 {{range .Users}}
+{{$user := .}}
 <div id="manage-user-{{.ID}}" class="modal-overlay">
   <div class="modal-box modal-box-wide">
     <h3>{{.Username}}</h3>
 
-    <div class="modal-section-label">Role &amp; bookmark link</div>
+    <div class="modal-section-label">Role</div>
     <form method="POST" action="/admin/users/{{.ID}}/role" class="modal-field-form">
       <select name="role">
         <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
@@ -38,9 +39,31 @@
         <option value="server_manager" {{if eq .Role "server_manager"}}selected{{end}}>Server Manager</option>
         <option value="member" {{if eq .Role "member"}}selected{{end}}>Member</option>
       </select>
-      <label class="modal-checkbox-label"><input type="checkbox" name="can_bookmark" {{if .CanBookmark}}checked{{end}}> Allow bookmark link</label>
       <button type="submit">Save role</button>
     </form>
+
+    {{if $.IsAdmin}}
+    <div class="modal-section-label">Permissions</div>
+    <form method="POST" action="/admin/users/{{$user.ID}}/permissions" class="permission-form">
+      <table>
+        <tr><th>Permission</th><th>Role</th><th>Access</th></tr>
+        {{range .Permissions}}
+        <tr>
+          <td>{{.Label}}</td>
+          <td>{{if .Default}}Allowed{{else}}None{{end}}</td>
+          <td>
+            <select name="permission_{{.Permission}}" aria-label="{{.Label}} access">
+              <option value="default" {{if eq .Override ""}}selected{{end}}>Use role</option>
+              <option value="grant" {{if eq .Override "grant"}}selected{{end}}>Allow</option>
+              <option value="revoke" {{if eq .Override "revoke"}}selected{{end}}>Deny</option>
+            </select>
+          </td>
+        </tr>
+        {{end}}
+      </table>
+      <button type="submit">Save permissions</button>
+    </form>
+    {{end}}
 
     <div class="modal-section-label">Email</div>
     <form method="POST" action="/admin/users/{{.ID}}/email" class="modal-field-form">
@@ -92,7 +115,6 @@
         <option value="server_manager">Server Manager</option>
         <option value="admin">Admin</option>
       </select>
-      <label class="modal-checkbox-label"><input type="checkbox" name="can_bookmark" checked> Allow bookmark link</label>
       <button type="submit">Create user</button>
     </form>
   </div>

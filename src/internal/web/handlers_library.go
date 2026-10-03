@@ -151,6 +151,25 @@ func (s *Server) FavoritesHandler(w http.ResponseWriter, r *http.Request) {
 	s.renderBookList(w, r, bookListParams{action: "/favorites", filter: index.Filter{ShelfID: shelfID}, heading: favoritesName, defaultSort: index.SortTitle, viewingShelfID: shelfID})
 }
 
+func (s *Server) ShelfHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	shelf, err := s.DB.GetOwnedShelf(username, id)
+	if err != nil {
+		http.Error(w, "failed to load shelf", http.StatusInternalServerError)
+		return
+	}
+	if shelf == nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.renderBookList(w, r, bookListParams{action: "/shelves/" + strconv.FormatInt(id, 10), filter: index.Filter{ShelfID: id}, heading: shelf.Name, defaultSort: index.SortTitle, viewingShelfID: id})
+}
+
 func (s *Server) ShelfToggle(w http.ResponseWriter, r *http.Request) {
 	bookID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {

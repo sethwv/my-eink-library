@@ -36,7 +36,7 @@
     <h3>Shelves</h3>
     <ul class="shelf-list">
     {{range .Shelves}}
-    <li><a class="shelf-toggle" href="/favorites">{{.Name}}</a></li>
+    <li><a class="shelf-toggle" href="{{if .IsSystem}}/favorites{{else}}/shelves/{{.ID}}{{end}}">{{.Name}}</a></li>
     {{end}}
     </ul>
   </div>
@@ -146,5 +146,6 @@
 <nav class="account-tabs" aria-label="Account settings">
   <a href="/account" class="{{if eq .AccountTab "account"}}is-active{{end}}">Account</a>
   {{if .EmailAvailable}}<a href="/account/email" class="{{if eq .AccountTab "email"}}is-active{{end}}">Email</a>{{end}}
+  {{if .CanOwnShelves}}<a href="/account/shelves" class="{{if eq .AccountTab "shelves"}}is-active{{end}}">Shelves</a>{{end}}
 </nav>
 {{end}}

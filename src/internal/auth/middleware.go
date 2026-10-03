@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+
+	"github.com/sethwv/my-sideload-library/internal/users"
 )
 
 type contextKey int
@@ -69,23 +71,22 @@ func (a *Authenticator) RequireFull(next http.Handler) http.Handler {
 // prompts rather than 403ing) and additionally 403s any user who can't
 // manage other users (role admin or user_manager).
 func (a *Authenticator) RequireManageUsers(next http.Handler) http.Handler {
-	return a.RequireFull(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		username, _ := UsernameFromContext(r.Context())
-		if !a.users.CanManageUsers(username) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	}))
+	return a.RequirePermission(users.PermissionManageUsers, next)
 }
 
 // RequireManageServer wraps RequireFull (so a restricted session step-up-
 // prompts rather than 403ing) and additionally 403s any user who can't
 // manage server/library settings (role admin or server_manager).
 func (a *Authenticator) RequireManageServer(next http.Handler) http.Handler {
+	return a.RequirePermission(users.PermissionManageServer, next)
+}
+
+// RequirePermission wraps RequireFull and requires the named effective
+// capability. Resource ownership checks remain the responsibility of handlers.
+func (a *Authenticator) RequirePermission(permission users.Permission, next http.Handler) http.Handler {
 	return a.RequireFull(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, _ := UsernameFromContext(r.Context())
-		if !a.users.CanManageServer(username) {
+		if !a.users.Can(username, permission) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

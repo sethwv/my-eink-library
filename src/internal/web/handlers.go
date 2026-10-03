@@ -51,6 +51,7 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 	canManageUsers := false
 	canManageServer := false
 	canBookmark := false
+	canOwnShelves := false
 	if username != "" {
 		// A restricted (bookmark-token) session shouldn't be offered admin
 		// links even if the account has them, since reaching /admin/* still
@@ -61,6 +62,7 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 		canManageUsers = s.Users.CanManageUsers(username) && full
 		canManageServer = s.Users.CanManageServer(username) && full
 		canBookmark = s.Users.CanUseBookmark(username)
+		canOwnShelves = s.Users.Can(username, users.PermissionOwnShelves) && full
 		if _, err = s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName); err != nil {
 			return nil, nil, err
 		}
@@ -82,6 +84,7 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 		"CanManageUsers":  canManageUsers,
 		"CanManageServer": canManageServer,
 		"CanBookmark":     canBookmark,
+		"CanOwnShelves":   canOwnShelves,
 		"Restricted":      auth.IsRestricted(r.Context()),
 		"Shelves":         shelves,
 		"SiteName":        s.SiteName,
@@ -309,10 +312,9 @@ func (s *Server) AdminUsersCreate(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	role := r.FormValue("role")
-	canBookmark := r.FormValue("can_bookmark") == "on"
 	email := r.FormValue("email")
 
-	if err := s.Users.Create(username, password, role, canBookmark, email); err != nil {
+	if err := s.Users.Create(username, password, role, true, email); err != nil {
 		s.renderAdminUsersError(w, r, err.Error())
 		return
 	}
@@ -334,13 +336,62 @@ func (s *Server) AdminUsersSetRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	role := r.FormValue("role")
-	canBookmark := r.FormValue("can_bookmark") == "on"
-
-	if err := s.Users.SetRole(id, role, canBookmark); err != nil {
+	user, err := s.Users.UserByID(id)
+	if err != nil || user == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.Users.SetRole(id, role, s.Users.CanUseBookmark(user.Username)); err != nil {
 		s.renderAdminUsersError(w, r, err.Error())
 		return
 	}
 
+	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+}
+
+// AdminUsersSetPermission changes an explicit capability override. Only an
+// administrator may change overrides, avoiding a user-manager privilege path.
+func (s *Server) AdminUsersSetPermission(w http.ResponseWriter, r *http.Request) {
+	username, _ := auth.UsernameFromContext(r.Context())
+	if !s.Users.IsAdmin(username) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	states, err := s.Users.PermissionStates(id)
+	if err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
+	overrides := make(map[users.Permission]*bool, len(states))
+	for _, state := range states {
+		var override *bool
+		switch r.FormValue("permission_" + string(state.Permission)) {
+		case "default":
+		case "grant":
+			value := true
+			override = &value
+		case "revoke":
+			value := false
+			override = &value
+		default:
+			s.renderAdminUsersError(w, r, "invalid permission override")
+			return
+		}
+		overrides[state.Permission] = override
+	}
+	if err := s.Users.SetPermissionOverrides(id, overrides); err != nil {
+		s.renderAdminUsersError(w, r, err.Error())
+		return
+	}
 	http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 }
 
@@ -1092,6 +1143,66 @@ func (s *Server) ServerIntegrationsChaptarrSave(w http.ResponseWriter, r *http.R
 // Account shows password and permitted bookmark-link settings.
 func (s *Server) Account(w http.ResponseWriter, r *http.Request) {
 	s.renderAccount(w, r, "account.html", "account", "", "")
+}
+
+func (s *Server) AccountShelves(w http.ResponseWriter, r *http.Request) {
+	s.renderAccountShelves(w, r, "", "")
+}
+
+func (s *Server) renderAccountShelves(w http.ResponseWriter, r *http.Request, errMsg, status string) {
+	base, shelves, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Account", "AccountTab": "shelves", "Shelves": shelves, "Error": errMsg, "Status": status, "ShelfLimit": index.MaxUserShelves}
+	mergeInto(data, base)
+	render(w, "account_shelves.html", data)
+}
+
+func (s *Server) AccountShelvesCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	if _, err := s.DB.CreateShelf(username, r.FormValue("name")); err != nil {
+		s.renderAccountShelves(w, r, err.Error(), "")
+		return
+	}
+	http.Redirect(w, r, "/account/shelves", http.StatusSeeOther)
+}
+
+func (s *Server) AccountShelvesRename(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	if err := s.DB.RenameShelf(username, id, r.FormValue("name")); err != nil {
+		s.renderAccountShelves(w, r, err.Error(), "")
+		return
+	}
+	http.Redirect(w, r, "/account/shelves", http.StatusSeeOther)
+}
+
+func (s *Server) AccountShelvesDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	if err := s.DB.DeleteShelf(username, id); err != nil {
+		s.renderAccountShelves(w, r, err.Error(), "")
+		return
+	}
+	http.Redirect(w, r, "/account/shelves", http.StatusSeeOther)
 }
 
 // AccountEmail shows email and digest settings when email is configured.

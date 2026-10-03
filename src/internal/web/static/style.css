@@ -522,6 +522,16 @@ label { display: block; margin: 0.6em 0; }
    under .modal-section-label headings. Delete sits below a divider since
    it's the one destructive action here. */
 .modal-field-form { margin: 0 0 1.2em; }
+.permission-form { margin: 0 0 1.2em; }
+.permission-form table { width: 100%; border-collapse: collapse; margin-bottom: 0.6em; }
+.permission-form th, .permission-form td { padding: 0.45em 0.35em; border-bottom: 1px solid #ddd; text-align: left; vertical-align: middle; }
+.permission-form th { color: #444; font-size: 0.85em; font-weight: 600; }
+.permission-form td:nth-child(2) { color: #444; font-size: 0.9em; }
+.permission-form select { width: 100%; padding: 0.45em; }
+.account-shelf { padding: 0.7em 0; border-bottom: 1px solid #ddd; }
+.account-shelf > a { display: inline-block; min-width: 12em; margin-right: 0.5em; }
+.account-shelf .inline-form { margin-right: 0.35em; }
+.account-shelf input[type="text"] { max-width: 14em; padding: 0.45em; }
 .modal-field-form label { display: block; font-size: 0.85em; color: #444; margin-bottom: 0.3em; }
 .modal-field-form input[type="text"],
 .modal-field-form input[type="email"],

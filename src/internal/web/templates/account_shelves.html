@@ -1,0 +1,31 @@
+{{define "content"}}
+{{template "topbar" .}}
+{{template "accounttabs" .}}
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
+
+<h2>Your shelves</h2>
+<form method="POST" action="/account/shelves" class="modal-field-form">
+  <label for="shelf-name">New shelf</label>
+  <input id="shelf-name" type="text" name="name" maxlength="100" required>
+  <button type="submit">Create shelf</button>
+</form>
+<p class="muted">Up to {{.ShelfLimit}} personal shelves. New shelves are private.</p>
+
+{{range .Shelves}}
+<div class="account-shelf">
+  <a href="{{if .IsSystem}}/favorites{{else}}/shelves/{{.ID}}{{end}}">{{.Name}}</a>
+  {{if .IsSystem}}
+  <span class="muted">System shelf</span>
+  {{else}}
+  <form method="POST" action="/account/shelves/{{.ID}}/rename" class="inline-form">
+    <input type="text" name="name" value="{{.Name}}" maxlength="100" required aria-label="Rename {{.Name}}">
+    <button type="submit">Rename</button>
+  </form>
+  <form method="POST" action="/account/shelves/{{.ID}}/delete" class="inline-form">
+    <button type="submit">Delete</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+{{end}}
