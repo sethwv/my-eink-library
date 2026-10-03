@@ -49,7 +49,12 @@ func (s *Store) migrateColumns() error {
 	}
 	if roleColumnIsNew {
 		_, err := s.sql.Exec(`UPDATE users SET role = 'admin' WHERE is_admin = 1`)
-		return err
+		if err != nil {
+			return err
+		}
 	}
-	return nil
+	_, err = s.sql.Exec(`INSERT INTO user_permission_overrides (user_id, permission, granted)
+		SELECT id, 'bookmark_link', 0 FROM users WHERE can_bookmark = 0
+		ON CONFLICT(user_id, permission) DO NOTHING`)
+	return err
 }

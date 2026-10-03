@@ -31,6 +31,9 @@ var (
 )
 
 func (s *Store) GenerateBookmarkToken(username string) (string, error) {
+	if !s.Can(username, PermissionBookmarkLink) {
+		return "", fmt.Errorf("bookmark links are not permitted")
+	}
 	token, hash, err := newToken()
 	if err != nil {
 		return "", fmt.Errorf("generate bookmark token: %w", err)
@@ -54,7 +57,7 @@ func (s *Store) VerifyBookmarkToken(token string) (string, bool) {
 	if token == "" {
 		return "", false
 	}
-	rows, err := s.sql.Query(`SELECT username, bookmark_token_hash FROM users WHERE bookmark_token_hash IS NOT NULL AND can_bookmark = 1 AND enabled = 1`)
+	rows, err := s.sql.Query(`SELECT u.username, u.bookmark_token_hash FROM users u LEFT JOIN user_permission_overrides p ON p.user_id = u.id AND p.permission = 'bookmark_link' WHERE u.bookmark_token_hash IS NOT NULL AND u.enabled = 1 AND (p.granted IS NULL OR p.granted = 1)`)
 	if err != nil {
 		return "", false
 	}
@@ -119,8 +122,19 @@ func (s *Store) InviteUser(username, email, role string, canBookmark bool) (toke
 	if err != nil {
 		return "", fmt.Errorf("generate invite token: %w", err)
 	}
-	_, err = s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, email, invite_token_hash, invite_token_created_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, username, string(passwordHash), boolToInt(role == RoleAdmin), role, boolToInt(canBookmark), email, hash, time.Now().Unix(), time.Now().Unix())
+	result, err := s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, email, invite_token_hash, invite_token_created_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, username, string(passwordHash), boolToInt(role == RoleAdmin), role, boolToInt(canBookmark), email, hash, time.Now().Unix(), time.Now().Unix())
 	if err != nil {
+		return "", err
+	}
+	if canBookmark {
+		return token, nil
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return "", err
+	}
+	denied := false
+	if err := s.SetPermissionOverride(id, PermissionBookmarkLink, &denied); err != nil {
 		return "", err
 	}
 	return token, nil

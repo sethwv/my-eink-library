@@ -36,6 +36,7 @@ type User struct {
 	Email            string
 	DigestSubscribed bool
 	InvitePending    bool
+	Permissions      []PermissionState
 }
 
 type Store struct {

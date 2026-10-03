@@ -60,19 +60,15 @@ func (s *Store) IsAdmin(username string) bool {
 }
 
 func (s *Store) CanManageUsers(username string) bool {
-	role, ok := s.role(username)
-	return ok && (role == RoleAdmin || role == RoleUserManager)
+	return s.Can(username, PermissionManageUsers)
 }
 
 func (s *Store) CanManageServer(username string) bool {
-	role, ok := s.role(username)
-	return ok && (role == RoleAdmin || role == RoleServerManager)
+	return s.Can(username, PermissionManageServer)
 }
 
 func (s *Store) CanUseBookmark(username string) bool {
-	var canBookmark int
-	err := s.sql.QueryRow(`SELECT can_bookmark FROM users WHERE username = ? AND enabled = 1`, username).Scan(&canBookmark)
-	return err == nil && canBookmark != 0
+	return s.Can(username, PermissionBookmarkLink)
 }
 
 func (s *Store) role(username string) (string, bool) {
@@ -97,7 +93,25 @@ func (s *Store) List() ([]User, error) {
 		}
 		out = append(out, u)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		permissions, err := s.PermissionStates(out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Permissions = permissions
+		for _, permission := range permissions {
+			if permission.Permission == PermissionBookmarkLink {
+				out[i].CanBookmark = permission.Override != "revoke" && (permission.Override == "grant" || permission.Default)
+			}
+		}
+	}
+	return out, nil
 }
 
 // UserByID returns one user, or nil when the id does not exist.
@@ -143,6 +157,8 @@ func scanUser(row userScanner) (User, error) {
 	return u, nil
 }
 
+// canBookmark is retained for programmatic account creation; it becomes an
+// explicit bookmark_link permission override rather than role state.
 func (s *Store) Create(username, password, role string, canBookmark bool, email string) error {
 	if username == "" || password == "" {
 		return fmt.Errorf("username and password are required")
@@ -157,10 +173,20 @@ func (s *Store) Create(username, password, role string, canBookmark bool, email 
 	if err != nil {
 		return err
 	}
-	_, err = s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, enabled, email, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`, username, hash, boolToInt(role == RoleAdmin), role, boolToInt(canBookmark), nullIfEmpty(email), time.Now().Unix())
-	return err
+	result, err := s.sql.Exec(`INSERT INTO users (username, password_hash, is_admin, role, can_bookmark, enabled, email, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`, username, hash, boolToInt(role == RoleAdmin), role, boolToInt(canBookmark), nullIfEmpty(email), time.Now().Unix())
+	if err != nil || canBookmark {
+		return err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
+	denied := false
+	return s.SetPermissionOverride(id, PermissionBookmarkLink, &denied)
 }
 
+// canBookmark is retained for programmatic role changes and updates the
+// bookmark_link override. The web UI manages it in the permission matrix.
 func (s *Store) SetRole(id int64, role string, canBookmark bool) error {
 	if !validRole(role) {
 		return fmt.Errorf("invalid role %q", role)
@@ -187,6 +213,13 @@ func (s *Store) SetRole(id int64, role string, canBookmark bool) error {
 		}
 	}
 	if _, err := tx.Exec(`UPDATE users SET role = ?, is_admin = ?, can_bookmark = ? WHERE id = ?`, role, boolToInt(role == RoleAdmin), boolToInt(canBookmark), id); err != nil {
+		return err
+	}
+	if !canBookmark {
+		if _, err := tx.Exec(`INSERT INTO user_permission_overrides (user_id, permission, granted) VALUES (?, ?, 0) ON CONFLICT(user_id, permission) DO UPDATE SET granted = 0`, id, PermissionBookmarkLink); err != nil {
+			return err
+		}
+	} else if _, err := tx.Exec(`DELETE FROM user_permission_overrides WHERE user_id = ? AND permission = ?`, id, PermissionBookmarkLink); err != nil {
 		return err
 	}
 	return tx.Commit()

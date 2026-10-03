@@ -449,6 +449,61 @@ func TestCanManageUsersAndServer_ByRole(t *testing.T) {
 	}
 }
 
+func TestPermissions_CombineRoleDefaultsAndUserOverrides(t *testing.T) {
+	s := openTestStore(t)
+	if err := s.Create("admin", "pw", RoleAdmin, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Create("member", "pw", RoleMember, true, ""); err != nil {
+		t.Fatal(err)
+	}
+	users, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var memberID int64
+	for _, user := range users {
+		if user.Username == "member" {
+			memberID = user.ID
+		}
+	}
+	if !s.Can("member", PermissionOwnShelves) {
+		t.Fatal("members should receive the default own-shelf capability")
+	}
+	if s.Can("member", PermissionManageShelves) {
+		t.Fatal("members must not administer other users' shelves")
+	}
+	if !s.Can("admin", PermissionManageShelves) {
+		t.Fatal("administrators should administer all shelves")
+	}
+	revoke := false
+	if err := s.SetPermissionOverride(memberID, PermissionOwnShelves, &revoke); err != nil {
+		t.Fatal(err)
+	}
+	if s.Can("member", PermissionOwnShelves) {
+		t.Fatal("explicit revocation should override the role default")
+	}
+	grant := true
+	if err := s.SetPermissionOverride(memberID, PermissionManageShelves, &grant); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Can("member", PermissionManageShelves) {
+		t.Fatal("explicit grant should override the role default")
+	}
+	if err := s.SetPermissionOverride(memberID, PermissionOwnShelves, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Can("member", PermissionOwnShelves) {
+		t.Fatal("clearing an override should restore the role default")
+	}
+	if err := s.SetEnabled(memberID, false); err != nil {
+		t.Fatal(err)
+	}
+	if s.Can("member", PermissionManageShelves) {
+		t.Fatal("disabled users must not retain effective permissions")
+	}
+}
+
 func TestSetRole_RefusesDemotingLastAdmin(t *testing.T) {
 	s := openTestStore(t)
 	if err := s.Create("admin", "pw", RoleAdmin, true, ""); err != nil {
