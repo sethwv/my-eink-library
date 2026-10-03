@@ -97,6 +97,32 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
 		return
 	}
+	downloadFormat := ""
+	if p.viewingShelfID != 0 {
+		switch q.Get("download") {
+		case "epub":
+			downloadFormat = "epub"
+		case "kepub":
+			if base["KepubEnabled"].(bool) {
+				downloadFormat = "kepub"
+			}
+		}
+	}
+	var shelfDownloadBooks []index.Book
+	if downloadFormat != "" {
+		shelfBookCount, err := s.DB.Count(index.Filter{ShelfID: p.viewingShelfID})
+		if err != nil {
+			http.Error(w, "failed to load shelf", http.StatusInternalServerError)
+			return
+		}
+		if shelfBookCount > 0 {
+			shelfDownloadBooks, err = s.DB.List(index.SortTitle, false, 1, shelfBookCount, index.Filter{ShelfID: p.viewingShelfID})
+			if err != nil {
+				http.Error(w, "failed to load shelf", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
 	bookIDs := make([]int64, len(books))
 	for i, book := range books {
 		bookIDs[i] = book.ID
@@ -139,7 +165,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	if descending {
 		toggleDir = "asc"
 	}
-	data := map[string]any{"Title": p.heading, "Heading": p.heading, "Books": books, "Sort": sortParam, "Dir": dir, "ToggleDir": toggleDir, "Page": page, "PrevPage": page - 1, "NextPage": page + 1, "HasNext": page < totalPages, "TotalPages": totalPages, "Pages": pages, "Query": search, "Action": p.action, "Name": p.name, "ShelfMemberships": memberships, "ViewingShelfID": p.viewingShelfID, "Locations": locations, "FavoritesShelfID": favoritesShelfID, "PersonalShelfCount": personalShelfCount, "RecentShelves": recentShelves}
+	data := map[string]any{"Title": p.heading, "Heading": p.heading, "Books": books, "Sort": sortParam, "Dir": dir, "ToggleDir": toggleDir, "Page": page, "PrevPage": page - 1, "NextPage": page + 1, "HasNext": page < totalPages, "TotalPages": totalPages, "Pages": pages, "Query": search, "Action": p.action, "Name": p.name, "ShelfMemberships": memberships, "ViewingShelfID": p.viewingShelfID, "Locations": locations, "FavoritesShelfID": favoritesShelfID, "PersonalShelfCount": personalShelfCount, "RecentShelves": recentShelves, "ShelfDownloadFormat": downloadFormat, "ShelfDownloadBooks": shelfDownloadBooks}
 	mergeInto(data, base)
 	render(w, "library.html", data)
 }

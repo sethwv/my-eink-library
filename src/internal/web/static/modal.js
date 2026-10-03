@@ -192,4 +192,14 @@ window.onload = function () {
   if (bookId) {
     openModal("book-" + bookId);
   }
+  var downloadFormat = getQueryParam("download");
+  if (downloadFormat) {
+    var downloadModals = document.getElementsByTagName("div");
+    for (var i = 0; i < downloadModals.length; i++) {
+      if (downloadModals[i].id.indexOf("shelf-downloads-") === 0) {
+        openModal(downloadModals[i].id);
+        break;
+      }
+    }
+  }
 };
