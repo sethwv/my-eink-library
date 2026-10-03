@@ -4,28 +4,43 @@
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 {{if .Status}}<p class="muted">{{.Status}}</p>{{end}}
 
-<h2>Your shelves</h2>
-<form method="POST" action="/account/shelves" class="modal-field-form">
-  <label for="shelf-name">New shelf</label>
-  <input id="shelf-name" type="text" name="name" maxlength="100" required>
-  <button type="submit">Create shelf</button>
+<form method="POST" action="/account/shelves" class="account-shelf-create">
+  <table class="toolbar-table"><tr>
+    <td><input id="shelf-name" class="search-input" type="text" name="name" maxlength="100" placeholder="New shelf" aria-label="New shelf" required></td>
+    <td><button type="submit" class="search-btn">Create shelf</button></td>
+  </tr></table>
 </form>
-<p class="muted">Up to {{.ShelfLimit}} personal shelves. New shelves are private.</p>
 
+<h2>Your shelves</h2>
+<table class="account-shelves"><tbody>
 {{range .Shelves}}
-<div class="account-shelf">
-  <a href="{{if .IsSystem}}/favorites{{else}}/shelves/{{.ID}}{{end}}">{{.Name}}</a>
+<tr><td class="account-shelf-name">
+  <a href="{{if .IsSystem}}/favorites{{else}}/shelves/{{.ID}}{{end}}">{{if .IsSystem}}<svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round" aria-label="Favourites"><polygon points="12 2 15 9 22 9 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9 9 9"/></svg>{{else if eq .Visibility "public"}}<svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Public"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>{{else if eq .Visibility "shared"}}<svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Shared"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a6 6 0 0 1 12 0v2"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/><path d="M21 21v-2a6 6 0 0 0-4-5.7"/></svg>{{else}}<svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Private"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{{end}} {{.Name}}</a>
+</td><td>
   {{if .IsSystem}}
   <span class="muted">System shelf</span>
   {{else}}
-  <form method="POST" action="/account/shelves/{{.ID}}/rename" class="inline-form">
-    <input type="text" name="name" value="{{.Name}}" maxlength="100" required aria-label="Rename {{.Name}}">
-    <button type="submit">Rename</button>
-  </form>
-  <form method="POST" action="/account/shelves/{{.ID}}/delete" class="inline-form">
-    <button type="submit">Delete</button>
-  </form>
+  <a class="account-shelf-settings" href="/shelves/{{.ID}}/settings" aria-label="Settings for {{.Name}}" title="Settings"><svg class="account-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/><circle cx="12" cy="12" r="8"/></svg></a>
   {{end}}
-</div>
+</td></tr>
+{{end}}
+</tbody></table>
+
+{{if .MemberShelves}}
+<h2>Shared shelves</h2>
+<table class="account-shelves"><tbody>
+{{range .MemberShelves}}
+<tr><td class="account-shelf-name"><a href="/shelves/{{.ID}}">{{if eq .Visibility "public"}}<svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Public"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>{{else}}<svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Shared"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a6 6 0 0 1 12 0v2"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/><path d="M21 21v-2a6 6 0 0 0-4-5.7"/></svg>{{end}} {{.Name}}</a></td><td class="muted">{{.Username}}</td><td class="muted">Shared with you</td>{{if $.CanManageShelves}}<td><a class="account-shelf-settings" href="/shelves/{{.ID}}/settings" aria-label="Settings for {{.Name}}" title="Settings"><svg class="account-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/><circle cx="12" cy="12" r="8"/></svg></a></td>{{end}}</tr>
+{{end}}
+</tbody></table>
+{{end}}
+
+{{if .PublicShelves}}
+<h2>Public shelves</h2>
+<table class="account-shelves"><tbody>
+{{range .PublicShelves}}
+<tr><td class="account-shelf-name"><a href="/shelves/{{.ID}}"><svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Public"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg> {{.Name}}</a></td><td class="muted">{{.Username}}</td><td class="muted">Public</td>{{if $.CanManageShelves}}<td><a class="account-shelf-settings" href="/shelves/{{.ID}}/settings" aria-label="Settings for {{.Name}}" title="Settings"><svg class="account-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/><circle cx="12" cy="12" r="8"/></svg></a></td>{{end}}</tr>
+{{end}}
+</tbody></table>
 {{end}}
 {{end}}

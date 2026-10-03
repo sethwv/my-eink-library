@@ -1,0 +1,31 @@
+{{define "content"}}
+{{template "topbar" .}}
+{{template "admintabs" .}}
+<h1>Manage shelves</h1>
+<h2>Private shelves</h2>
+<table class="account-shelves"><tbody>
+{{range .PrivateShelves}}
+<tr><td class="account-shelf-name"><a href="/shelves/{{.ID}}"><svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Private"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> {{.Name}}</a></td><td class="muted">{{.Username}}</td><td><a class="account-shelf-settings" href="/shelves/{{.ID}}/settings" aria-label="Settings for {{.Name}}" title="Settings"><svg class="account-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/><circle cx="12" cy="12" r="8"/></svg></a></td></tr>
+{{else}}
+<tr><td class="muted">No private shelves.</td></tr>
+{{end}}
+</tbody></table>
+
+<h2>Shared shelves</h2>
+<table class="account-shelves"><tbody>
+{{range .SharedShelves}}
+<tr><td class="account-shelf-name"><a href="/shelves/{{.ID}}"><svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Shared"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a6 6 0 0 1 12 0v2"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/><path d="M21 21v-2a6 6 0 0 0-4-5.7"/></svg> {{.Name}}</a></td><td class="muted">{{.Username}}</td><td><a class="account-shelf-settings" href="/shelves/{{.ID}}/settings" aria-label="Settings for {{.Name}}" title="Settings"><svg class="account-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/><circle cx="12" cy="12" r="8"/></svg></a></td></tr>
+{{else}}
+<tr><td class="muted">No shared shelves.</td></tr>
+{{end}}
+</tbody></table>
+
+<h2>Public shelves</h2>
+<table class="account-shelves"><tbody>
+{{range .PublicShelves}}
+<tr><td class="account-shelf-name"><a href="/shelves/{{.ID}}"><svg class="shelf-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Public"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg> {{.Name}}</a></td><td class="muted">{{.Username}}</td><td><a class="account-shelf-settings" href="/shelves/{{.ID}}/settings" aria-label="Settings for {{.Name}}" title="Settings"><svg class="account-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/><circle cx="12" cy="12" r="8"/></svg></a></td></tr>
+{{else}}
+<tr><td class="muted">No public shelves.</td></tr>
+{{end}}
+</tbody></table>
+{{end}}

@@ -281,7 +281,9 @@ label { display: block; margin: 0.6em 0; }
   width: 10.5em;
   white-space: nowrap;
 }
-.shelf-download-button { position: relative; top: -0.1em; margin-left: 0.4em; padding: 0.2em 0.45em; vertical-align: middle; font-size: 0.75em; font-weight: normal; line-height: 1em; }
+.shelf-download-button { display: inline-block; margin-left: 0.4em; padding: 0.2em 0.45em; vertical-align: middle; font-size: 0.75em; font-weight: normal; line-height: 1em; }
+.shelf-index { max-width: 34em; padding: 0; list-style: none; }
+.shelf-index li { overflow: hidden; margin: 0.45em 0; text-overflow: ellipsis; white-space: nowrap; }
 .appearance-mode.download-format-selector { display: table; width: 50%; margin: 0 auto 1em; table-layout: fixed; font-size: inherit; border-spacing: 0; border-collapse: collapse; }
 .appearance-mode.download-format-selector td { width: 50%; padding: 0; }
 .appearance-mode.download-format-selector button { width: 100%; font-size: 1em; }
@@ -586,10 +588,18 @@ label { display: block; margin: 0.6em 0; }
 .permission-form th { color: #444; font-size: 0.85em; font-weight: 600; }
 .permission-form td:nth-child(2) { color: #444; font-size: 0.9em; }
 .permission-form select { width: 100%; padding: 0.45em; }
-.account-shelf { padding: 0.7em 0; border-bottom: 1px solid #ddd; }
-.account-shelf > a { display: inline-block; min-width: 12em; margin-right: 0.5em; }
-.account-shelf .inline-form { margin-right: 0.35em; }
-.account-shelf input[type="text"] { max-width: 14em; padding: 0.45em; }
+.account-shelves { width: 100%; border-top: 1px solid #ddd; border-collapse: collapse; table-layout: fixed; }
+.account-shelf-create { margin-bottom: 0.5em; }
+.account-shelves td { padding: 0.7em 0; border-bottom: 1px solid #ddd; vertical-align: middle; }
+.account-shelf-name { width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-shelf-name a { display: block; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+.shelf-visibility-icon { width: 1em; height: 1em; margin-right: 0.2em; vertical-align: -0.15em; }
+.shelf-list-visibility-icon { position: absolute; top: 50%; left: 0.75em; margin: -0.5em 0 0; }
+.shelf-picker-list .shelf-label, #shelves-nav-modal .shelf-label { left: 2em; }
+.account-shelves .inline-form { margin-right: 0.35em; }
+.account-shelves input[type="text"] { max-width: 14em; padding: 0.45em; }
+.account-shelf-settings { display: inline-block; padding: 0.35em; }
+.account-settings-icon { display: block; width: 1.2em; height: 1.2em; }
 .modal-field-form label { display: block; font-size: 0.85em; color: #444; margin-bottom: 0.3em; }
 .modal-field-form input[type="text"],
 .modal-field-form input[type="email"],
