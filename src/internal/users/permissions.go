@@ -10,11 +10,12 @@ import (
 type Permission string
 
 const (
-	PermissionManageUsers   Permission = "manage_users"
-	PermissionManageServer  Permission = "manage_server"
-	PermissionOwnShelves    Permission = "own_shelves"
-	PermissionManageShelves Permission = "manage_shelves"
-	PermissionBookmarkLink  Permission = "bookmark_link"
+	PermissionManageUsers         Permission = "manage_users"
+	PermissionManageServer        Permission = "manage_server"
+	PermissionOwnShelves          Permission = "own_shelves"
+	PermissionManageShelves       Permission = "manage_shelves"
+	PermissionCreatePublicShelves Permission = "create_public_shelves"
+	PermissionBookmarkLink        Permission = "bookmark_link"
 )
 
 type PermissionState struct {
@@ -32,6 +33,7 @@ var permissions = []struct {
 	{PermissionManageServer, "Manage server"},
 	{PermissionOwnShelves, "Own shelves"},
 	{PermissionManageShelves, "Manage all shelves"},
+	{PermissionCreatePublicShelves, "Create public shelves"},
 	{PermissionBookmarkLink, "Bookmark link"},
 }
 
@@ -53,6 +55,8 @@ func roleHasPermission(role string, permission Permission) bool {
 	case PermissionOwnShelves:
 		return validRole(role)
 	case PermissionManageShelves:
+		return role == RoleAdmin
+	case PermissionCreatePublicShelves:
 		return role == RoleAdmin
 	case PermissionBookmarkLink:
 		return validRole(role)

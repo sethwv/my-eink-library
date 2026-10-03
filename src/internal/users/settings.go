@@ -60,6 +60,7 @@ type GeneralSettings struct {
 	PublicURL            string
 	CoverWidth           int
 	PageSize             int
+	ShelfLimit           int
 	SessionTTL           time.Duration
 	PasswordResetEnabled bool
 }
@@ -91,7 +92,7 @@ func (s *Store) SaveKepubSettings(m KepubSettings) error {
 func (s *Store) GetGeneralSettings() (GeneralSettings, error) {
 	var m GeneralSettings
 	var ttlSeconds, passwordResetEnabled int64
-	err := s.sql.QueryRow(`SELECT site_name, public_url, cover_width, page_size, session_ttl_seconds, password_reset_enabled FROM general_settings WHERE id = 1`).Scan(&m.SiteName, &m.PublicURL, &m.CoverWidth, &m.PageSize, &ttlSeconds, &passwordResetEnabled)
+	err := s.sql.QueryRow(`SELECT site_name, public_url, cover_width, page_size, shelf_limit, session_ttl_seconds, password_reset_enabled FROM general_settings WHERE id = 1`).Scan(&m.SiteName, &m.PublicURL, &m.CoverWidth, &m.PageSize, &m.ShelfLimit, &ttlSeconds, &passwordResetEnabled)
 	if err == sql.ErrNoRows {
 		return GeneralSettings{}, nil
 	}
@@ -104,6 +105,6 @@ func (s *Store) GetGeneralSettings() (GeneralSettings, error) {
 }
 
 func (s *Store) SaveGeneralSettings(m GeneralSettings) error {
-	_, err := s.sql.Exec(`INSERT INTO general_settings (id, site_name, public_url, cover_width, page_size, session_ttl_seconds, password_reset_enabled) VALUES (1, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, public_url = excluded.public_url, cover_width = excluded.cover_width, page_size = excluded.page_size, session_ttl_seconds = excluded.session_ttl_seconds, password_reset_enabled = excluded.password_reset_enabled`, m.SiteName, m.PublicURL, m.CoverWidth, m.PageSize, int64(m.SessionTTL/time.Second), boolToInt(m.PasswordResetEnabled))
+	_, err := s.sql.Exec(`INSERT INTO general_settings (id, site_name, public_url, cover_width, page_size, shelf_limit, session_ttl_seconds, password_reset_enabled) VALUES (1, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, public_url = excluded.public_url, cover_width = excluded.cover_width, page_size = excluded.page_size, shelf_limit = excluded.shelf_limit, session_ttl_seconds = excluded.session_ttl_seconds, password_reset_enabled = excluded.password_reset_enabled`, m.SiteName, m.PublicURL, m.CoverWidth, m.PageSize, m.ShelfLimit, int64(m.SessionTTL/time.Second), boolToInt(m.PasswordResetEnabled))
 	return err
 }

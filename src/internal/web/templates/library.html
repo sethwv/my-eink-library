@@ -1,7 +1,7 @@
 {{define "content"}}
 {{template "topbar" .}}
 
-<h1>{{.Heading}}{{if .ViewingShelfID}} <button type="button" class="shelf-download-button" onclick="return openModal('shelf-downloads-{{.ViewingShelfID}}');">Download</button>{{end}}</h1>
+<h1>{{.Heading}}{{if .ViewingShelfID}} <button type="button" class="shelf-download-button" onclick="return openModal('shelf-downloads-{{.ViewingShelfID}}');">Download</button>{{end}}{{if .ManageViewingShelf}} <button type="button" class="shelf-download-button" onclick="location.href='/shelves/{{.ViewingShelfID}}/settings';">Settings</button>{{end}}</h1>
 
 {{if .ViewingShelfID}}
 <div id="shelf-downloads-{{.ViewingShelfID}}" class="modal-overlay">

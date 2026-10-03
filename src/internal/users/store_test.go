@@ -476,6 +476,12 @@ func TestPermissions_CombineRoleDefaultsAndUserOverrides(t *testing.T) {
 	if !s.Can("admin", PermissionManageShelves) {
 		t.Fatal("administrators should administer all shelves")
 	}
+	if s.Can("member", PermissionCreatePublicShelves) {
+		t.Fatal("members must not create public shelves by default")
+	}
+	if !s.Can("admin", PermissionCreatePublicShelves) {
+		t.Fatal("administrators should create public shelves")
+	}
 	revoke := false
 	if err := s.SetPermissionOverride(memberID, PermissionOwnShelves, &revoke); err != nil {
 		t.Fatal(err)

@@ -85,7 +85,7 @@ func TestGetShelf_FoundAndNotFound(t *testing.T) {
 
 func TestUserShelfLifecycleIsPrivateAndOwnerScoped(t *testing.T) {
 	db := openTestDB(t)
-	shelf, err := db.CreateShelf("alice", "To Read")
+	shelf, err := db.CreateShelf("alice", "To Read", 25)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestUserShelfLifecycleIsPrivateAndOwnerScoped(t *testing.T) {
 	if err := db.RenameShelf("alice", shelf.ID, "Reading Soon"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.CreateShelf("alice", "reading soon"); err == nil {
+	if _, err := db.CreateShelf("alice", "reading soon", 25); err == nil {
 		t.Error("expected case-insensitive duplicate shelf name to fail")
 	}
 	if err := db.DeleteShelf("bob", shelf.ID); err == nil {
@@ -127,23 +127,122 @@ func TestUserShelfLimitAndSystemShelfProtection(t *testing.T) {
 	if err := db.DeleteShelf("alice", favorites); err == nil {
 		t.Error("expected system shelf delete to fail")
 	}
-	for i := 0; i < MaxUserShelves; i++ {
-		if _, err := db.CreateShelf("alice", "Shelf "+strconv.Itoa(i)); err != nil {
+	const limit = 5
+	for i := 0; i < limit; i++ {
+		if _, err := db.CreateShelf("alice", "Shelf "+strconv.Itoa(i), limit); err != nil {
 			t.Fatalf("CreateShelf %d: %v", i, err)
 		}
 	}
-	if _, err := db.CreateShelf("alice", "One too many"); err == nil {
-		t.Errorf("expected more than %d user shelves to fail", MaxUserShelves)
+	if _, err := db.CreateShelf("alice", "One too many", limit); err == nil {
+		t.Errorf("expected more than %d user shelves to fail", limit)
+	}
+	for i := 0; i < limit+1; i++ {
+		if _, err := db.CreateShelf("admin", "Shelf "+strconv.Itoa(i), 0); err != nil {
+			t.Fatalf("unlimited CreateShelf %d: %v", i, err)
+		}
+	}
+}
+
+func TestShelfSharingAccessAndMembership(t *testing.T) {
+	db := openTestDB(t)
+	shared, err := db.CreateShelf("alice", "Club Picks", 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, err := db.CreateShelf("alice", "Public Picks", 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetShelfVisibility("alice", shared.ID, ShelfVisibilityShared); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetShelfVisibility("alice", public.ID, ShelfVisibilityPublic); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddShelfMember("alice", shared.ID, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if shelves, err := db.ListEditableShelves("bob"); err != nil || len(shelves) != 1 || shelves[0].ID != shared.ID {
+		t.Errorf("editable shelves for member = %+v, %v", shelves, err)
+	}
+	if shelf, err := db.GetVisibleShelf("carol", shared.ID); err != nil || shelf != nil {
+		t.Errorf("uninvited shared access = %+v, %v; want nil", shelf, err)
+	}
+	if shelf, err := db.GetVisibleShelf("bob", shared.ID); err != nil || shelf == nil || shelf.Role != "member" {
+		t.Errorf("member shared access = %+v, %v", shelf, err)
+	}
+	if shelf, err := db.GetEditableShelf("bob", shared.ID); err != nil || shelf == nil {
+		t.Errorf("member editable access = %+v, %v", shelf, err)
+	}
+	if shelf, err := db.GetEditableShelf("carol", public.ID); err != nil || shelf != nil {
+		t.Errorf("public reader editable access = %+v, %v; want nil", shelf, err)
+	}
+	if err := db.AddShelfMember("alice", public.ID, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if shelf, err := db.GetEditableShelf("bob", public.ID); err != nil || shelf == nil {
+		t.Errorf("public member editable access = %+v, %v", shelf, err)
+	}
+	if err := db.RemoveShelfMember("alice", shared.ID, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if shelf, err := db.GetVisibleShelf("bob", shared.ID); err != nil || shelf != nil {
+		t.Errorf("revoked shared access = %+v, %v; want nil", shelf, err)
+	}
+}
+
+func TestDeleteShelfForManagerAndUserCleanup(t *testing.T) {
+	db := openTestDB(t)
+	shelf, err := db.CreateShelf("alice", "Reading", 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetShelfVisibility("alice", shelf.ID, ShelfVisibilityShared); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddShelfMember("alice", shelf.ID, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddBookToShelf(shelf.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeleteShelfForManager(shelf.ID); err != nil {
+		t.Fatal(err)
+	}
+	if shelf, err := db.GetShelf(shelf.ID); err != nil || shelf != nil {
+		t.Errorf("deleted shelf = %+v, %v; want nil", shelf, err)
+	}
+	shelf, err = db.CreateShelf("alice", "Again", 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetShelfVisibility("alice", shelf.ID, ShelfVisibilityShared); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddShelfMember("alice", shelf.ID, "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeleteUserShelves("bob"); err != nil {
+		t.Fatal(err)
+	}
+	if member, err := db.GetVisibleShelf("bob", shelf.ID); err != nil || member != nil {
+		t.Errorf("deleted user membership = %+v, %v; want nil", member, err)
+	}
+	if err := db.DeleteUserShelves("alice"); err != nil {
+		t.Fatal(err)
+	}
+	if owner, err := db.GetShelf(shelf.ID); err != nil || owner != nil {
+		t.Errorf("deleted owner shelf = %+v, %v; want nil", owner, err)
 	}
 }
 
 func TestRecentShelfPrefersBookMembershipThenLastUsed(t *testing.T) {
 	db := openTestDB(t)
-	reading, err := db.CreateShelf("alice", "Reading")
+	reading, err := db.CreateShelf("alice", "Reading", 25)
 	if err != nil {
 		t.Fatal(err)
 	}
-	later, err := db.CreateShelf("alice", "Later")
+	later, err := db.CreateShelf("alice", "Later", 25)
 	if err != nil {
 		t.Fatal(err)
 	}

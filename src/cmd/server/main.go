@@ -104,6 +104,7 @@ func main() {
 			PublicURL:  cfg.PublicURL,
 			CoverWidth: cfg.CoverWidth,
 			PageSize:   cfg.PageSize,
+			ShelfLimit: 5,
 			SessionTTL: cfg.SessionTTL,
 		}
 		if err := userStore.SaveGeneralSettings(generalSettings); err != nil {
@@ -249,11 +250,18 @@ func main() {
 	mux.Handle("GET /series", authn.RequireAuth(http.HandlerFunc(srv.SeriesHandler)))
 	mux.Handle("GET /favorites", authn.RequireAuth(http.HandlerFunc(srv.FavoritesHandler)))
 	mux.Handle("GET /shelves/{id}", authn.RequireAuth(http.HandlerFunc(srv.ShelfHandler)))
+	mux.Handle("GET /shelves/{id}/settings", authn.RequireFull(http.HandlerFunc(srv.ShelfSettings)))
+	mux.Handle("POST /shelves/{id}/settings/visibility", authn.RequireFull(http.HandlerFunc(srv.ShelfSettingsVisibility)))
+	mux.Handle("POST /shelves/{id}/settings/rename", authn.RequireFull(http.HandlerFunc(srv.ShelfSettingsRename)))
+	mux.Handle("POST /shelves/{id}/settings/delete", authn.RequireFull(http.HandlerFunc(srv.ShelfSettingsDelete)))
+	mux.Handle("POST /shelves/{id}/settings/members", authn.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(srv.ShelfSettingsMemberAdd)))
+	mux.Handle("POST /shelves/{id}/settings/members/{username}/delete", authn.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(srv.ShelfSettingsMemberDelete)))
 	mux.Handle("GET /covers/{id}", authn.RequireAuth(http.HandlerFunc(srv.Cover)))
 	mux.Handle("GET /books/{id}/download", authn.RequireAuth(http.HandlerFunc(srv.DownloadEPUB)))
 	mux.Handle("GET /books/{id}/download.kepub", authn.RequireAuth(http.HandlerFunc(srv.DownloadKepub)))
 	mux.Handle("POST /books/{id}/shelves/{shelfID}", authn.RequireAuth(http.HandlerFunc(srv.ShelfToggle)))
 	mux.Handle("GET /admin/users", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsers)))
+	mux.Handle("GET /admin/shelves", authn.RequirePermission(users.PermissionManageShelves, http.HandlerFunc(srv.AdminShelves)))
 	mux.Handle("POST /admin/users", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersCreate)))
 	mux.Handle("POST /admin/users/{id}/role", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersSetRole)))
 	mux.Handle("POST /admin/users/{id}/permissions", authn.RequireManageUsers(http.HandlerFunc(srv.AdminUsersSetPermission)))
@@ -282,7 +290,7 @@ func main() {
 	mux.Handle("GET /account/shelves", authn.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(srv.AccountShelves)))
 	mux.Handle("POST /account/shelves", authn.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(srv.AccountShelvesCreate)))
 	mux.Handle("POST /account/shelves/{id}/rename", authn.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(srv.AccountShelvesRename)))
-	mux.Handle("POST /account/shelves/{id}/delete", authn.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(srv.AccountShelvesDelete)))
+	mux.Handle("POST /account/shelves/{id}/delete", authn.RequireFull(http.HandlerFunc(srv.AccountShelvesDelete)))
 	mux.Handle("GET /account/email", authn.RequireFull(http.HandlerFunc(srv.AccountEmail)))
 	mux.Handle("GET /account/bookmark", authn.RequireFull(http.HandlerFunc(srv.AccountRedirect)))
 	mux.Handle("POST /account/bookmark/regenerate", authn.RequireFull(http.HandlerFunc(srv.AccountBookmarkRegenerate)))

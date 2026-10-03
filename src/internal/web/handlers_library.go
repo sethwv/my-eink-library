@@ -12,6 +12,7 @@ import (
 	"github.com/sethwv/my-sideload-library/internal/auth"
 	"github.com/sethwv/my-sideload-library/internal/index"
 	"github.com/sethwv/my-sideload-library/internal/kepub"
+	"github.com/sethwv/my-sideload-library/internal/users"
 )
 
 func (s *Server) LibraryGrid(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +36,7 @@ type bookListParams struct {
 	heading        string
 	defaultSort    index.SortKey
 	viewingShelfID int64
+	manageShelf    bool
 }
 
 func (s *Server) hideMatchFilter() index.Filter {
@@ -156,7 +158,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	if descending {
 		toggleDir = "asc"
 	}
-	data := map[string]any{"Title": p.heading, "Heading": p.heading, "Books": books, "Sort": sortParam, "Dir": dir, "ToggleDir": toggleDir, "Page": page, "PrevPage": page - 1, "NextPage": page + 1, "HasNext": page < totalPages, "TotalPages": totalPages, "Pages": pages, "Query": search, "Action": p.action, "Name": p.name, "ShelfMemberships": memberships, "ViewingShelfID": p.viewingShelfID, "Locations": locations, "FavoritesShelfID": favoritesShelfID, "PersonalShelfCount": personalShelfCount, "RecentShelves": recentShelves, "ShelfDownloadFormat": downloadFormat, "ShelfDownloadBooks": shelfDownloadBooks}
+	data := map[string]any{"Title": p.heading, "Heading": p.heading, "Books": books, "Sort": sortParam, "Dir": dir, "ToggleDir": toggleDir, "Page": page, "PrevPage": page - 1, "NextPage": page + 1, "HasNext": page < totalPages, "TotalPages": totalPages, "Pages": pages, "Query": search, "Action": p.action, "Name": p.name, "ShelfMemberships": memberships, "ViewingShelfID": p.viewingShelfID, "ManageViewingShelf": p.manageShelf, "Locations": locations, "FavoritesShelfID": favoritesShelfID, "PersonalShelfCount": personalShelfCount, "RecentShelves": recentShelves, "ShelfDownloadFormat": downloadFormat, "ShelfDownloadBooks": shelfDownloadBooks}
 	mergeInto(data, base)
 	render(w, "library.html", data)
 }
@@ -196,16 +198,27 @@ func (s *Server) ShelfHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
-	shelf, err := s.DB.GetOwnedShelf(username, id)
+	shelf, err := s.DB.GetVisibleShelf(username, id)
 	if err != nil {
 		http.Error(w, "failed to load shelf", http.StatusInternalServerError)
 		return
+	}
+	if shelf == nil && s.Users.Can(username, users.PermissionManageShelves) && !auth.IsRestricted(r.Context()) {
+		managed, err := s.DB.GetShelf(id)
+		if err != nil {
+			http.Error(w, "failed to load shelf", http.StatusInternalServerError)
+			return
+		}
+		if managed != nil {
+			shelf = &index.ShelfAccess{Shelf: *managed, Role: "manager"}
+		}
 	}
 	if shelf == nil {
 		http.NotFound(w, r)
 		return
 	}
-	s.renderBookList(w, r, bookListParams{action: "/shelves/" + strconv.FormatInt(id, 10), filter: index.Filter{ShelfID: id}, heading: shelf.Name, defaultSort: index.SortTitle, viewingShelfID: id})
+	manageShelf := shelf.Role == "owner" || (s.Users.Can(username, users.PermissionManageShelves) && !auth.IsRestricted(r.Context()))
+	s.renderBookList(w, r, bookListParams{action: "/shelves/" + strconv.FormatInt(id, 10), filter: index.Filter{ShelfID: id}, heading: shelf.Name, defaultSort: index.SortTitle, viewingShelfID: id, manageShelf: manageShelf})
 }
 
 func (s *Server) ShelfToggle(w http.ResponseWriter, r *http.Request) {
@@ -224,12 +237,12 @@ func (s *Server) ShelfToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
-	shelf, err := s.DB.GetShelf(shelfID)
+	shelf, err := s.DB.GetEditableShelf(username, shelfID)
 	if err != nil {
 		http.Error(w, "failed to update shelf", http.StatusInternalServerError)
 		return
 	}
-	if shelf == nil || shelf.Username != username {
+	if shelf == nil {
 		http.NotFound(w, r)
 		return
 	}

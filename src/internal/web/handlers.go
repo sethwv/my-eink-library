@@ -52,6 +52,8 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 	canManageServer := false
 	canBookmark := false
 	canOwnShelves := false
+	canManageShelves := false
+	var visibleShelves []index.ShelfAccess
 	if username != "" {
 		// A restricted (bookmark-token) session shouldn't be offered admin
 		// links even if the account has them, since reaching /admin/* still
@@ -63,10 +65,14 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 		canManageServer = s.Users.CanManageServer(username) && full
 		canBookmark = s.Users.CanUseBookmark(username)
 		canOwnShelves = s.Users.Can(username, users.PermissionOwnShelves) && full
+		canManageShelves = s.Users.Can(username, users.PermissionManageShelves) && full
 		if _, err = s.DB.EnsureSystemShelf(username, favoritesSlug, favoritesName); err != nil {
 			return nil, nil, err
 		}
-		if shelves, err = s.DB.ListShelves(username); err != nil {
+		if shelves, err = s.DB.ListEditableShelves(username); err != nil {
+			return nil, nil, err
+		}
+		if visibleShelves, err = s.DB.ListVisibleShelves(username); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -79,19 +85,21 @@ func (s *Server) baseData(r *http.Request) (data map[string]any, shelves []index
 	}
 
 	data = map[string]any{
-		"Username":        username,
-		"IsAdmin":         isAdmin,
-		"CanManageUsers":  canManageUsers,
-		"CanManageServer": canManageServer,
-		"CanBookmark":     canBookmark,
-		"CanOwnShelves":   canOwnShelves,
-		"Restricted":      auth.IsRestricted(r.Context()),
-		"Shelves":         shelves,
-		"SiteName":        s.SiteName,
-		"CurrentURL":      r.URL.RequestURI(),
-		"BuildVersion":    s.BuildVersion,
-		"BuildDate":       s.BuildDate,
-		"KepubEnabled":    kepubSettings.Enabled,
+		"Username":         username,
+		"IsAdmin":          isAdmin,
+		"CanManageUsers":   canManageUsers,
+		"CanManageServer":  canManageServer,
+		"CanBookmark":      canBookmark,
+		"CanOwnShelves":    canOwnShelves,
+		"CanManageShelves": canManageShelves,
+		"Restricted":       auth.IsRestricted(r.Context()),
+		"Shelves":          shelves,
+		"VisibleShelves":   visibleShelves,
+		"SiteName":         s.SiteName,
+		"CurrentURL":       r.URL.RequestURI(),
+		"BuildVersion":     s.BuildVersion,
+		"BuildDate":        s.BuildDate,
+		"KepubEnabled":     kepubSettings.Enabled,
 	}
 	return data, shelves, nil
 }
@@ -539,6 +547,32 @@ func (s *Server) AdminUsersDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user, err := s.Users.UserByID(id)
+	if err != nil || user == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if user.IsAdmin && user.Enabled {
+		allUsers, err := s.Users.List()
+		if err != nil {
+			http.Error(w, "failed to load users", http.StatusInternalServerError)
+			return
+		}
+		enabledAdmins := 0
+		for _, candidate := range allUsers {
+			if candidate.IsAdmin && candidate.Enabled {
+				enabledAdmins++
+			}
+		}
+		if enabledAdmins <= 1 {
+			s.renderAdminUsersError(w, r, "cannot delete the last remaining admin")
+			return
+		}
+	}
+	if err := s.DB.DeleteUserShelves(user.Username); err != nil {
+		s.renderAdminUsersError(w, r, "failed to remove user shelves: "+err.Error())
+		return
+	}
 	if err := s.Users.Delete(id); err != nil {
 		s.renderAdminUsersError(w, r, err.Error())
 		return
@@ -652,6 +686,7 @@ func (s *Server) adminSettingsData() (map[string]any, error) {
 		"PublicURL":                 general.PublicURL,
 		"CoverWidth":                general.CoverWidth,
 		"PageSize":                  general.PageSize,
+		"ShelfLimit":                general.ShelfLimit,
 		"SessionTTL":                general.SessionTTL.String(),
 		"PasswordResetEnabled":      general.PasswordResetEnabled,
 		"PasswordResetConfigurable": s.emailAvailable(),
@@ -813,6 +848,11 @@ func (s *Server) AdminSettingsGeneralSave(w http.ResponseWriter, r *http.Request
 		s.renderAdminSettingsError(w, r, "page size must be a positive number", "")
 		return
 	}
+	shelfLimit, err := strconv.Atoi(r.FormValue("shelf_limit"))
+	if err != nil || shelfLimit < 1 {
+		s.renderAdminSettingsError(w, r, "shelves per user must be a positive number", "")
+		return
+	}
 	sessionTTL, err := time.ParseDuration(r.FormValue("session_ttl"))
 	if err != nil || sessionTTL <= 0 {
 		s.renderAdminSettingsError(w, r, "session TTL must be a valid duration like 720h", "")
@@ -829,6 +869,7 @@ func (s *Server) AdminSettingsGeneralSave(w http.ResponseWriter, r *http.Request
 		PublicURL:            strings.TrimRight(r.FormValue("public_url"), "/"),
 		CoverWidth:           coverWidth,
 		PageSize:             pageSize,
+		ShelfLimit:           shelfLimit,
 		SessionTTL:           sessionTTL,
 		PasswordResetEnabled: current.PasswordResetEnabled,
 	}
@@ -1149,14 +1190,230 @@ func (s *Server) AccountShelves(w http.ResponseWriter, r *http.Request) {
 	s.renderAccountShelves(w, r, "", "")
 }
 
-func (s *Server) renderAccountShelves(w http.ResponseWriter, r *http.Request, errMsg, status string) {
-	base, shelves, err := s.baseData(r)
+func (s *Server) ShelfSettings(w http.ResponseWriter, r *http.Request) {
+	s.renderShelfSettings(w, r, 0, "")
+}
+
+func (s *Server) AdminShelves(w http.ResponseWriter, r *http.Request) {
+	shelves, err := s.DB.ListUserShelves()
 	if err != nil {
 		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
 		return
 	}
-	data := map[string]any{"Title": "Account", "AccountTab": "shelves", "Shelves": shelves, "Error": errMsg, "Status": status, "ShelfLimit": index.MaxUserShelves}
+	var privateShelves, sharedShelves, publicShelves []index.Shelf
+	for _, shelf := range shelves {
+		switch shelf.Visibility {
+		case index.ShelfVisibilityShared:
+			sharedShelves = append(sharedShelves, shelf)
+		case index.ShelfVisibilityPublic:
+			publicShelves = append(publicShelves, shelf)
+		default:
+			privateShelves = append(privateShelves, shelf)
+		}
+	}
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load page", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Manage Shelves", "AdminTab": "shelves", "PrivateShelves": privateShelves, "SharedShelves": sharedShelves, "PublicShelves": publicShelves}
 	mergeInto(data, base)
+	render(w, "admin_shelves.html", data)
+}
+
+func (s *Server) renderShelfSettings(w http.ResponseWriter, r *http.Request, requestedID int64, errMsg string) {
+	id := requestedID
+	if id == 0 {
+		var err error
+		id, err = strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	shelf, err := s.DB.GetOwnedShelf(username, id)
+	if err != nil {
+		http.Error(w, "failed to load shelf", http.StatusInternalServerError)
+		return
+	}
+	canManage := s.Users.Can(username, users.PermissionManageShelves)
+	if shelf == nil && canManage {
+		shelf, err = s.DB.GetShelf(id)
+		if err != nil {
+			http.Error(w, "failed to load shelf", http.StatusInternalServerError)
+			return
+		}
+	}
+	if shelf == nil || shelf.IsSystem {
+		http.NotFound(w, r)
+		return
+	}
+	var members []index.ShelfAccess
+	if canManage && shelf.Username != username {
+		members, err = s.DB.ListShelfMembersForManager(id)
+	} else {
+		members, err = s.DB.ListShelfMembers(username, id)
+	}
+	if err != nil {
+		http.Error(w, "failed to load shelf members", http.StatusInternalServerError)
+		return
+	}
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load shelf", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Shelf settings", "Shelf": shelf, "Members": members, "Error": errMsg, "ManageShelf": canManage && shelf.Username != username}
+	mergeInto(data, base)
+	render(w, "shelf_settings.html", data)
+}
+
+func (s *Server) ShelfSettingsVisibility(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	if r.FormValue("visibility") == index.ShelfVisibilityPublic && !s.Users.Can(username, users.PermissionCreatePublicShelves) && !s.Users.Can(username, users.PermissionManageShelves) {
+		s.renderShelfSettings(w, r, id, "you are not allowed to make shelves public")
+		return
+	}
+	var setErr error
+	if s.Users.Can(username, users.PermissionManageShelves) {
+		setErr = s.DB.SetShelfVisibilityForManager(id, r.FormValue("visibility"))
+	} else {
+		setErr = s.DB.SetShelfVisibility(username, id, r.FormValue("visibility"))
+	}
+	if setErr != nil {
+		s.renderShelfSettings(w, r, id, setErr.Error())
+		return
+	}
+	http.Redirect(w, r, "/shelves/"+strconv.FormatInt(id, 10)+"/settings", http.StatusSeeOther)
+}
+
+func (s *Server) ShelfSettingsRename(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	var renameErr error
+	if s.Users.Can(username, users.PermissionManageShelves) {
+		renameErr = s.DB.RenameShelfForManager(id, r.FormValue("name"))
+	} else {
+		renameErr = s.DB.RenameShelf(username, id, r.FormValue("name"))
+	}
+	if renameErr != nil {
+		s.renderShelfSettings(w, r, id, renameErr.Error())
+		return
+	}
+	http.Redirect(w, r, "/shelves/"+strconv.FormatInt(id, 10)+"/settings", http.StatusSeeOther)
+}
+
+func (s *Server) ShelfSettingsDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	var deleteErr error
+	if s.Users.Can(username, users.PermissionManageShelves) {
+		deleteErr = s.DB.DeleteShelfForManager(id)
+	} else {
+		deleteErr = s.DB.DeleteShelf(username, id)
+	}
+	if deleteErr != nil {
+		s.renderShelfSettings(w, r, id, deleteErr.Error())
+		return
+	}
+	http.Redirect(w, r, "/account/shelves", http.StatusSeeOther)
+}
+
+func (s *Server) ShelfSettingsMemberAdd(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	member := strings.TrimSpace(r.FormValue("username"))
+	if user, err := s.Users.UserByUsername(member); err != nil || user == nil || !user.Enabled {
+		s.renderShelfSettings(w, r, id, "member must be an enabled user")
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	if err := s.DB.AddShelfMember(username, id, member); err != nil {
+		s.renderShelfSettings(w, r, id, err.Error())
+		return
+	}
+	http.Redirect(w, r, "/shelves/"+strconv.FormatInt(id, 10)+"/settings", http.StatusSeeOther)
+}
+
+func (s *Server) ShelfSettingsMemberDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	if err := s.DB.RemoveShelfMember(username, id, r.PathValue("username")); err != nil {
+		s.renderShelfSettings(w, r, id, err.Error())
+		return
+	}
+	http.Redirect(w, r, "/shelves/"+strconv.FormatInt(id, 10)+"/settings", http.StatusSeeOther)
+}
+
+func (s *Server) renderAccountShelves(w http.ResponseWriter, r *http.Request, errMsg, status string) {
+	base, _, err := s.baseData(r)
+	if err != nil {
+		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+		return
+	}
+	username, _ := auth.UsernameFromContext(r.Context())
+	shelves, err := s.DB.ListShelves(username)
+	if err != nil {
+		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+		return
+	}
+	visibleShelves, err := s.DB.ListVisibleShelves(username)
+	if err != nil {
+		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+		return
+	}
+	var memberShelves, publicShelves []index.ShelfAccess
+	for _, shelf := range visibleShelves {
+		switch shelf.Role {
+		case "member":
+			memberShelves = append(memberShelves, shelf)
+		case "reader":
+			publicShelves = append(publicShelves, shelf)
+		}
+	}
+	settings, err := s.Users.GetGeneralSettings()
+	if err != nil {
+		http.Error(w, "failed to load shelf settings", http.StatusInternalServerError)
+		return
+	}
+	data := map[string]any{"Title": "Account", "AccountTab": "shelves", "Shelves": shelves, "MemberShelves": memberShelves, "PublicShelves": publicShelves, "Error": errMsg, "Status": status, "ShelfLimit": settings.ShelfLimit, "UnlimitedShelves": s.Users.Can(username, users.PermissionManageShelves)}
+	mergeInto(data, base)
+	// baseData supplies editable shelves for book controls. Account management
+	// must instead show only shelves owned by the current user.
+	data["Shelves"] = shelves
 	render(w, "account_shelves.html", data)
 }
 
@@ -1166,7 +1423,16 @@ func (s *Server) AccountShelvesCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
-	if _, err := s.DB.CreateShelf(username, r.FormValue("name")); err != nil {
+	settings, err := s.Users.GetGeneralSettings()
+	if err != nil {
+		http.Error(w, "failed to load shelf settings", http.StatusInternalServerError)
+		return
+	}
+	limit := settings.ShelfLimit
+	if s.Users.Can(username, users.PermissionManageShelves) {
+		limit = 0
+	}
+	if _, err := s.DB.CreateShelf(username, r.FormValue("name"), limit); err != nil {
 		s.renderAccountShelves(w, r, err.Error(), "")
 		return
 	}
@@ -1198,8 +1464,14 @@ func (s *Server) AccountShelvesDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, _ := auth.UsernameFromContext(r.Context())
-	if err := s.DB.DeleteShelf(username, id); err != nil {
-		s.renderAccountShelves(w, r, err.Error(), "")
+	var deleteErr error
+	if s.Users.Can(username, users.PermissionManageShelves) {
+		deleteErr = s.DB.DeleteShelfForManager(id)
+	} else {
+		deleteErr = s.DB.DeleteShelf(username, id)
+	}
+	if deleteErr != nil {
+		s.renderAccountShelves(w, r, deleteErr.Error(), "")
 		return
 	}
 	http.Redirect(w, r, "/account/shelves", http.StatusSeeOther)

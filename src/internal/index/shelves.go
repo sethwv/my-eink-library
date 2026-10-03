@@ -8,7 +8,11 @@ import (
 	"time"
 )
 
-const MaxUserShelves = 25
+const (
+	ShelfVisibilityPrivate = "private"
+	ShelfVisibilityShared  = "shared"
+	ShelfVisibilityPublic  = "public"
+)
 
 // Shelf is a named, per-user collection of books. "Favourites" is the first
 // system-provided shelf; user-created shelves (with their own management UI)
@@ -20,6 +24,13 @@ type Shelf struct {
 	Name       string
 	IsSystem   bool
 	Visibility string
+}
+
+// ShelfAccess includes the current user's access role for a visible shelf.
+// Role is owner, member, or reader (for a public shelf).
+type ShelfAccess struct {
+	Shelf
+	Role string
 }
 
 // EnsureSystemShelf returns the id of the given system shelf for username,
@@ -68,6 +79,78 @@ func (d *DB) ListShelves(username string) ([]Shelf, error) {
 	return shelves, rows.Err()
 }
 
+// ListVisibleShelves returns shelves the user may browse. Owners, explicit
+// members, and authenticated readers of public shelves are included.
+func (d *DB) ListVisibleShelves(username string) ([]ShelfAccess, error) {
+	rows, err := d.sql.Query(`SELECT s.id, s.username, s.slug, s.name, s.is_system, s.visibility,
+		CASE WHEN s.username = ? THEN 'owner' WHEN sm.username IS NOT NULL THEN 'member' ELSE 'reader' END
+		FROM shelves s LEFT JOIN shelf_members sm ON sm.shelf_id = s.id AND sm.username = ?
+		WHERE s.username = ? OR sm.username IS NOT NULL OR s.visibility = 'public'
+		ORDER BY CASE WHEN s.username = ? THEN 0 WHEN s.visibility = 'shared' THEN 1 ELSE 2 END,
+		s.is_system DESC, s.name COLLATE NOCASE`, username, username, username, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var shelves []ShelfAccess
+	for rows.Next() {
+		var shelf ShelfAccess
+		var isSystem int
+		if err := rows.Scan(&shelf.ID, &shelf.Username, &shelf.Slug, &shelf.Name, &isSystem, &shelf.Visibility, &shelf.Role); err != nil {
+			return nil, err
+		}
+		shelf.IsSystem = isSystem != 0
+		shelves = append(shelves, shelf)
+	}
+	return shelves, rows.Err()
+}
+
+// ListEditableShelves returns owned shelves plus explicitly shared shelves.
+// It is used by book controls, where public read access must not create a
+// mutation target.
+func (d *DB) ListEditableShelves(username string) ([]Shelf, error) {
+	rows, err := d.sql.Query(`SELECT s.id, s.username, s.slug, s.name, s.is_system, s.visibility
+		FROM shelves s LEFT JOIN shelf_members sm ON sm.shelf_id = s.id AND sm.username = ?
+		WHERE s.username = ? OR sm.username IS NOT NULL
+		ORDER BY s.is_system DESC, s.name COLLATE NOCASE`, username, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var shelves []Shelf
+	for rows.Next() {
+		var shelf Shelf
+		var isSystem int
+		if err := rows.Scan(&shelf.ID, &shelf.Username, &shelf.Slug, &shelf.Name, &isSystem, &shelf.Visibility); err != nil {
+			return nil, err
+		}
+		shelf.IsSystem = isSystem != 0
+		shelves = append(shelves, shelf)
+	}
+	return shelves, rows.Err()
+}
+
+// ListUserShelves returns every non-system shelf for administrator management.
+func (d *DB) ListUserShelves() ([]Shelf, error) {
+	rows, err := d.sql.Query(`SELECT id, username, slug, name, is_system, visibility FROM shelves WHERE is_system = 0 ORDER BY username COLLATE NOCASE, name COLLATE NOCASE`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var shelves []Shelf
+	for rows.Next() {
+		var shelf Shelf
+		var isSystem int
+		if err := rows.Scan(&shelf.ID, &shelf.Username, &shelf.Slug, &shelf.Name, &isSystem, &shelf.Visibility); err != nil {
+			return nil, err
+		}
+		shelf.IsSystem = isSystem != 0
+		shelves = append(shelves, shelf)
+	}
+	return shelves, rows.Err()
+}
+
 // GetShelf returns the shelf with the given id, or nil if it doesn't exist.
 // Callers must check Shelf.Username against the current user before acting
 // on it — a shelf id alone doesn't prove ownership.
@@ -105,9 +188,40 @@ func (d *DB) GetOwnedShelf(username string, id int64) (*Shelf, error) {
 	return &sh, nil
 }
 
-// CreateShelf creates a private non-system shelf for username. The caller is
-// responsible for checking the effective own_shelves permission.
-func (d *DB) CreateShelf(username, name string) (*Shelf, error) {
+// GetVisibleShelf returns nil for an inaccessible shelf so callers do not
+// disclose private shelf metadata.
+func (d *DB) GetVisibleShelf(username string, id int64) (*ShelfAccess, error) {
+	var shelf ShelfAccess
+	var isSystem int
+	err := d.sql.QueryRow(`SELECT s.id, s.username, s.slug, s.name, s.is_system, s.visibility,
+		CASE WHEN s.username = ? THEN 'owner' WHEN sm.username IS NOT NULL THEN 'member' ELSE 'reader' END
+		FROM shelves s LEFT JOIN shelf_members sm ON sm.shelf_id = s.id AND sm.username = ?
+		WHERE s.id = ? AND (s.username = ? OR sm.username IS NOT NULL OR s.visibility = 'public')`,
+		username, username, id, username,
+	).Scan(&shelf.ID, &shelf.Username, &shelf.Slug, &shelf.Name, &isSystem, &shelf.Visibility, &shelf.Role)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	shelf.IsSystem = isSystem != 0
+	return &shelf, nil
+}
+
+// GetEditableShelf returns a shelf the user owns or has explicit membership
+// for. Public visibility never grants write access.
+func (d *DB) GetEditableShelf(username string, id int64) (*ShelfAccess, error) {
+	shelf, err := d.GetVisibleShelf(username, id)
+	if err != nil || shelf == nil || (shelf.Role != "owner" && shelf.Role != "member") {
+		return nil, err
+	}
+	return shelf, nil
+}
+
+// CreateShelf creates a private non-system shelf for username. A non-positive
+// limit allows unlimited shelves for administrative callers.
+func (d *DB) CreateShelf(username, name string, limit int) (*Shelf, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("shelf name is required")
@@ -124,8 +238,8 @@ func (d *DB) CreateShelf(username, name string) (*Shelf, error) {
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM shelves WHERE username = ? AND is_system = 0`, username).Scan(&count); err != nil {
 		return nil, err
 	}
-	if count >= MaxUserShelves {
-		return nil, fmt.Errorf("you can create at most %d shelves", MaxUserShelves)
+	if limit > 0 && count >= limit {
+		return nil, fmt.Errorf("you can create at most %d shelves", limit)
 	}
 	var exists int
 	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM shelves WHERE username = ? AND is_system = 0 AND name = ? COLLATE NOCASE)`, username, name).Scan(&exists); err != nil {
@@ -153,6 +267,14 @@ func (d *DB) CreateShelf(username, name string) (*Shelf, error) {
 }
 
 func (d *DB) RenameShelf(username string, id int64, name string) error {
+	return d.renameShelf(id, username, name)
+}
+
+func (d *DB) RenameShelfForManager(id int64, name string) error {
+	return d.renameShelf(id, "", name)
+}
+
+func (d *DB) renameShelf(id int64, username, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("shelf name is required")
@@ -160,7 +282,13 @@ func (d *DB) RenameShelf(username string, id int64, name string) error {
 	if len(name) > 100 {
 		return fmt.Errorf("shelf name must be 100 characters or fewer")
 	}
-	result, err := d.sql.Exec(`UPDATE shelves SET name = ? WHERE id = ? AND username = ? AND is_system = 0`, name, id, username)
+	query := `UPDATE shelves SET name = ? WHERE id = ? AND is_system = 0`
+	args := []any{name, id}
+	if username != "" {
+		query += ` AND username = ?`
+		args = append(args, username)
+	}
+	result, err := d.sql.Exec(query, args...)
 	if err != nil {
 		if strings.Contains(err.Error(), "idx_shelves_owner_name") || strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("a shelf with that name already exists")
@@ -178,12 +306,28 @@ func (d *DB) RenameShelf(username string, id int64, name string) error {
 }
 
 func (d *DB) DeleteShelf(username string, id int64) error {
+	return d.deleteShelf(id, username)
+}
+
+// DeleteShelfForManager deletes any non-system shelf. Callers must check the
+// administrator-level manage_shelves permission before using it.
+func (d *DB) DeleteShelfForManager(id int64) error {
+	return d.deleteShelf(id, "")
+}
+
+func (d *DB) deleteShelf(id int64, username string) error {
 	tx, err := d.sql.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	result, err := tx.Exec(`DELETE FROM shelves WHERE id = ? AND username = ? AND is_system = 0`, id, username)
+	query := `DELETE FROM shelves WHERE id = ? AND is_system = 0`
+	args := []any{id}
+	if username != "" {
+		query += ` AND username = ?`
+		args = append(args, username)
+	}
+	result, err := tx.Exec(query, args...)
 	if err != nil {
 		return err
 	}
@@ -197,7 +341,144 @@ func (d *DB) DeleteShelf(username string, id int64) error {
 	if _, err := tx.Exec(`DELETE FROM shelf_books WHERE shelf_id = ?`, id); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`DELETE FROM shelf_members WHERE shelf_id = ?`, id); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+func (d *DB) SetShelfVisibility(username string, id int64, visibility string) error {
+	return d.setShelfVisibility(id, username, visibility)
+}
+
+func (d *DB) SetShelfVisibilityForManager(id int64, visibility string) error {
+	return d.setShelfVisibility(id, "", visibility)
+}
+
+func (d *DB) setShelfVisibility(id int64, username, visibility string) error {
+	if visibility != ShelfVisibilityPrivate && visibility != ShelfVisibilityShared && visibility != ShelfVisibilityPublic {
+		return fmt.Errorf("invalid shelf visibility")
+	}
+	query := `UPDATE shelves SET visibility = ? WHERE id = ? AND is_system = 0`
+	args := []any{visibility, id}
+	if username != "" {
+		query += ` AND username = ?`
+		args = append(args, username)
+	}
+	result, err := d.sql.Exec(query, args...)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 0 {
+		return fmt.Errorf("shelf not found")
+	}
+	return nil
+}
+
+func (d *DB) ListShelfMembers(owner string, id int64) ([]ShelfAccess, error) {
+	shelf, err := d.GetOwnedShelf(owner, id)
+	if err != nil || shelf == nil || shelf.IsSystem {
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("shelf not found")
+	}
+	rows, err := d.sql.Query(`SELECT username FROM shelf_members WHERE shelf_id = ? ORDER BY username COLLATE NOCASE`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var members []ShelfAccess
+	for rows.Next() {
+		var member ShelfAccess
+		if err := rows.Scan(&member.Username); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+	return members, rows.Err()
+}
+
+func (d *DB) ListShelfMembersForManager(id int64) ([]ShelfAccess, error) {
+	rows, err := d.sql.Query(`SELECT username FROM shelf_members WHERE shelf_id = ? ORDER BY username COLLATE NOCASE`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var members []ShelfAccess
+	for rows.Next() {
+		var member ShelfAccess
+		if err := rows.Scan(&member.Username); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+	return members, rows.Err()
+}
+
+func (d *DB) AddShelfMember(owner string, id int64, member string) error {
+	if strings.TrimSpace(member) == "" || member == owner {
+		return fmt.Errorf("invalid shelf member")
+	}
+	shelf, err := d.GetOwnedShelf(owner, id)
+	if err != nil || shelf == nil || shelf.IsSystem {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("shelf not found")
+	}
+	if shelf.Visibility == ShelfVisibilityPrivate {
+		return fmt.Errorf("private shelves cannot have members")
+	}
+	_, err = d.sql.Exec(`INSERT OR IGNORE INTO shelf_members (shelf_id, username, created_at) VALUES (?, ?, ?)`, id, member, time.Now().Unix())
+	return err
+}
+
+func (d *DB) RemoveShelfMember(owner string, id int64, member string) error {
+	shelf, err := d.GetOwnedShelf(owner, id)
+	if err != nil || shelf == nil || shelf.IsSystem {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("shelf not found")
+	}
+	if shelf.Visibility == ShelfVisibilityPrivate {
+		return fmt.Errorf("private shelves cannot have members")
+	}
+	result, err := d.sql.Exec(`DELETE FROM shelf_members WHERE shelf_id = ? AND username = ?`, id, member)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 0 {
+		return fmt.Errorf("shelf member not found")
+	}
+	return nil
+}
+
+// DeleteUserShelves removes all shelves owned by username and any memberships
+// that grant username access to someone else's shelf.
+func (d *DB) DeleteUserShelves(username string) error {
+	return d.withTx(func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`DELETE FROM shelf_members WHERE username = ?`, username); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM shelf_members WHERE shelf_id IN (SELECT id FROM shelves WHERE username = ?)`, username); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM shelf_books WHERE shelf_id IN (SELECT id FROM shelves WHERE username = ?)`, username); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`DELETE FROM shelves WHERE username = ?`, username)
+		return err
+	})
 }
 
 // RecentShelf prefers the most recently added personal shelf containing bookID
@@ -322,8 +603,8 @@ func (d *DB) ShelfMemberships(username string, bookIDs []int64) (map[int64]map[i
 	if len(bookIDs) == 0 {
 		return memberships, nil
 	}
-	args := make([]any, 1, len(bookIDs)+1)
-	args[0] = username
+	args := make([]any, 0, len(bookIDs)+2)
+	args = append(args, username, username)
 	for _, bookID := range bookIDs {
 		args = append(args, bookID)
 	}
@@ -331,7 +612,9 @@ func (d *DB) ShelfMemberships(username string, bookIDs []int64) (map[int64]map[i
 		return strings.TrimRight(strings.Repeat("?,", n), ",")
 	}
 	rows, err := d.sql.Query(
-		`SELECT shelf_books.shelf_id, shelf_books.book_id FROM shelf_books JOIN shelves ON shelves.id = shelf_books.shelf_id WHERE shelves.username = ? AND shelf_books.book_id IN (`+placeholders(len(bookIDs))+`)`,
+		`SELECT shelf_books.shelf_id, shelf_books.book_id FROM shelf_books JOIN shelves ON shelves.id = shelf_books.shelf_id
+		LEFT JOIN shelf_members ON shelf_members.shelf_id = shelves.id AND shelf_members.username = ?
+		WHERE (shelves.username = ? OR shelf_members.username IS NOT NULL) AND shelf_books.book_id IN (`+placeholders(len(bookIDs))+`)`,
 		args...,
 	)
 	if err != nil {
