@@ -5,23 +5,19 @@
 
 {{if .ViewingShelfID}}
 <div id="shelf-downloads-{{.ViewingShelfID}}" class="modal-overlay">
-  <div class="modal-box">
+  <div class="modal-box modal-box-shelves">
+    <h3>Download</h3>
+    <table class="appearance-mode download-format-selector{{if not .KepubEnabled}} download-format-one{{end}}" role="group" aria-label="Download format"><tr>
+      <td><form method="GET" action="{{.Action}}"><input type="hidden" name="sort" value="{{.Sort}}"><input type="hidden" name="dir" value="{{.Dir}}"><input type="hidden" name="page" value="{{.Page}}"><input type="hidden" name="q" value="{{.Query}}"><button type="submit" name="download" value="epub" class="appearance-mode-auto{{if eq .ShelfDownloadFormat "epub"}} is-selected{{end}}">EPUB</button></form></td>{{if .KepubEnabled}}<td><form method="GET" action="{{.Action}}"><input type="hidden" name="sort" value="{{.Sort}}"><input type="hidden" name="dir" value="{{.Dir}}"><input type="hidden" name="page" value="{{.Page}}"><input type="hidden" name="q" value="{{.Query}}"><button type="submit" name="download" value="kepub" class="appearance-mode-dark{{if eq .ShelfDownloadFormat "kepub"}} is-selected{{end}}">KEPUB</button></form></td>{{end}}
+    </tr></table>
     {{if .ShelfDownloadFormat}}
-    <h3>{{if eq .ShelfDownloadFormat "kepub"}}KEPUB{{else}}EPUB{{end}} downloads</h3>
-    <p class="muted">Download each book in title order.</p>
     {{if .ShelfDownloadBooks}}
-    <div class="shelf-download-list">
-    {{range .ShelfDownloadBooks}}<a class="btn-download" href="/books/{{.ID}}/download{{if eq $.ShelfDownloadFormat "kepub"}}.kepub{{end}}">{{.Title}}</a>{{end}}
-    </div>
+    <ul class="shelf-list shelf-nav-list shelf-download-list{{if eq (len .ShelfDownloadBooks) 1}} shelf-nav-list-single{{end}}">
+    {{range .ShelfDownloadBooks}}<li><a class="shelf-toggle" href="/books/{{.ID}}/download{{if eq $.ShelfDownloadFormat "kepub"}}.kepub{{end}}">{{.Title}}</a></li>{{end}}
+    </ul>
     {{else}}
     <p class="muted">This shelf has no books to download.</p>
     {{end}}
-    <a class="btn-download" href="{{.Action}}">Choose another format</a>
-    {{else}}
-    <h3>Download shelf</h3>
-    <p class="muted">Choose a format.</p>
-    <a class="btn-download" href="{{.Action}}?download=epub">Download EPUB</a>
-    {{if .KepubEnabled}}<a class="btn-download" href="{{.Action}}?download=kepub">Download KEPUB</a>{{end}}
     {{end}}
   </div>
 </div>

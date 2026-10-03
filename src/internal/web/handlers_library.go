@@ -99,29 +99,20 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	}
 	downloadFormat := ""
 	if p.viewingShelfID != 0 {
+		downloadFormat = "epub"
+		if base["KepubEnabled"].(bool) {
+			downloadFormat = "kepub"
+		}
 		switch q.Get("download") {
 		case "epub":
 			downloadFormat = "epub"
 		case "kepub":
-			if base["KepubEnabled"].(bool) {
-				downloadFormat = "kepub"
-			}
+			// Keep the enabled KEPUB default when it is available.
 		}
 	}
 	var shelfDownloadBooks []index.Book
 	if downloadFormat != "" {
-		shelfBookCount, err := s.DB.Count(index.Filter{ShelfID: p.viewingShelfID})
-		if err != nil {
-			http.Error(w, "failed to load shelf", http.StatusInternalServerError)
-			return
-		}
-		if shelfBookCount > 0 {
-			shelfDownloadBooks, err = s.DB.List(index.SortTitle, false, 1, shelfBookCount, index.Filter{ShelfID: p.viewingShelfID})
-			if err != nil {
-				http.Error(w, "failed to load shelf", http.StatusInternalServerError)
-				return
-			}
-		}
+		shelfDownloadBooks = books
 	}
 	bookIDs := make([]int64, len(books))
 	for i, book := range books {

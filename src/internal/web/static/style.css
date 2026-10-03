@@ -281,7 +281,12 @@ label { display: block; margin: 0.6em 0; }
   width: 10.5em;
   white-space: nowrap;
 }
-.shelf-download-button { margin-left: 0.4em; padding: 0.3em 0.55em; vertical-align: middle; }
+.shelf-download-button { position: relative; top: -0.1em; margin-left: 0.4em; padding: 0.2em 0.45em; vertical-align: middle; font-size: 0.75em; font-weight: normal; line-height: 1em; }
+.appearance-mode.download-format-selector { display: table; width: 50%; margin: 0 auto 1em; table-layout: fixed; font-size: inherit; border-spacing: 0; border-collapse: collapse; }
+.appearance-mode.download-format-selector td { width: 50%; padding: 0; }
+.appearance-mode.download-format-selector button { width: 100%; font-size: 1em; }
+.appearance-mode.download-format-selector.download-format-one td { width: 100%; }
+.appearance-mode.download-format-selector.download-format-one .appearance-mode-auto { -webkit-border-radius: 5px; border-radius: 5px; }
 .dir-icon {
   display: inline-block;
   vertical-align: middle;
@@ -406,9 +411,11 @@ label { display: block; margin: 0.6em 0; }
 /* Shelf toggle list inside the download modal's shelves section */
 .shelf-list { list-style: none; padding: 0; margin: 0 0 0.5em; }
 .shelf-list li { margin: 0.5em 0; }
-.shelf-nav-list { text-align: left; }
-.shelf-nav-list li { display: inline-block; width: 49%; padding-right: 0.3em; vertical-align: top; }
-.shelf-nav-list-single li { display: block; width: 100%; padding-right: 0; }
+.shelf-nav-list { text-align: center; }
+.shelf-nav-list li { display: inline-block; width: 49%; box-sizing: border-box; margin: 0.15em 0; padding: 0; vertical-align: top; }
+.shelf-nav-list li:nth-child(odd) { padding-right: 0.15em; }
+.shelf-nav-list li:nth-child(even) { padding-left: 0.15em; }
+.shelf-nav-list-single li { display: block; width: 100%; padding: 0; }
 .shelf-nav-list-single .shelf-toggle { width: 16em; max-width: 100%; margin: 0 auto; }
 @media (max-width: 480px) {
   .shelf-nav-list li { display: block; width: 100%; padding-right: 0; }
@@ -903,11 +910,11 @@ html.theme-dark .table-wrap th.field-group-heading { background: #222; }
 .appearance-mode button.is-selected {
   position: relative;
   z-index: 1;
-  background: #f7f7f7;
+  background: #e6e6e6;
   border-color: #888;
 }
 .appearance-mode button:active { background: #f0f0f0; }
 html.theme-dark .appearance-mode-label { color: #c4c4c4; }
 html.theme-dark .appearance-mode button { background: #222; border-color: #595959; }
-html.theme-dark .appearance-mode button.is-selected { background: #303030; border-color: #c4c4c4; }
+html.theme-dark .appearance-mode button.is-selected { background: #3a3a3a; border-color: #c4c4c4; }
 html.theme-dark .appearance-mode button:active { background: #383838; }
