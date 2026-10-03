@@ -671,7 +671,7 @@ func TestAccountShelvesLifecycleRequiresOwnerCapability(t *testing.T) {
 	}
 	page := httptest.NewRecorder()
 	server.Auth.RequirePermission(users.PermissionOwnShelves, http.HandlerFunc(server.AccountShelves)).ServeHTTP(page, authenticatedRequest(t, server, http.MethodGet, "/account/shelves", "reader", nil))
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Your shelves") || !strings.Contains(page.Body.String(), "Reading Soon") || !strings.Contains(page.Body.String(), `href="/account/shelves">Manage shelves`) {
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Your shelves") || !strings.Contains(page.Body.String(), "Reading Soon") || !strings.Contains(page.Body.String(), `aria-label="Manage shelves"`) {
 		t.Fatalf("account shelves page did not render created shelf: (%d) %s", page.Code, page.Body.String())
 	}
 	reader, err := server.Users.UserByUsername("reader")

@@ -407,7 +407,8 @@ label { display: block; margin: 0.6em 0; }
 .shelf-list li { margin: 0.5em 0; }
 .shelf-nav-list { text-align: left; }
 .shelf-nav-list li { display: inline-block; width: 49%; padding-right: 0.3em; vertical-align: top; }
-.shelf-nav-list .shelf-nav-manage { width: 100%; margin-top: 0.8em; padding-top: 0.8em; border-top: 1px solid #ddd; }
+.shelf-nav-list-single li { display: block; width: 100%; padding-right: 0; }
+.shelf-nav-list-single .shelf-toggle { width: 16em; max-width: 100%; margin: 0 auto; }
 @media (max-width: 480px) {
   .shelf-nav-list li { display: block; width: 100%; padding-right: 0; }
 }
@@ -497,6 +498,7 @@ label { display: block; margin: 0.6em 0; }
    established safe layout primitive here) instead of the plain centered
    single-column stack other modals use. */
 .modal-box-wide { max-width: 34em; text-align: left; }
+.modal-box-shelves { max-width: 40em; }
 .modal-layout { width: 100%; border-collapse: collapse; margin-bottom: 0.5em; }
 .modal-layout td { padding: 0; border: none; vertical-align: top; }
 .modal-layout td.modal-cover-cell { width: 33%; padding-right: 1.5em; text-align: center; vertical-align: middle; }
