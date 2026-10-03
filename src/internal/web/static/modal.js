@@ -94,6 +94,13 @@ function setShelfButtonState(btn, onShelf) {
   } else if (!onShelf && hasClass) {
     btn.className = (" " + btn.className + " ").replace(" is-on ", " ").replace(/^\s+|\s+$/g, "");
   }
+  var glyphs = btn.getElementsByTagName("svg");
+  for (var i = 0; i < glyphs.length; i++) {
+    if ((" " + glyphs[i].getAttribute("class") + " ").indexOf(" shelf-check ") > -1) {
+      glyphs[i].style.display = onShelf ? "inline-block" : "none";
+      glyphs[i].style.visibility = onShelf ? "visible" : "hidden";
+    }
+  }
 }
 
 function syncShelfControls(bookId, shelfId, onShelf, recent) {
