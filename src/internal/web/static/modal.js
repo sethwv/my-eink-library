@@ -47,6 +47,16 @@ function closeModal(id) {
   return false;
 }
 
+function openShelfPicker(bookId) {
+  closeModal("book-" + bookId);
+  return openModal("book-" + bookId + "-shelves");
+}
+
+function backToBook(bookId) {
+  closeModal("book-" + bookId + "-shelves");
+  return openModal("book-" + bookId);
+}
+
 // Tapping the dark backdrop, or the per-book overlay's own padding area
 // (outside .modal-box but inside .modal-overlay), closes whichever modal
 // is open. A click inside .modal-box always has some descendant element
@@ -77,9 +87,51 @@ document.onclick = function (e) {
 // guaranteed already on that shelf, tapping it always means "remove," so on
 // success the whole card and its modal are dropped from the page instead of
 // just flipping the checkmark.
-function toggleShelf(bookId, shelfId, btn, isViewing) {
+function setShelfButtonState(btn, onShelf) {
+  var hasClass = (" " + btn.className + " ").indexOf(" is-on ") > -1;
+  if (onShelf && !hasClass) {
+    btn.className += " is-on";
+  } else if (!onShelf && hasClass) {
+    btn.className = (" " + btn.className + " ").replace(" is-on ", " ").replace(/^\s+|\s+$/g, "");
+  }
+}
+
+function syncShelfControls(bookId, shelfId, onShelf, recent) {
+  var buttons = document.getElementsByTagName("button");
+  var i;
+  for (i = 0; i < buttons.length; i++) {
+    if (buttons[i].getAttribute("data-book-id") === String(bookId) && buttons[i].getAttribute("data-shelf-id") === String(shelfId)) {
+      setShelfButtonState(buttons[i], onShelf);
+    }
+  }
+  if (!recent) {
+    return;
+  }
+  var recentButton = document.getElementById("book-" + bookId + "-recent");
+  var recentForm = document.getElementById("book-" + bookId + "-recent-form");
+  if (!recentButton || !recentForm) {
+    return;
+  }
+  recentButton.setAttribute("data-shelf-id", recent.id);
+  setShelfButtonState(recentButton, recent.onShelf);
+  recentForm.action = "/books/" + bookId + "/shelves/" + recent.id;
+  var labels = recentButton.getElementsByTagName("span");
+  for (i = 0; i < labels.length; i++) {
+    if ((" " + labels[i].className + " ").indexOf(" shelf-label-name ") > -1) {
+      labels[i].textContent = recent.name;
+      break;
+    }
+  }
+}
+
+function toggleShelfForButton(btn, isViewing) {
+  return toggleShelf(btn.getAttribute("data-book-id"), btn.getAttribute("data-shelf-id"), isViewing);
+}
+
+function toggleShelf(bookId, shelfId, isViewing) {
   var xhr = new XMLHttpRequest();
   xhr.open("POST", "/books/" + bookId + "/shelves/" + shelfId, true);
+  xhr.setRequestHeader("Accept", "application/json");
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) {
       return;
@@ -99,12 +151,14 @@ function toggleShelf(bookId, shelfId, btn, isViewing) {
       if (card && card.parentNode) {
         card.parentNode.removeChild(card);
       }
-    } else if (btn) {
-      if ((" " + btn.className + " ").indexOf(" is-on ") > -1) {
-        btn.className = (" " + btn.className + " ").replace(" is-on ", " ").replace(/^\s+|\s+$/g, "");
-      } else {
-        btn.className += " is-on";
+    } else {
+      var state;
+      try {
+        state = JSON.parse(xhr.responseText);
+      } catch (err) {
+        return;
       }
+      syncShelfControls(bookId, shelfId, state.onShelf, state.recent);
     }
   };
   xhr.send();

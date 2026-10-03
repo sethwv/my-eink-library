@@ -200,6 +200,32 @@ func (d *DB) DeleteShelf(username string, id int64) error {
 	return tx.Commit()
 }
 
+// RecentShelf prefers the most recently added personal shelf containing bookID
+// and otherwise returns the user's most recently used personal shelf.
+func (d *DB) RecentShelf(username string, bookID int64) (*Shelf, error) {
+	var sh Shelf
+	var isSystem int
+	err := d.sql.QueryRow(`SELECT s.id, s.username, s.slug, s.name, s.is_system, s.visibility
+		FROM shelves s JOIN shelf_books sb ON sb.shelf_id = s.id
+		WHERE s.username = ? AND s.is_system = 0 AND sb.book_id = ?
+		ORDER BY sb.added_at DESC, s.id DESC LIMIT 1`, username, bookID,
+	).Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem, &sh.Visibility)
+	if err == sql.ErrNoRows {
+		err = d.sql.QueryRow(`SELECT id, username, slug, name, is_system, visibility FROM shelves
+			WHERE username = ? AND is_system = 0 AND last_used_at > 0
+			ORDER BY last_used_at DESC, id DESC LIMIT 1`, username,
+		).Scan(&sh.ID, &sh.Username, &sh.Slug, &sh.Name, &isSystem, &sh.Visibility)
+	}
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sh.IsSystem = isSystem != 0
+	return &sh, nil
+}
+
 type shelfSlugQueryer interface {
 	QueryRow(string, ...any) *sql.Row
 }
@@ -251,12 +277,20 @@ func (d *DB) AddBookToShelf(shelfID, bookID int64) error {
 		`INSERT OR IGNORE INTO shelf_books (shelf_id, book_id, added_at) VALUES (?, ?, ?)`,
 		shelfID, bookID, time.Now().Unix(),
 	)
+	if err != nil {
+		return err
+	}
+	_, err = d.sql.Exec(`UPDATE shelves SET last_used_at = ? WHERE id = ?`, time.Now().Unix(), shelfID)
 	return err
 }
 
 // RemoveBookFromShelf removes bookID from shelfID, a no-op if not present.
 func (d *DB) RemoveBookFromShelf(shelfID, bookID int64) error {
 	_, err := d.sql.Exec(`DELETE FROM shelf_books WHERE shelf_id = ? AND book_id = ?`, shelfID, bookID)
+	if err != nil {
+		return err
+	}
+	_, err = d.sql.Exec(`UPDATE shelves SET last_used_at = ? WHERE id = ?`, time.Now().Unix(), shelfID)
 	return err
 }
 

@@ -137,6 +137,39 @@ func TestUserShelfLimitAndSystemShelfProtection(t *testing.T) {
 	}
 }
 
+func TestRecentShelfPrefersBookMembershipThenLastUsed(t *testing.T) {
+	db := openTestDB(t)
+	reading, err := db.CreateShelf("alice", "Reading")
+	if err != nil {
+		t.Fatal(err)
+	}
+	later, err := db.CreateShelf("alice", "Later")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddBookToShelf(reading.ID, 10); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.sql.Exec(`UPDATE shelves SET last_used_at = CASE id WHEN ? THEN 10 WHEN ? THEN 20 END WHERE id IN (?, ?)`, reading.ID, later.ID, reading.ID, later.ID); err != nil {
+		t.Fatal(err)
+	}
+	recent, err := db.RecentShelf("alice", 10)
+	if err != nil || recent == nil || recent.ID != reading.ID {
+		t.Fatalf("RecentShelf for member book = %+v, %v; want Reading", recent, err)
+	}
+	recent, err = db.RecentShelf("alice", 99)
+	if err != nil || recent == nil || recent.ID != later.ID {
+		t.Fatalf("RecentShelf fallback = %+v, %v; want Later", recent, err)
+	}
+	if err := db.RemoveBookFromShelf(later.ID, 99); err != nil {
+		t.Fatal(err)
+	}
+	recent, err = db.RecentShelf("alice", 99)
+	if err != nil || recent == nil || recent.ID != later.ID {
+		t.Fatalf("RecentShelf after removal = %+v, %v; want Later", recent, err)
+	}
+}
+
 func TestShelfBooks_AddRemoveIsOn(t *testing.T) {
 	db := openTestDB(t)
 	shelfID, err := db.EnsureSystemShelf("alice", "favourites", "Favourites")

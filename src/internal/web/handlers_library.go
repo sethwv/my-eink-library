@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -91,7 +92,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		http.Error(w, "failed to load library", http.StatusInternalServerError)
 		return
 	}
-	base, _, err := s.baseData(r)
+	base, shelves, err := s.baseData(r)
 	if err != nil {
 		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
 		return
@@ -106,6 +107,26 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 		http.Error(w, "failed to load shelves", http.StatusInternalServerError)
 		return
 	}
+	var favoritesShelfID int64
+	personalShelfCount := 0
+	for _, shelf := range shelves {
+		if shelf.IsSystem {
+			favoritesShelfID = shelf.ID
+		} else {
+			personalShelfCount++
+		}
+	}
+	recentShelves := make(map[int64]*index.Shelf)
+	if personalShelfCount > 0 {
+		for _, book := range books {
+			shelf, err := s.DB.RecentShelf(username, book.ID)
+			if err != nil {
+				http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+				return
+			}
+			recentShelves[book.ID] = shelf
+		}
+	}
 	locations, err := s.DB.LocationsForBooks(bookIDs)
 	if err != nil {
 		http.Error(w, "failed to load library", http.StatusInternalServerError)
@@ -118,7 +139,7 @@ func (s *Server) renderBookList(w http.ResponseWriter, r *http.Request, p bookLi
 	if descending {
 		toggleDir = "asc"
 	}
-	data := map[string]any{"Title": p.heading, "Heading": p.heading, "Books": books, "Sort": sortParam, "Dir": dir, "ToggleDir": toggleDir, "Page": page, "PrevPage": page - 1, "NextPage": page + 1, "HasNext": page < totalPages, "TotalPages": totalPages, "Pages": pages, "Query": search, "Action": p.action, "Name": p.name, "ShelfMemberships": memberships, "ViewingShelfID": p.viewingShelfID, "Locations": locations}
+	data := map[string]any{"Title": p.heading, "Heading": p.heading, "Books": books, "Sort": sortParam, "Dir": dir, "ToggleDir": toggleDir, "Page": page, "PrevPage": page - 1, "NextPage": page + 1, "HasNext": page < totalPages, "TotalPages": totalPages, "Pages": pages, "Query": search, "Action": p.action, "Name": p.name, "ShelfMemberships": memberships, "ViewingShelfID": p.viewingShelfID, "Locations": locations, "FavoritesShelfID": favoritesShelfID, "PersonalShelfCount": personalShelfCount, "RecentShelves": recentShelves}
 	mergeInto(data, base)
 	render(w, "library.html", data)
 }
@@ -203,6 +224,36 @@ func (s *Server) ShelfToggle(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		http.Error(w, "failed to update shelf", http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("Accept") == "application/json" {
+		recent, err := s.DB.RecentShelf(username, bookID)
+		if err != nil {
+			http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+			return
+		}
+		var recentState *struct {
+			ID      int64  `json:"id"`
+			Name    string `json:"name"`
+			OnShelf bool   `json:"onShelf"`
+		}
+		if recent != nil {
+			recentOnShelf, err := s.DB.IsBookOnShelf(recent.ID, bookID)
+			if err != nil {
+				http.Error(w, "failed to load shelves", http.StatusInternalServerError)
+				return
+			}
+			recentState = &struct {
+				ID      int64  `json:"id"`
+				Name    string `json:"name"`
+				OnShelf bool   `json:"onShelf"`
+			}{ID: recent.ID, Name: recent.Name, OnShelf: recentOnShelf}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			OnShelf bool `json:"onShelf"`
+			Recent  any  `json:"recent"`
+		}{OnShelf: !onShelf, Recent: recentState})
 		return
 	}
 	http.Redirect(w, r, safeNext(r.FormValue("next")), http.StatusSeeOther)
